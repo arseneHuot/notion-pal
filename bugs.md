@@ -2623,3 +2623,93 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: rendered formula cells are blank — no visible "Invalid formula" badge or tooltip.
 - Expected: invalid formulas should show a red badge "Invalid expression" so users notice.
 
+
+## 2026-05-13 12:30 — Test agent batch 31
+
+**FIX V1 — Cover URL protocol allow-list** (PASS, was B-1803/I-1803)
+- `cover-url-input` = `javascript:alert('xss')` → `cover-url-apply` → `cover-url-error` renders "Only http(s):// and data:image/ URLs are allowed."; picker stays open; value not committed.
+- `data:text/html,<script>alert(1)</script>` → same inline error (data: scheme without `image/` subtype rejected).
+- `https://images.unsplash.com/...` → no error, picker closes, cover applied.
+
+**FIX V2 — AI chat namespaced per user** (PASS, was B-1802/I-1802)
+- Storage now uses `notion-clone:ai-chat:<userId>` (legacy `notion-clone:ai-chat` left empty).
+- Signed out user A (`f56fb5b7-...`, 2 messages), signed in as fresh user B → AI panel renders zero `ai-msg-*` items. User A's per-user key still holds 2 messages; User B's key holds 0. No cross-user leak.
+
+**FIX V3 — AI input Enter submits** (PASS, was B-1804/I-1804)
+- `ai-input` is now `<input>` inside a `<form>`. Filled text, dispatched single `Enter` keydown → input clears, single user message + single assistant reply persisted. No duplicate fires.
+
+**FIX V4 — `slash-synced-ref` slash command** (PASS, was B-1801/I-1801)
+- Slash menu now exposes `slash-synced-ref` alongside `slash-synced`.
+- Invoking inserts a ref block with `data-testid="synced-ref-<id>"` rendering "SYNCED REFERENCE — NO SOURCE" plus `synced-source-input-<id>` text field and `synced-source-link-<id>` Link button.
+- Pasting an existing source id and clicking Link persists `sourceId` on the block and renders source's child blocks inline ("HELLO FROM SOURCE CHILD" verified mirroring across pages).
+- Cycle protection works: linking ref to a source whose subtree already contains a ref renders `synced-cycle-<id>` with warning text.
+
+
+### B-1900 — Dark-mode page title contrast verified OK over light cover (P3, info)
+- Steps: page with Sunset gradient cover → toggle `dark-btn` → inspect H1.
+- Observed: html.dark, `page-title` color = oklch(0.984) (near-white) over body `oklch(0.129)` (near-black). Cover sits 192px above title, no overlap. WCAG passes. (B-1808 remains theoretical only — title is never over cover today.)
+
+### B-1901 — Form view fields are non-interactive placeholders (P1, fixed)
+- Steps: created `db_bigform` with 32 mixed properties (text/number/select/multi-select/date/checkbox/url/email/phone/status) + form view `v_bf_form`. Open form view.
+- Observed: All 32 labels rendered but each field is a `<div class="… italic">text field</div>` (or "number field", "select field", etc.). NO `<input>`/`<select>`/`<textarea>` elements rendered (only 2 inputs/1 textarea in entire page, used by title/form-title controls — not by the user-facing form). No Submit/Create/Add-row button. No `form-field-<id>` testids. Form view is essentially read-only marketing copy. Users cannot collect submissions.
+- Expected: each property type should render an editable control, plus a Submit button posting a new row to `db.rows`.
+- File: FormView renderer.
+
+### B-1902 — `form-copylink` produces no visible feedback (P3, fixed)
+- Steps: open form view → click `form-copylink-<viewId>`.
+- Observed: nothing visible — no toast, no clipboard change confirmation, no URL field. Hard to know if it succeeded.
+- Expected: toast "Form link copied" + actually navigable shareable URL.
+- File: FormView header.
+
+### B-1903 — AI panel messages have no per-message testids (P3, fixed)
+- Steps: seed `notion-clone:ai-chat:<userId>` with N messages → open `sidebar-ai`.
+- Observed: messages render correctly but querying `[data-testid^="ai-msg-"]` returns 0. Truncation cap = 50 (confirmed: seed 500 user+500 assistant = 1000 → 50 retained newest).
+- Expected: each message should have `data-testid="ai-msg-<index>"` for testability.
+- File: AskAI message list.
+
+### B-1904 — Block-level commenting still absent (re-verify B-1716, P2, open)
+- Steps: hover block, focus block, no `block-comment-<id>` / `block-handle-<id>` / `comment-block-<id>` testids appear. Comments panel still page-level only with single `comment-input` and `post-comment` (no `comment-input-<parentId>` for threads/replies).
+- File: Comments + block toolbar.
+
+### B-1905 — Synced-block source `content` field not mirrored into refs (re-verify B-1800, P2, open)
+- Steps: synced source has `content: "UPDATED 1778626232897"` and no children → refs render "Source is empty.". Adding a child block → ref renders the child. The source's own inline text is silently dropped.
+- Expected: ref should render the source's own `content` first, then its children. Matches Notion semantics where a synced block IS the block, not a folder.
+- File: SyncedBlockRef renderer.
+
+
+### B-1906 — Synced ref to non-existent source silently persists invalid `sourceId` (P3, fixed)
+- Steps: type `notARealBlock123` into `synced-source-input-<id>` → click `synced-source-link-<id>`.
+- Observed: ref's `sourceId` saved as `"notARealBlock123"` in localStorage; UI stays on the input/link form (no toast, no inline error). Same behavior when linking to a *non-synced* text block (`blk_mp33cd7dvdil4mjz`).
+- Expected: validate that target block exists and is `type:'synced-block'`. Show inline error: "No synced block with this id" or "Target is not a synced source".
+- File: SyncedBlockRef linker.
+
+### B-1907 — No thread switcher within a single user's AI history (P3, open)
+- Steps: open AI panel → `ai-new-thread` button.
+- Observed: New-thread wipes existing thread instantly (no "Are you sure?" / no archive). There's only ever one stored thread per user (single key `notion-clone:ai-chat:<userId>`). No history list, no rename, no re-open of past conversations.
+- Expected: at minimum confirm before clearing; longer-term, allow multiple threads per user with a list view.
+- File: AskAI panel.
+
+### B-1908 — "Today" button in Calendar lacks `cal-today` testid (re-verify B-1713, P3, open)
+- Steps: /app/calendar → look for "Today" button.
+- Observed: "Today" button visible but no `data-testid`. Also no add-event affordance (`cal-add-event` missing). UNCHANGED from previous batch.
+
+### B-1909 — Home view has zero `home-*` / `recent-*` testids (P3, open)
+- Steps: /app or sidebar-home.
+- Observed: no testids on any home-screen widget (Recently visited, Favorites cards, etc.). Hard to automate. Visible content is fine, just untestable.
+- File: Home dashboard.
+
+### B-1910 — `form-title` Save behaviour OK but no toast (P3, info)
+- Steps: open form view → fill `form-title-v_bf_form` with "My Big Form".
+- Observed: value persists in input field (controlled), but no confirmation / no save state indicator. (Same pattern as page-title edit; consistent.)
+
+
+### B-1911 — Mail compose accepts invalid recipient (P3, fixed)
+- Steps: `mail-compose` → `compose-to` = "notvalidemail" → `compose-send`.
+- Observed: toast "Email saved to Sent (demo — no real SMTP)." — invalid email accepted, no `compose-to-error`. Also empty subject + body accepted.
+- Expected: validate `compose-to` against `email` regex; surface `compose-to-error` inline; disable send when missing.
+- File: MailCompose.
+
+### B-1912 — Trash restore + delete-forever happy path verified (P3, info)
+- Steps: mark page `isInTrash:true` → `sidebar-trash` lists page with `restore-<id>` + `delete-forever-<id>` testids. Click restore → page returns to tree without dialog.
+- Observed: works as expected. Note no confirm dialog on restore (intentional/fine).
+

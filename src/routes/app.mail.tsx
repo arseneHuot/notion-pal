@@ -118,16 +118,25 @@ function MailPage() {
 
 function ComposeMail({ compose, onClose }: { compose: { to: string; subject: string; body: string }; onClose: () => void }) {
   const [state, setState] = useState(compose);
+  const recipients = state.to.split(",").map((s) => s.trim()).filter(Boolean);
+  const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const invalid = recipients.filter((r) => !emailRe.test(r));
+  const canSend = recipients.length > 0 && invalid.length === 0;
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h2 className="font-semibold mb-3">New message</h2>
       <input
         value={state.to}
         onChange={(e) => setState({ ...state, to: e.target.value })}
-        placeholder="To"
-        className="w-full border border-input rounded px-2 py-1 mb-2 text-sm bg-background"
+        placeholder="To (comma-separated)"
+        className={`w-full border rounded px-2 py-1 mb-1 text-sm bg-background ${invalid.length > 0 ? "border-amber-400" : "border-input"}`}
         data-testid="compose-to"
       />
+      {invalid.length > 0 && (
+        <div className="text-xs text-amber-600 mb-2" data-testid="compose-to-error">
+          Invalid address: {invalid.join(", ")}
+        </div>
+      )}
       <input
         value={state.subject}
         onChange={(e) => setState({ ...state, subject: e.target.value })}
@@ -167,7 +176,8 @@ function ComposeMail({ compose, onClose }: { compose: { to: string; subject: str
             toast("Email saved to Sent (demo — no real SMTP).", "success");
             onClose();
           }}
-          className="bg-primary text-primary-foreground text-sm rounded px-3 py-1.5"
+          disabled={!canSend}
+          className="bg-primary text-primary-foreground text-sm rounded px-3 py-1.5 disabled:opacity-50"
           data-testid="compose-send"
         >
           Send

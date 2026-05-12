@@ -941,3 +941,37 @@ Priority: high / medium / low.
 ### I-1809 — Consider react-window virtualization for board + table at >1000 rows (low, open)
 - See B-1811/B-1812. Today 500 rows is fine. At ~5000 rows DOM count crosses 50k and will be sluggish.
 
+
+## 2026-05-13 12:50 — Test agent batch 31
+
+### I-1900 — Form view: implement actual interactive inputs + submit handler (high, open)
+- See B-1901. Today every field renders as static `<div>text field</div>`, etc. — zero usability. Need:
+  - Real `<input>` / `<select>` / date picker / checkbox per property type
+  - `data-testid="form-field-<propId>"` per row
+  - "Submit" button creating a `row_` in the DB and clearing inputs
+  - Optional thank-you screen
+
+### I-1901 — `form-copylink-<viewId>` should toast + actually link to a public route (high, open)
+- See B-1902. Today clipboard might be set but no visible feedback. Also `/form/<viewId>` is 404 — public form viewer not implemented. Either add a public read-only route or hide the action until then.
+
+### I-1902 — Add `data-testid="ai-msg-<index>"` per chat message (low, open)
+- See B-1903. Today queries returning 0 force fallback to text matching. Trivial fix; high automation value.
+
+### I-1903 — Synced ref: validate target on Link (medium, open)
+- See B-1906. Confirm block exists & is `type:'synced-block'` before persisting `sourceId`. Render inline error otherwise.
+
+### I-1904 — Synced ref: also mirror source's own `content` (high, open)
+- See B-1905/B-1800. Refs currently only mirror `children`; source's own text body is silently dropped. Matches Notion behavior.
+
+### I-1905 — AI: thread list / multi-thread support (medium, open)
+- See B-1907. Today `ai-new-thread` destroys history without confirmation. Either confirm + archive, or allow multiple threads with a switcher.
+
+### I-1906 — Home/Inbox: add `home-*`, `inbox-row-*`, `inbox-mark-read-*` testids (low, open)
+- See B-1909, plus existing inbox gap.
+
+### I-1907 — Cover gradient + dark mode handled correctly (info)
+- Verified: html.dark flips title to near-white, body to near-black. Cover (Sunset) sits above title — no overlap, contrast not at risk.
+
+### I-1908 — Mail compose: validate `compose-to` as email (low, open)
+- See B-1911. Inline error + disable Send for invalid/empty recipient.
+

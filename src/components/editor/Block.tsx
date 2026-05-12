@@ -1295,7 +1295,19 @@ function SyncedEl({ block, pageId }: { block: Block; pageId: string }) {
               data-testid={`synced-source-input-${block.id}`}
             />
             <button
-              onClick={() => updateBlock(block.id, { sourceId: sourceIdInput.trim() } as Partial<Block>)}
+              onClick={() => {
+                const id = sourceIdInput.trim();
+                const target = id ? allBlocks[id] : undefined;
+                if (!id) {
+                  import("@/components/ui/Toast").then((m) => m.toast("Paste a synced-block id first", "error"));
+                  return;
+                }
+                if (!target || target.type !== "synced-block") {
+                  import("@/components/ui/Toast").then((m) => m.toast("No synced-block with that id was found in this workspace", "error"));
+                  return;
+                }
+                updateBlock(block.id, { sourceId: id } as Partial<Block>);
+              }}
               className="bg-primary text-primary-foreground text-xs px-2 rounded"
               data-testid={`synced-source-link-${block.id}`}
             >

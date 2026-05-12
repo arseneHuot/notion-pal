@@ -146,7 +146,7 @@ export function AIChat() {
           </div>
         )}
         {messages.map((m, i) => (
-          <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : ""}`}>
+          <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : ""}`} data-testid={`ai-msg-${i}`} data-role={m.role}>
             <div className={`rounded-lg px-3 py-2 text-sm max-w-[85%] ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
               <div className="whitespace-pre-wrap">{m.content}</div>
               {m.sources && m.sources.length > 0 && (

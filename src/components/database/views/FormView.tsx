@@ -2,13 +2,16 @@ import { useState } from "react";
 import { useStore, addDatabaseRow, updateView } from "@/lib/store";
 import { PropertyCell } from "../PropertyEditor";
 import { Copy, Check } from "lucide-react";
+import { toast } from "@/components/ui/Toast";
 
 export function FormView({ databaseId, viewId }: { databaseId: string; viewId: string }) {
   const db = useStore((s) => s.databases[databaseId]);
   const view = db?.views.find((v) => v.id === viewId);
   const [values, setValues] = useState<Record<string, unknown>>({});
   const [submitted, setSubmitted] = useState(false);
-  const [editing, setEditing] = useState(true);
+  // Default to the user-facing Preview (B-1901). Users can flip to Edit
+  // mode via the button to configure the form's title / description.
+  const [editing, setEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   if (!db || !view || view.type !== "form") return null;
   const fields = db.properties.filter((p) => p.type !== "created-time" && p.type !== "created-by" && p.type !== "last-edited-time" && p.type !== "last-edited-by" && p.type !== "unique-id" && p.type !== "formula" && p.type !== "rollup" && p.type !== "button");
@@ -29,8 +32,9 @@ export function FormView({ databaseId, viewId }: { databaseId: string; viewId: s
         <button
           onClick={() => {
             const url = `${typeof window !== "undefined" ? window.location.origin : ""}/form/${databaseId}/${viewId}`;
-            navigator.clipboard?.writeText(url);
+            navigator.clipboard?.writeText(url).catch(() => undefined);
             setCopied(true);
+            toast("Form link copied to clipboard", "info");
             setTimeout(() => setCopied(false), 1500);
           }}
           className="text-xs flex items-center gap-1 px-2 py-1 rounded hover:bg-accent"
@@ -75,7 +79,7 @@ export function FormView({ databaseId, viewId }: { databaseId: string; viewId: s
           ) : (
             <div className="space-y-3">
               {fields.map((p) => (
-                <div key={p.id}>
+                <div key={p.id} data-testid={`form-field-${p.id}`}>
                   <label className="block text-xs font-medium mb-1">{p.name}</label>
                   <FormField
                     database={db}
