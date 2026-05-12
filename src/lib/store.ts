@@ -511,17 +511,58 @@ export function updatePage(id: string, patch: Partial<Page>) {
 }
 
 export function deletePage(id: string) {
-  // Soft delete to trash
+  // Soft delete to trash. Cascade to children so they don't dangle.
   setState((s) => {
     const page = s.pages[id];
     if (!page) return s;
-    return {
-      ...s,
-      pages: {
-        ...s.pages,
-        [id]: { ...page, isInTrash: true, trashedAt: Date.now() },
-      },
-    };
+    const idsToTrash = new Set<string>([id]);
+    let queue = [id];
+    while (queue.length > 0) {
+      const next: string[] = [];
+      for (const pid of queue) {
+        for (const p of Object.values(s.pages)) {
+          if (p.parentId === pid && !p.isInTrash && !idsToTrash.has(p.id)) {
+            idsToTrash.add(p.id);
+            next.push(p.id);
+          }
+        }
+      }
+      queue = next;
+    }
+    const now = Date.now();
+    const newPages = { ...s.pages };
+    for (const pid of idsToTrash) {
+      const p = newPages[pid];
+      if (p) newPages[pid] = { ...p, isInTrash: true, trashedAt: now };
+    }
+    return { ...s, pages: newPages };
+  });
+}
+
+export function restorePageCascade(id: string) {
+  setState((s) => {
+    const page = s.pages[id];
+    if (!page) return s;
+    const idsToRestore = new Set<string>([id]);
+    let queue = [id];
+    while (queue.length > 0) {
+      const next: string[] = [];
+      for (const pid of queue) {
+        for (const p of Object.values(s.pages)) {
+          if (p.parentId === pid && p.isInTrash && !idsToRestore.has(p.id)) {
+            idsToRestore.add(p.id);
+            next.push(p.id);
+          }
+        }
+      }
+      queue = next;
+    }
+    const newPages = { ...s.pages };
+    for (const pid of idsToRestore) {
+      const p = newPages[pid];
+      if (p) newPages[pid] = { ...p, isInTrash: false, trashedAt: null };
+    }
+    return { ...s, pages: newPages };
   });
 }
 

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { useStore, updatePage, createBlock, deletePage, restorePage, permanentlyDeletePage } from "@/lib/store";
 import { BlockComponent } from "@/components/editor/Block";
 import { EmojiOrCoverPicker } from "@/components/page/EmojiOrCoverPicker";
 import { PageComments } from "@/components/page/PageComments";
 import { useAuth } from "@/hooks/use-auth";
 import type { Block } from "@/lib/types";
+import { stripHtml, wordCount } from "@/lib/text";
+import { toast } from "@/components/ui/Toast";
 
 export function PageView({ pageId }: { pageId: string }) {
   const page = useStore((s) => s.pages[pageId]);
@@ -19,6 +21,26 @@ export function PageView({ pageId }: { pageId: string }) {
     window.addEventListener("open-comments", open);
     return () => window.removeEventListener("open-comments", open);
   }, []);
+
+  // Word-count listener (B-211)
+  useEffect(() => {
+    function showCount() {
+      if (!page) return;
+      let chars = 0;
+      let words = 0;
+      for (const id of page.blocks) {
+        const b = blocks[id];
+        if (b && "content" in b && typeof b.content === "string") {
+          const t = stripHtml(b.content);
+          chars += t.length;
+          words += wordCount(t);
+        }
+      }
+      toast(`${words} words · ${chars} characters`, "info");
+    }
+    window.addEventListener("show-word-count", showCount);
+    return () => window.removeEventListener("show-word-count", showCount);
+  }, [page, blocks]);
 
   if (!page) {
     return (

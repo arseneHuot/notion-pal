@@ -28,7 +28,7 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="w-64 shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-full overflow-y-auto flex flex-col">
+    <aside className="w-64 shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border h-full overflow-y-auto flex flex-col z-30 md:relative max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:shadow-xl">
       <div className="p-3 flex items-center justify-between">
         <button className="flex items-center gap-2 px-2 py-1 rounded hover:bg-sidebar-accent text-sm font-medium flex-1 min-w-0">
           <span className="text-base">{workspace?.icon ?? "📓"}</span>
@@ -46,7 +46,7 @@ export function Sidebar() {
       </div>
 
       <div className="px-2 space-y-0.5">
-        <SidebarButton icon={<Search className="size-4" />} label="Search" testid="sidebar-search" onClick={() => setUI({})} shortcut="⌘K" />
+        <SidebarButton icon={<Search className="size-4" />} label="Search" testid="sidebar-search" onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))} shortcut="⌘K" />
         <SidebarButton icon={<Sparkles className="size-4" />} label="Ask AI" testid="sidebar-ai" onClick={() => window.dispatchEvent(new CustomEvent("open-ai-chat"))} />
         <SidebarButton icon={<Home className="size-4" />} label="Home" testid="sidebar-home" onClick={() => navigate({ to: "/app" })} />
         <SidebarButton icon={<Inbox className="size-4" />} label="Inbox" testid="sidebar-inbox" onClick={() => navigate({ to: "/app/inbox" })} />
@@ -271,10 +271,8 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
           </button>
           <button
             onClick={() => {
-              if (confirm("Move this page to Trash?")) {
-                deletePage(page.id);
-                navigate({ to: "/app" });
-              }
+              deletePage(page.id);
+              navigate({ to: "/app" });
               setMenuOpen(false);
             }}
             className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent flex items-center gap-2 text-destructive"

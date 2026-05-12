@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/auth")({
@@ -17,9 +17,9 @@ function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (user) {
-    navigate({ to: "/app" });
-  }
+  useEffect(() => {
+    if (user) navigate({ to: "/app" });
+  }, [user, navigate]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();

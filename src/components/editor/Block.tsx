@@ -348,7 +348,8 @@ function useEditable(
   }
 
   function handleMarkdownShortcuts(plain: string) {
-    const m = plain.match(/^(#{1,3}|\*|-|\+|>|\[\]|"\.\.\.|```|---|"|>>|\d+\.)\s/);
+    // Order matters: longer prefixes (>>, ###, ```, ---) must come before their shorter siblings.
+    const m = plain.match(/^(>>|###|##|#|```|---|\*|-|\+|>|\[\]|\d+\.)\s/);
     if (!m || !ref.current) return;
     const prefix = m[1];
     let newType: BlockType | null = null;
@@ -364,9 +365,10 @@ function useEditable(
     else if (/^\d+\.$/.test(prefix)) newType = "numbered-list";
 
     if (newType) {
-      // Strip prefix from content
       const remaining = plain.slice(prefix.length + 1);
       updateBlock(block.id, { type: newType, content: remaining } as Partial<Block>);
+      // Clear DOM since the prefix is part of innerHTML
+      if (ref.current) ref.current.innerHTML = remaining;
       setTimeout(() => focus(), 0);
     }
   }

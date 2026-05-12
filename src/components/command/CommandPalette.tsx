@@ -26,8 +26,17 @@ export function CommandPalette() {
         setOpen(false);
       }
     }
+    function onCustomOpen() {
+      setOpen(true);
+      setQuery("");
+      setActiveIndex(0);
+    }
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("open-command-palette", onCustomOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("open-command-palette", onCustomOpen);
+    };
   }, [open]);
 
   const items = useMemo(() => {

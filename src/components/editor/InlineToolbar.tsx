@@ -80,6 +80,7 @@ export function InlineToolbar() {
         onMouseDown={(e) => { e.preventDefault(); exec("bold"); }}
         className={`p-1.5 rounded hover:bg-accent ${active.bold ? "bg-accent" : ""}`}
         title="Bold (Cmd+B)"
+        aria-label="Bold"
         data-testid="ib-bold"
       >
         <Bold className="size-3.5" />
@@ -88,6 +89,7 @@ export function InlineToolbar() {
         onMouseDown={(e) => { e.preventDefault(); exec("italic"); }}
         className={`p-1.5 rounded hover:bg-accent ${active.italic ? "bg-accent" : ""}`}
         title="Italic (Cmd+I)"
+        aria-label="Italic"
         data-testid="ib-italic"
       >
         <Italic className="size-3.5" />
@@ -96,6 +98,7 @@ export function InlineToolbar() {
         onMouseDown={(e) => { e.preventDefault(); exec("strikeThrough"); }}
         className={`p-1.5 rounded hover:bg-accent ${active.strike ? "bg-accent" : ""}`}
         title="Strike"
+        aria-label="Strikethrough"
         data-testid="ib-strike"
       >
         <Strikethrough className="size-3.5" />
@@ -119,6 +122,7 @@ export function InlineToolbar() {
         }}
         className="p-1.5 rounded hover:bg-accent"
         title="Inline code"
+        aria-label="Inline code"
         data-testid="ib-code"
       >
         <Code className="size-3.5" />
@@ -127,6 +131,7 @@ export function InlineToolbar() {
         onMouseDown={(e) => { e.preventDefault(); applyLink(); }}
         className="p-1.5 rounded hover:bg-accent"
         title="Link"
+        aria-label="Insert link"
         data-testid="ib-link"
       >
         <LinkIcon className="size-3.5" />
@@ -144,6 +149,7 @@ export function InlineToolbar() {
         }}
         className="p-1.5 rounded hover:bg-accent text-violet-500"
         title="Ask AI about selection"
+        aria-label="Ask AI"
         data-testid="ib-ai"
       >
         <Sparkles className="size-3.5" />

@@ -3,10 +3,11 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopBar } from "@/components/layout/TopBar";
-import { useStore } from "@/lib/store";
+import { useStore, setUI } from "@/lib/store";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { AIChat } from "@/components/ai/AIChat";
 import { InlineToolbar } from "@/components/editor/InlineToolbar";
+import { Toaster } from "@/components/ui/Toast";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
@@ -30,6 +31,16 @@ function AppLayout() {
     }
   }, [user, loading, navigate]);
 
+  // Auto-collapse sidebar on small screens.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 768px)");
+    const sync = () => setUI({ sidebarOpen: !mq.matches });
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -52,6 +63,7 @@ function AppLayout() {
       <CommandPalette />
       <AIChat />
       <InlineToolbar />
+      <Toaster />
     </div>
   );
 }

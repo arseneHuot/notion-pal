@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useStore, upsertMail } from "@/lib/store";
 import { useState, useMemo } from "react";
 import { uid } from "@/lib/id";
+import { toast } from "@/components/ui/Toast";
 
 export const Route = createFileRoute("/app/mail")({
   component: MailPage,
@@ -73,7 +74,10 @@ function MailPage() {
           {list.map((m) => (
             <button
               key={m.id}
-              onClick={() => setSelected(m.id)}
+              onClick={() => {
+                setSelected(m.id);
+                if (!m.read) upsertMail({ ...m, read: true });
+              }}
               className={`w-full text-left p-3 border-b border-border ${selected === m.id ? "bg-accent" : "hover:bg-accent/50"} ${!m.read ? "font-medium" : ""}`}
               data-testid={`mail-${m.id}`}
             >
@@ -141,7 +145,7 @@ function ComposeMail({ compose, onClose }: { compose: { to: string; subject: str
       <div className="mt-3 flex gap-2">
         <button
           onClick={() => {
-            alert("Demo: email queued (no real SMTP).");
+            toast("Email queued (demo — no real SMTP).", "success");
             onClose();
           }}
           className="bg-primary text-primary-foreground text-sm rounded px-3 py-1.5"

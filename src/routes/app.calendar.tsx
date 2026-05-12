@@ -109,8 +109,9 @@ function CalendarPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
+            onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() - 1, 1))}
             className="p-1 hover:bg-accent rounded"
+            aria-label="Previous month"
             data-testid="cal-prev"
           >
             <ChevronLeft className="size-4" />
@@ -119,8 +120,9 @@ function CalendarPage() {
             {cursor.toLocaleString(undefined, { month: "long", year: "numeric" })}
           </div>
           <button
-            onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
+            onClick={() => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + 1, 1))}
             className="p-1 hover:bg-accent rounded"
+            aria-label="Next month"
             data-testid="cal-next"
           >
             <ChevronRight className="size-4" />

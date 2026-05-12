@@ -74,17 +74,28 @@ function SettingsPage() {
         <div className="space-y-2 border border-border rounded p-4">
           <button
             onClick={() => {
-              const state = useStore.getState ? useStore.getState() : null;
+              const s = useStoreState();
+              if (!s) return;
               const json = JSON.stringify({
-                workspace: workspace,
-                pages: Object.values(useStoreState()?.pages ?? {}),
-                databases: Object.values(useStoreState()?.databases ?? {}),
+                workspace,
+                teamspaces: Object.values(s.teamspaces ?? {}),
+                pages: Object.values(s.pages ?? {}),
+                blocks: Object.values(s.blocks ?? {}),
+                databases: Object.values(s.databases ?? {}),
+                rows: Object.values(s.rows ?? {}),
+                comments: Object.values(s.comments ?? {}),
+                templates: Object.values(s.templates ?? {}),
+                automations: Object.values(s.automations ?? {}),
+                calendarEvents: Object.values(s.calendarEvents ?? {}),
+                mails: Object.values(s.mails ?? {}),
+                exportedAt: new Date().toISOString(),
+                schemaVersion: s.schemaVersion ?? 1,
               }, null, 2);
               const blob = new Blob([json], { type: "application/json" });
               const url = URL.createObjectURL(blob);
               const a = document.createElement("a");
               a.href = url;
-              a.download = "notion-clone-export.json";
+              a.download = `notion-clone-export-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
             }}

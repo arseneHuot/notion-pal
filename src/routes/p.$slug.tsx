@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { BlockComponent } from "@/components/editor/Block";
+import { sanitizeHtml } from "@/lib/sanitize";
 import type { Page, Block } from "@/lib/types";
 
 export const Route = createFileRoute("/p/$slug")({
@@ -75,30 +76,32 @@ function PublicPage() {
   );
 }
 
+function safeHtml(s: string | undefined): { __html: string } {
+  return { __html: sanitizeHtml(s ?? "") };
+}
+
 function ReadonlyBlock({ block }: { block: Block }) {
-  // For simplicity reuse the BlockComponent but it would require disabling editing.
-  // Instead, render a simplified view.
-  if (block.type === "heading-1") return <h1 className="text-3xl font-bold mt-4 mb-1" dangerouslySetInnerHTML={{ __html: (block as { content?: string }).content ?? "" }} />;
-  if (block.type === "heading-2") return <h2 className="text-2xl font-semibold mt-3 mb-1" dangerouslySetInnerHTML={{ __html: (block as { content?: string }).content ?? "" }} />;
-  if (block.type === "heading-3") return <h3 className="text-xl font-semibold mt-2 mb-1" dangerouslySetInnerHTML={{ __html: (block as { content?: string }).content ?? "" }} />;
-  if (block.type === "bullet-list") return <ul className="list-disc pl-5"><li dangerouslySetInnerHTML={{ __html: (block as { content?: string }).content ?? "" }} /></ul>;
-  if (block.type === "numbered-list") return <ol className="list-decimal pl-5"><li dangerouslySetInnerHTML={{ __html: (block as { content?: string }).content ?? "" }} /></ol>;
+  if (block.type === "heading-1") return <h1 className="text-3xl font-bold mt-4 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
+  if (block.type === "heading-2") return <h2 className="text-2xl font-semibold mt-3 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
+  if (block.type === "heading-3") return <h3 className="text-xl font-semibold mt-2 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
+  if (block.type === "bullet-list") return <ul className="list-disc pl-5"><li dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} /></ul>;
+  if (block.type === "numbered-list") return <ol className="list-decimal pl-5"><li dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} /></ol>;
   if (block.type === "todo") {
     const todo = block as Extract<Block, { type: "todo" }>;
     return (
       <div className="flex items-start gap-2 py-0.5">
         <input type="checkbox" checked={todo.checked} disabled className="mt-1.5" />
-        <div className={todo.checked ? "line-through text-muted-foreground" : ""} dangerouslySetInnerHTML={{ __html: todo.content }} />
+        <div className={todo.checked ? "line-through text-muted-foreground" : ""} dangerouslySetInnerHTML={safeHtml(todo.content)} />
       </div>
     );
   }
-  if (block.type === "quote") return <blockquote className="border-l-4 border-foreground/40 pl-3 italic" dangerouslySetInnerHTML={{ __html: (block as { content?: string }).content ?? "" }} />;
+  if (block.type === "quote") return <blockquote className="border-l-4 border-foreground/40 pl-3 italic" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
   if (block.type === "callout") {
     const c = block as Extract<Block, { type: "callout" }>;
     return (
       <div className="flex items-start gap-3 bg-muted/40 rounded-lg p-3 my-2">
         <div className="text-xl">{c.emoji}</div>
-        <div dangerouslySetInnerHTML={{ __html: c.content }} />
+        <div dangerouslySetInnerHTML={safeHtml(c.content)} />
       </div>
     );
   }
@@ -107,7 +110,12 @@ function ReadonlyBlock({ block }: { block: Block }) {
     const c = block as Extract<Block, { type: "code" }>;
     return <pre className="bg-muted rounded-md p-3 overflow-x-auto"><code className="text-sm font-mono">{c.content}</code></pre>;
   }
-  if (block.type === "image") return <img src={(block as { url?: string }).url} className="max-w-full rounded" alt="" />;
-  if (block.type === "text") return <p dangerouslySetInnerHTML={{ __html: (block as { content?: string }).content ?? "" }} />;
+  if (block.type === "image") {
+    const url = (block as { url?: string }).url ?? "";
+    // Only allow http(s) and data: URLs for images.
+    if (!/^(https?:|data:)/i.test(url)) return null;
+    return <img src={url} className="max-w-full rounded" alt="" />;
+  }
+  if (block.type === "text") return <p dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
   return null;
 }
