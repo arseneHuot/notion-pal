@@ -72,14 +72,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Notion Open Source" },
+      { name: "description", content: "Notion Pal is a web application that replicates the core functionality of Notion for note-taking and organization." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Notion Open Source" },
+      { property: "og:description", content: "Notion Pal is a web application that replicates the core functionality of Notion for note-taking and organization." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Notion Open Source" },
+      { name: "twitter:description", content: "Notion Pal is a web application that replicates the core functionality of Notion for note-taking and organization." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f2b2d842-bc21-4533-92db-47bda182776a/id-preview-40d87968--c0d84cac-8936-4e64-88c8-edb88f875305.lovable.app-1778587357032.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/f2b2d842-bc21-4533-92db-47bda182776a/id-preview-40d87968--c0d84cac-8936-4e64-88c8-edb88f875305.lovable.app-1778587357032.png" },
     ],
     links: [
       {
