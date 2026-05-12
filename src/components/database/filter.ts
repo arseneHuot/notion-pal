@@ -5,29 +5,85 @@ export function applyFilters(rows: DatabaseRow[], filters: Filter[], db: NotionD
   return rows.filter((r) => filters.every((f) => evalFilter(r, f, db)));
 }
 
+function propertyType(db: NotionDatabase, propertyId: string): string | undefined {
+  return db.properties.find((p) => p.id === propertyId)?.type;
+}
+
+/** Coerce a value to a number if it looks like one, including ISO dates → ms. */
+function toComparable(v: unknown, asDate: boolean): number {
+  if (v == null) return NaN;
+  if (asDate) {
+    if (typeof v === "number") return v;
+    const t = Date.parse(String(v));
+    return isNaN(t) ? NaN : t;
+  }
+  if (typeof v === "number") return v;
+  const n = Number(v);
+  return isNaN(n) ? NaN : n;
+}
+
 function evalFilter(r: DatabaseRow, f: Filter, db: NotionDatabase): boolean {
   const v = r.values[f.propertyId];
+  const pType = propertyType(db, f.propertyId);
+  const dateProp = pType === "date";
+  const arrayProp = pType === "multi-select" || pType === "files" || pType === "person" || pType === "relation";
+
   switch (f.operator) {
-    case "contains":
-      return typeof v === "string" && v.toLowerCase().includes(String(f.value).toLowerCase());
-    case "does-not-contain":
-      return typeof v !== "string" || !v.toLowerCase().includes(String(f.value).toLowerCase());
-    case "is":
+    case "contains": {
+      const needle = String(f.value ?? "").toLowerCase();
+      if (Array.isArray(v)) {
+        // For multi-select / relation / person we compare option names or row labels by id (string).
+        return v.some((item) => String(item ?? "").toLowerCase().includes(needle));
+      }
+      return typeof v === "string" && v.toLowerCase().includes(needle);
+    }
+    case "does-not-contain": {
+      const needle = String(f.value ?? "").toLowerCase();
+      if (Array.isArray(v)) {
+        return !v.some((item) => String(item ?? "").toLowerCase().includes(needle));
+      }
+      return typeof v !== "string" || !v.toLowerCase().includes(needle);
+    }
+    case "is": {
+      if (Array.isArray(v)) return v.includes(f.value as never);
       return v === f.value;
-    case "is-not":
+    }
+    case "is-not": {
+      if (Array.isArray(v)) return !v.includes(f.value as never);
       return v !== f.value;
+    }
     case "is-empty":
       return v == null || (Array.isArray(v) && v.length === 0) || v === "";
     case "is-not-empty":
       return !(v == null || (Array.isArray(v) && v.length === 0) || v === "");
-    case "greater-than":
-      return Number(v) > Number(f.value);
-    case "less-than":
-      return Number(v) < Number(f.value);
-    case "greater-than-equal":
-      return Number(v) >= Number(f.value);
-    case "less-than-equal":
-      return Number(v) <= Number(f.value);
+    case "greater-than": {
+      const a = toComparable(v, dateProp);
+      const b = toComparable(f.value, dateProp);
+      return !isNaN(a) && !isNaN(b) && a > b;
+    }
+    case "less-than": {
+      const a = toComparable(v, dateProp);
+      const b = toComparable(f.value, dateProp);
+      return !isNaN(a) && !isNaN(b) && a < b;
+    }
+    case "greater-than-equal": {
+      const a = toComparable(v, dateProp);
+      const b = toComparable(f.value, dateProp);
+      return !isNaN(a) && !isNaN(b) && a >= b;
+    }
+    case "less-than-equal": {
+      const a = toComparable(v, dateProp);
+      const b = toComparable(f.value, dateProp);
+      return !isNaN(a) && !isNaN(b) && a <= b;
+    }
+    case "before":
+      return dateProp
+        ? !isNaN(toComparable(v, true)) && toComparable(v, true) < toComparable(f.value, true)
+        : false;
+    case "after":
+      return dateProp
+        ? !isNaN(toComparable(v, true)) && toComparable(v, true) > toComparable(f.value, true)
+        : false;
     case "checked":
       return v === true;
     case "unchecked":
@@ -55,5 +111,9 @@ function compareValues(a: unknown, b: unknown): number {
   if (a == null) return 1;
   if (b == null) return -1;
   if (typeof a === "number" && typeof b === "number") return a - b;
+  // Try numeric comparison first (handles numeric strings, e.g. dates as ISO sort lexically OK)
+  const an = Number(a);
+  const bn = Number(b);
+  if (!isNaN(an) && !isNaN(bn) && typeof a !== "boolean" && typeof b !== "boolean") return an - bn;
   return String(a).localeCompare(String(b));
 }

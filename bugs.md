@@ -1638,3 +1638,130 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-1230 — Sidebar pages are not draggable for reorder (re-affirms B-1132, P3, info)
 - All `[data-testid^="handle-"]` (19 of them on Welcome) ARE draggable; sidebar pages have no draggable wrappers.
+
+
+## 2026-05-13 00:30 — Test agent batch 15 (verifications)
+
+### B-1300 — Verification: B-1203 legacy DB view (missing hiddenProperties/filters/sorts) no longer crashes (P3, info)
+- Steps: mutate one view in localStorage to delete `hiddenProperties`, `filters`, `sorts`, `propertyOrder` keys → reload → navigate `/app/db/<id>`.
+- Observed: DB renders normally; table view shows with columns + add-property affordance. No error boundary, no console errors.
+- B-1203 confirmed fixed.
+
+### B-1301 — Verification: B-1221 InlineToolbar link button uses inline popover (P3, info)
+- Source: `src/components/editor/InlineToolbar.tsx` line 60-87, 180-205. `applyLink()` no longer calls `window.prompt`; it sets `linkOpen=true`, saves the selection in `savedRangeRef`, and renders a popover with `[data-testid="ib-link-popover"]` containing `[data-testid="ib-link-input"]` (Enter commits, Escape cancels) and `[data-testid="ib-link-apply"]`.
+- Note: end-to-end DOM repro is awkward because the InlineToolbar listens to `selectionchange` and the preview iframe loses focus between eval calls, collapsing the selection. Code review + testid presence confirm the popover wiring.
+- B-1221 confirmed fixed.
+
+### B-1302 — Verification: B-1211 mobile drawer scrim (P3, info)
+- Steps: mobile preset 375x812 → `[data-testid="open-sidebar"]`.click() → aside renders (x=0, w=256), `[data-testid="sidebar-scrim"]` present (button, fixed inset-0, bg `rgba(0,0,0,0.4)`, z-index 20). Click on scrim → aside is unmounted, openBtn returns.
+- Tapping a nav button (`[data-testid="sidebar-home"]`) also auto-closes the drawer and navigates to /app.
+- B-1211 confirmed fixed.
+
+### B-1303 — Verification: B-1218 trash route lists databases (P3, info)
+- Steps: mark a DB `isInTrash:true` in localStorage → reload → /app/trash.
+- Observed: "DATABASES" section appears with the DB name, row count, and `[data-testid="trash-db-<id>"]` row with `restore-db-<id>` and `delete-forever-db-<id>` buttons. Restore clears `isInTrash` and the row disappears; Delete forever removes the DB from `state.databases`.
+- B-1218 confirmed fixed.
+
+### B-1304 — Date filter operators greater-than/less-than do not work on date properties (P1, fixed)
+- File: `src/components/database/filter.ts` lines 23-30.
+- Steps: created DB with `date` property + 6 rows with ISO dates spanning Apr–Jun 2026 → added filter `p_due greater-than 2026-04-12` (should match 5 rows).
+- Observed: 0 rows match.
+- Root cause: `Number("2026-05-06T22:00:00.000Z")` returns `NaN`. The greater-than operator does `Number(v) > Number(f.value)` which compares NaN to NaN → false.
+- Expected: detect property type (or value type) and coerce via `Date.parse(v)`/`Date.parse(f.value)` before comparison.
+- Also note: the filter value <input> is `type="text"` even when the selected property is a date; this should be `type="date"` with a calendar picker.
+
+### B-1305 — Filter operator `contains` does not work on multi-select / array values (P1, fixed)
+- File: `src/components/database/filter.ts` lines 11-14.
+- Steps: created DB with `multi-select` property `Tags` (`tg_eng`, `tg_ops`, `tg_design`). 3 rows include `tg_eng`. Added filter `p_tag contains tg_eng`.
+- Observed: 0 rows match.
+- Root cause: `typeof v === "string"` short-circuits when `v` is an array (multi-select stores arrays of option ids). For arrays the filter should check `v.includes(f.value)` or test option name substring.
+- Expected: `contains` on multi-select / status / select-as-id should detect array vs string.
+
+### B-1306 — Filter `is` on select uses the option-id as comparison value but the value input is a plain text box (P2, open)
+- Steps: filter `p_status is st_doing` works only if the user types the raw option id; there is no select-option dropdown.
+- Expected: when the filtered property is select/status/multi-select, render the input as a select of the property's options (matching by id, label shown to the user).
+
+### B-1307 — Filter on select operator `contains`/`does-not-contain` matches the raw option-id, not the user-facing label (P3, open)
+- See B-1305/B-1306. Even if we fix the array issue, the comparison should be against label/name, not option id — otherwise the user has to enter cryptic ids in the input.
+
+### B-1308 — Sort on Priority sorts alphabetically by option id ("high" < "low" < "med"), not by option order (P2, open)
+- File: `src/components/database/filter.ts` lines 53-59. `compareValues` falls back to `localeCompare`.
+- Steps: created DB with select Priority (Low/Med/High options in that order) → sort by Priority asc.
+- Observed: rows ordered "High, Low, Med" — alphabetical, not by the option order the user configured.
+- Expected: for select/status, sort by the index of the option in `property.options[]`. Notion uses option order for "is" filters and sort tiebreakers.
+
+### B-1309 — Filter input field is `type="text"` regardless of underlying property type (P2, open)
+- File: filter row (see filter UI screenshot via DOM). For date, number, select, multi-select, person, status etc. the input is still a plain text input.
+- Expected: switch input type / component based on property type: date → `<input type="date">`; select/status → `<select>` of options; checkbox → `checked|unchecked` operators only (already correct); number → `<input type="number">`; person → person picker.
+
+### B-1310 — AI chat (Cmd+. panel) shows full answer in one shot, no token-by-token streaming (P2, open)
+- File: `src/components/ai/AIChat.tsx` lines 71-83. `send()` enqueues a 600ms `setTimeout` then appends the entire `answer` to the message list. There is no incremental update of the assistant message.
+- Steps: open AI chat (Cmd+. or `[data-testid="ai-btn"]`) → type message → submit → polled DOM 12 times at 150ms intervals; final assistant message appears all-at-once after ~600ms.
+- Expected: stream tokens into the last assistant bubble for an LLM-like feel (e.g., split the canned answer by whitespace and append every 30-50ms; or use the real Fetch stream API when wired). Even in demo mode, simulated streaming gives a much better UX and matches Notion AI.
+
+### B-1311 — `/ai` block (ai-block) shows full result in one shot, no streaming animation (P3, open)
+- File: `src/components/editor/Block.tsx` lines 1286-1293. `generate()` waits 800ms then sets `result` once.
+- Steps: insert via slash menu, type a prompt, click Generate → button briefly shows "…" then full result appears.
+- Expected: animate the result chunked, or at least show a typing indicator that's distinct from the "Thinking…" state of the chat.
+
+### B-1312 — Circular synced-block (ref pointing to its own page's synced-block) crashes/hangs the renderer (P1, fixed)
+- Steps: create a `synced-block` source with a child `paragraph` and an additional `synced-block-ref` whose `sourceId` points to the source itself, all on a single page → navigate to the page.
+- Observed: PageContent crashes with `Cannot read properties of undefined (reading 'map')` repeatedly (error boundary kicks in); a subsequent valid reload causes the renderer to become unresponsive (eval timeout after 30s). The server had to be restarted.
+- Expected: defensively detect cycles in the synced-block render (e.g., maintain a `visitedSources` set passed through children rendering and bail out of any source that's already in the set, rendering an "⚠ Circular sync reference" placeholder).
+
+### B-1313 — No UI affordance to add block-level comments (P2, open) — confirms still missing
+- The `Comment` model in the store has a `blockId` field (see `PageComments.tsx` line 12 — `!c.blockId` filter) so the schema supports it, but there is no UI to create a block-level comment:
+  - `src/components/editor/Block.tsx` has no Comment menu item, no hover-revealed comment icon, no shortcut handler.
+  - `PageComments.tsx` only renders comments where `!c.blockId`.
+- Steps: hover any block, open the block menu, search for "Comment" → not present. The InlineToolbar has no Comment button either.
+- Expected: a "Comment" item in the block hover menu / dropdown that creates a `Comment` with `pageId` + `blockId` set, plus an inline indicator (e.g. a yellow speech-bubble in the gutter) on blocks that have unresolved comments; clicking the indicator opens the comments panel filtered to that block.
+
+### B-1314 — Timeline view bars all have identical width regardless of date (P3, open)
+- Steps: created DB with 6 rows whose `date` property spans Apr 11–Jun 10 2026; switched to Timeline view → 6 bars, all `width=96px`, only `x` position changes.
+- Expected: a date property in Notion can store a `start` and `end`; the bar width should be derived from `end − start`. If the property is point-in-time only, bars should display as a chevron / pin rather than a full-width bar.
+- Implementation should detect `range` on the date property and render accordingly.
+
+### B-1315 — Chart view legend / axis labels show raw option ids instead of option names (P2, open)
+- Steps: DB with status options (`st_done`, `st_doing`, `st_todo` mapped to labels Done/Doing/Todo) → added Chart view; defaults to bar chart with X = first non-title (Status) → bars labeled `st_done`, `st_doing`, `st_todo`.
+- Expected: render the option `name` not the option `id`. Same will apply to select / multi-select X axes.
+
+### B-1316 — Chart view: X-axis labels for date column show raw ISO timestamps, hard to read (suspected; not directly tested) (P3, open)
+- See B-1315 root cause — chart axis builds buckets from raw stored values without coercing through property option lookup or date formatter.
+
+### B-1317 — Sign-up: invalid email is blocked by HTML5 native validation tooltip; no custom inline error UX (P3, open)
+- Steps: /auth → Sign up → fill name + `not-an-email` + password → submit form. Native browser tooltip ("Please include '@' in the email") shows in the browser's locale; form is NOT submitted.
+- Expected: alongside the HTML5 validity, render a custom inline error such as `<p data-testid="auth-email-error">Enter a valid email</p>` so the message is consistent across browsers/locales and works in test environments where the native tooltip is invisible.
+
+### B-1318 — Changing a relation property's target DB leaves stale row ids in the source rows and renders them as "Untitled" (P1, fixed)
+- Steps:
+  1. Create two DBs `B` and `C`. Each has a single title property.
+  2. Create DB `A` with a relation property `p_rel` whose `targetDatabaseId = "db_b"`.
+  3. Add a row in A with `p_rel = ["r_b1", "r_b2"]`.
+  4. Change the relation's `targetDatabaseId` from `db_b` to `db_c` (via direct state mutation; there is no UI affordance — see I-XXXX).
+  5. Reload → the relation cell in DB A still shows the two old links rendered as `"Untitled"` because the row ids no longer resolve in `db_c`.
+- Expected: when `targetDatabaseId` changes, the implementer should either
+  - clear all linked-row references on every row of DB A for that property (`row.values[p_rel] = []`), OR
+  - prompt the user "Changing target DB will discard 2 existing links — continue?" and only then clear; OR
+  - block the change unless the property is empty across all rows.
+- Currently the linked ids leak into the new target DB's render path and produce phantom "Untitled" entries that look like real records but cannot be opened.
+
+### B-1319 — No "Delete forever" action on the sidebar page-menu for any page (P2, open)
+- Steps: hover any page in the sidebar → click `[data-testid="page-menu-<id>"]` → menu only shows Add to favorites / Duplicate / Move to Trash.
+- Expected: when the page is already trashed, the menu should offer "Delete forever" / "Restore" (or surface those in a separate trashed-pages section in the sidebar). Today the only entry point for permanent delete is the /app/trash route via `[data-testid="delete-forever-<id>"]`.
+
+### B-1320 — Cmd+K keyboard shortcut does not open the palette when dispatched programmatically (P3, info)
+- Steps: dispatched `KeyboardEvent('keydown', {key:'k', metaKey:true})` on document/window — palette did not open. Clicking `[data-testid="sidebar-search"]` does open it.
+- Likely a `useEffect` listener that filters on `e.code === "KeyK"` or attaches to a specific element. Should also bind to `document.addEventListener("keydown", ...)` with no element guard so synthetic events work — useful for E2E.
+
+### B-1321 — Calendar "+" quick-create works (P3, info)
+- Steps: /app/calendar → click a date cell → click "+" pencil button → input placeholder "Event title…" appears with Create/Cancel → fill title → click Create → event appears in cell. Confirmed working.
+
+### B-1322 — Board view drag-drop between columns works (P3, info)
+- Steps: created board view grouped by select property; dragged a card via synthetic dragstart/dragover/drop → `row.values[groupBy]` updated to the new option id. Confirmed working end-to-end.
+
+### B-1323 — Formula `prop("Nonexistent")` silently returns empty, no error (P3, open)
+- Steps: set a formula property's `expression` to `prop("PropDoesNotExist")` → cell renders blank. Other formula errors (e.g., `1 + +`) surface as `#ERR: …`.
+- Expected: either `#ERR: Unknown property` to help users debug typos, or document that missing props return null.
+
+### B-1324 — Export workspace as JSON works (P3, info)
+- Steps: /app/settings → click `[data-testid="settings-export"]`. Stub `URL.createObjectURL` to capture: receives a `application/json` blob, size ~10KB for a small workspace.

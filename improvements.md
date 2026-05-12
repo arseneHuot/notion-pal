@@ -619,3 +619,51 @@ Priority: high / medium / low.
 
 ### I-1214 — Add a clearer "Demo mode" badge to the AI panel (low, open)
 - See B-1229. The footer "Models: GPT-5.2 · ... (demo)" is easy to miss. A subtle pill in the header would prevent false expectations.
+
+
+## 2026-05-13 00:50 — Test agent batch 15
+
+### I-1300 — Coerce date / number filter values via Date.parse before numeric compare (high, open)
+- See B-1304. Today `Number("2026-05-06T22:00:00.000Z")` returns NaN, so date filters always fail. Use `Date.parse(v)` for date properties (lookup property type) and stick with `Number(v)` for number/percent properties.
+
+### I-1301 — Support array values in `contains`/`does-not-contain` filter operators (high, open)
+- See B-1305. For multi-select / status with array storage, `contains <option-id-or-name>` should test `Array.isArray(v) && v.includes(needle)` or compare against option labels via the property's `options[]` list.
+
+### I-1302 — Filter value input should be property-type aware (high, open)
+- See B-1306 / B-1309. Date → `<input type="date">`; select/status → `<select>` of options; person → person picker; number → `<input type="number">`. Today the input is `type="text"` regardless.
+
+### I-1303 — Compare select / status by `options[].order` (or option index) instead of localeCompare on option id (medium, open)
+- See B-1308. For each select / status sort, look up the option in `property.options[]` and compare by index. Multi-select can sort by the first option's index.
+
+### I-1304 — Stream AI chat responses token-by-token (medium, open)
+- See B-1310. In demo mode, split the answer by whitespace and `setMessages` every 30-50ms via a `requestAnimationFrame` loop. In production hook the real `fetch().body.pipeThrough(new TextDecoderStream())` stream into the last assistant bubble.
+
+### I-1305 — Stream AI block result with a typing animation (low, open)
+- See B-1311. Same fix pattern as I-1304 but for `Block.tsx > AIBlockEl`.
+
+### I-1306 — Cycle-detect synced-block-ref render path (high, open)
+- See B-1312. In Block.tsx's synced-block / synced-block-ref renderer, pass a `Set<sourceId>` down the tree; if `set.has(sourceId)`, render `⚠ Circular synced reference` instead of recursing. Add an integration test for B-1312's exact seed shape.
+
+### I-1307 — Inline block-level comments UI (high, open)
+- See B-1313. Add a "Comment" action to the block hover/dropdown menu that creates a `Comment` with both `pageId` and `blockId` set. Add a gutter indicator on blocks with unresolved comments, plus filter the existing PageComments dialog to that block when the indicator is clicked.
+
+### I-1308 — Bar width in Timeline view should derive from start/end of range dates (medium, open)
+- See B-1314. The current implementation gives every bar a fixed width of 96px. Detect `date.range === true` (or whatever the schema uses) and compute width from `Math.max(1, dateDiffDays(end, start)) * dayPixelWidth`. For single-day events, render as a pin/diamond.
+
+### I-1309 — Chart view should label X-axis with `option.name` not `option.id` (high, open)
+- See B-1315 / B-1316. In `Chart.tsx`'s bucket aggregator, after grouping by raw id, map each bucket label through `property.options.find(o => o.id === id)?.name ?? id`. Same for tooltip labels.
+
+### I-1310 — Custom inline error message on the auth form for invalid email (low, open)
+- See B-1317. Add `<p id="auth-email-error" data-testid="auth-email-error">Enter a valid email address.</p>` rendered when `!email.match(/\S+@\S+\.\S+/)` after submit. Native HTML5 tooltip is locale-dependent and easily missed by test harnesses.
+
+### I-1311 — Clear stale relation row references when a relation property's target DB is changed (high, open)
+- See B-1318. On `updateDatabaseProperty(<rel>, { targetDatabaseId: newId })`, walk every row of the owning database and reset `row.values[relPropId] = []`. Optionally toast a count: "Discarded N broken links."
+
+### I-1312 — Surface "Delete forever" on trashed pages in a sidebar Trashed section (medium, open)
+- See B-1319. Either show trashed pages collapsed at the bottom of the sidebar with Restore / Delete forever actions, or add the action to the page-menu when the page is already in trash. Today users must navigate to /app/trash.
+
+### I-1313 — Make Cmd+K palette open via DOM-dispatched KeyboardEvent for E2E reliability (low, open)
+- See B-1320. The shortcut handler likely guards on `event.isTrusted` or `event.code`. Add `document.addEventListener("keydown", e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") open(); })` at the app level.
+
+### I-1314 — Surface `#ERR: Unknown property` when a formula references a non-existent property name (low, open)
+- See B-1323. Today `prop("Nonexistent")` returns null/empty silently. Throwing a `FormulaError("Unknown property \"Nonexistent\"")` would make typos discoverable.

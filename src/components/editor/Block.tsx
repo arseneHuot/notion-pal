@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+
+/** Tracks the chain of synced-block ids currently being rendered, so we can
+ *  detect a cycle (a ref whose source eventually points back to itself).
+ *  Without this guard, the recursive BlockComponent render loops until the
+ *  React runtime kills the tab. */
+const SyncedAncestorsContext = createContext<Set<string>>(new Set());
 import { useNavigate } from "@tanstack/react-router";
 import {
   GripVertical, Plus, ChevronRight, ChevronDown, MoreHorizontal, Trash, Copy,
@@ -1174,8 +1180,22 @@ function BreadcrumbEl({ block, pageId }: { block: Block; pageId: string }) {
 
 function SyncedEl({ block, pageId }: { block: Block; pageId: string }) {
   const allBlocks = useStore((s) => s.blocks);
+  const ancestors = useContext(SyncedAncestorsContext);
 
   if (block.type === "synced-block") {
+    // Cycle detection: if our own id is already an ancestor we'd render
+    // forever — stop and surface a friendly message instead.
+    if (ancestors.has(block.id)) {
+      return (
+        <BlockShell block={block} pageId={pageId}>
+          <div className="border-l-4 border-amber-400 pl-3 py-2 text-xs text-amber-700 dark:text-amber-300 italic" data-testid={`synced-cycle-${block.id}`}>
+            ⚠ Synced block cycle detected — stopped rendering to avoid an infinite loop.
+          </div>
+        </BlockShell>
+      );
+    }
+    const nextAncestors = new Set(ancestors);
+    nextAncestors.add(block.id);
     // Original / source — host its child blocks.
     const children = Object.values(allBlocks)
       .filter((b) => b.parentId === block.id)
@@ -1204,27 +1224,29 @@ function SyncedEl({ block, pageId }: { block: Block; pageId: string }) {
     }
 
     return (
-      <BlockShell block={block} pageId={pageId}>
-        <div className="border-l-4 border-pink-400 pl-3 py-2" data-testid={`synced-source-${block.id}`}>
-          <div className="text-xs uppercase text-pink-600 mb-1 flex items-center gap-2">
-            <span>Synced block (source)</span>
-            <button onClick={copyId} className="text-[10px] underline text-muted-foreground hover:text-foreground">copy id</button>
+      <SyncedAncestorsContext.Provider value={nextAncestors}>
+        <BlockShell block={block} pageId={pageId}>
+          <div className="border-l-4 border-pink-400 pl-3 py-2" data-testid={`synced-source-${block.id}`}>
+            <div className="text-xs uppercase text-pink-600 mb-1 flex items-center gap-2">
+              <span>Synced block (source)</span>
+              <button onClick={copyId} className="text-[10px] underline text-muted-foreground hover:text-foreground">copy id</button>
+            </div>
+            {children.length === 0 && (
+              <div className="text-xs text-muted-foreground italic">No content yet — add a block below or paste this id into a synced-block-ref to mirror.</div>
+            )}
+            {children.map((c) => (
+              <BlockComponent key={c.id} block={c} pageId={pageId} />
+            ))}
+            <button
+              onClick={addChild}
+              className="text-xs text-muted-foreground hover:text-foreground mt-1"
+              data-testid={`synced-add-${block.id}`}
+            >
+              + Add block
+            </button>
           </div>
-          {children.length === 0 && (
-            <div className="text-xs text-muted-foreground italic">No content yet — add a block below or paste this id into a synced-block-ref to mirror.</div>
-          )}
-          {children.map((c) => (
-            <BlockComponent key={c.id} block={c} pageId={pageId} />
-          ))}
-          <button
-            onClick={addChild}
-            className="text-xs text-muted-foreground hover:text-foreground mt-1"
-            data-testid={`synced-add-${block.id}`}
-          >
-            + Add block
-          </button>
-        </div>
-      </BlockShell>
+        </BlockShell>
+      </SyncedAncestorsContext.Provider>
     );
   }
 
@@ -1264,18 +1286,31 @@ function SyncedEl({ block, pageId }: { block: Block; pageId: string }) {
     );
   }
 
+  if (ancestors.has(source.id)) {
+    return (
+      <BlockShell block={block} pageId={pageId}>
+        <div className="border-l-4 border-amber-400 pl-3 py-2 text-xs text-amber-700 dark:text-amber-300 italic" data-testid={`synced-cycle-${block.id}`}>
+          ⚠ Synced reference cycle detected — stopped mirroring to avoid an infinite loop.
+        </div>
+      </BlockShell>
+    );
+  }
+  const nextAncestors = new Set(ancestors);
+  nextAncestors.add(source.id);
   return (
-    <BlockShell block={block} pageId={pageId}>
-      <div className="border-l-4 border-pink-400 pl-3 py-2" data-testid={`synced-ref-${block.id}`}>
-        <div className="text-xs uppercase text-pink-600 mb-1">Synced reference</div>
-        {children.length === 0 && (
-          <div className="text-xs text-muted-foreground italic">Source is empty.</div>
-        )}
-        {children.map((c) => (
-          <BlockComponent key={c.id} block={c} pageId={pageId} />
-        ))}
-      </div>
-    </BlockShell>
+    <SyncedAncestorsContext.Provider value={nextAncestors}>
+      <BlockShell block={block} pageId={pageId}>
+        <div className="border-l-4 border-pink-400 pl-3 py-2" data-testid={`synced-ref-${block.id}`}>
+          <div className="text-xs uppercase text-pink-600 mb-1">Synced reference</div>
+          {children.length === 0 && (
+            <div className="text-xs text-muted-foreground italic">Source is empty.</div>
+          )}
+          {children.map((c) => (
+            <BlockComponent key={c.id} block={c} pageId={pageId} />
+          ))}
+        </div>
+      </BlockShell>
+    </SyncedAncestorsContext.Provider>
   );
 }
 

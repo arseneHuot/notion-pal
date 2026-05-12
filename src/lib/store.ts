@@ -1128,6 +1128,29 @@ export function updateDatabaseProperty(databaseId: string, propertyId: string, p
       void becomingDual;
     }
 
+    // If a relation's targetDatabaseId is being changed, clear stale row
+    // links in this database's rows (B-1318) so we don't leave dangling ids
+    // that render as "Untitled" phantoms.
+    let rowsPatch: typeof s.rows | null = null;
+    if (
+      previous &&
+      previous.type === "relation" &&
+      (patch as Partial<Extract<Property, { type: "relation" }>>).targetDatabaseId !== undefined &&
+      (patch as Partial<Extract<Property, { type: "relation" }>>).targetDatabaseId !== previous.targetDatabaseId
+    ) {
+      const updatedRows = { ...s.rows };
+      let touched = false;
+      for (const r of Object.values(updatedRows)) {
+        if (r.databaseId !== databaseId) continue;
+        const cur = r.values[propertyId];
+        if (Array.isArray(cur) && cur.length > 0) {
+          updatedRows[r.id] = { ...r, values: { ...r.values, [propertyId]: [] }, updatedAt: Date.now() };
+          touched = true;
+        }
+      }
+      if (touched) rowsPatch = updatedRows;
+    }
+
     nextDbs = {
       ...nextDbs,
       [databaseId]: {
@@ -1217,7 +1240,7 @@ export function updateDatabaseProperty(databaseId: string, propertyId: string, p
       }
     }
 
-    return { ...s, databases: nextDbs };
+    return { ...s, databases: nextDbs, rows: rowsPatch ?? s.rows };
   });
 }
 
