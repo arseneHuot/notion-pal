@@ -517,3 +517,57 @@ Priority: high / medium / low.
 ### I-818 — Wire up Sort/Filter/Group UI for db views (high, open)
 - See B-818. State already supports them, so it's just exposing UI controls.
 
+
+
+## 2026-05-12 22:45 — Test agent batch 13
+
+### I-1100 — Cmd+K palette items should set `aria-selected` on the highlighted row (medium, open)
+- See B-1111. cmdk currently styles via a class; for a11y screens, set `aria-selected={isHighlighted}` and `role="option"` on each item plus `role="listbox"` on the wrapper.
+
+### I-1101 — Surface a Favorites sort/order UI (medium, open)
+- See B-1106. Either auto-sort by `favoritedAt` desc (cheap, mirrors most apps) or add drag handles to reorder. Store a `favoriteOrder: string[]` on the workspace or in `ui`.
+
+### I-1102 — Make ButtonCell render the property's `label` (and optional `emoji`) (high, open)
+- See B-1107. One-liner: replace `{bp.label || "Run"}` with `{[bp.emoji, bp.label || property.name || "Run"].filter(Boolean).join(" ")}`.
+
+### I-1103 — Unify button action handling between block-level and DB-cell button (high, open)
+- See B-1108. Extract `runButtonAction(action, ctx)` into `src/lib/button-actions.ts` and call it from both Block.tsx and PropertyEditor.tsx so the kinds stay in sync.
+
+### I-1104 — Public viewer should render synced-block children (high, open)
+- See B-1120. Walk the source's `blockIds` server-side at the readonly Block component (similar to how it handles toggle children in B-801 / I-801).
+
+### I-1105 — App-level Undo for title / content edits using `page.history` (high, open)
+- See B-1121. The store already has a `history` array per page; expose ⌘Z / ⌘⇧Z handlers that pop/push and call `updatePage(...)`.
+
+### I-1106 — Sanitise block fields when changing type (medium, open)
+- See B-1122. When transforming, project the existing block through `narrowToType(newType, block)` that drops fields not in the new union variant. Avoids fields silently piling up.
+
+### I-1107 — Sticky title column in wide database tables (high, open)
+- See B-1113. CSS-only fix: `position: sticky; left: 0; background: var(--card);` on the first `<td>` / `<th>` of each row; remember to set `z-index: 1` and a matching shadow on the right edge.
+
+### I-1108 — Implement at-least Markdown export from page action menu (medium, open)
+- See B-1117. Each block already has a clear text shape (`content`, `type`, children). A small `blocksToMarkdown(pageId)` function plus a "Copy as Markdown" item in the page menu would solve 80% of the export use cases.
+
+### I-1109 — Per-person permissions on Share dialog using existing `page.permissions` shape (high, open)
+- See B-1116. The `Page` type already has `permissions: PagePermission[]` and `pageOwners: string[]`. Add an email-invite input + dropdown for view/comment/edit and render the list under "People with access".
+
+### I-1110 — Inline teamspace creation UI (medium, open)
+- See B-1131. Replace `prompt("Teamspace name?")` with the inline input pattern used by view-rename / add-property.
+
+### I-1111 — Drag-handle to reorder sidebar pages and teamspaces (medium, open)
+- See B-1132. Make each ts-* / sidebar page row draggable; reuse the block-DnD logic but persist `order` on `Page` and `Teamspace`.
+
+### I-1112 — Editable Calendar event chips (high, open)
+- See B-1137. Click on an event opens an inline editor (title, date, time, color, calendar source); add a "Delete" affordance regardless of whether the event came from quickCreate or from a DB derivation.
+
+### I-1113 — Coerce `calendarSource: personal` events into the source-aware Trash flow (high, open)
+- See B-1135. One-liner fix in the `eventsByDay` build: when the underlying event has no DB origin, map `source: "calendar"` so the existing Trash button shows up. Alternatively branch the Trash button on either field.
+
+### I-1114 — Smarter Form-view link or remove the button if no /form route exists (medium, open)
+- See B-1138. Either ship the public form route or rename the CTA.
+
+### I-1115 — Chart X-axis should default to the first non-title categorical property (low, open)
+- See B-1139. If user picks title, show a hint "Each row will be its own bar — pick a select/status property for grouping."
+
+### I-1116 — Toggle the visibility of `created-by` / `last-edited-by` columns when row metadata is missing (medium, open)
+- See B-1112. Either default-hide them when rows lack the field, or render them with a "—" placeholder so a single bad row doesn't tank the page.

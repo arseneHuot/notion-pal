@@ -300,8 +300,10 @@ function useEditable(
   const [slashPos, setSlashPos] = useState({ x: 0, y: 0 });
   const pageBlocks = useStore((s) => s.pages[pageId]?.blocks ?? []);
 
-  // Initialize content. Only sync DOM if the content diverges AND the
-  // editor isn't currently focused (avoids cursor jumps on every keystroke).
+  // Initialize content. Sync DOM whenever the stored content diverges from
+  // the DOM and the editor isn't currently focused (so external state changes
+  // — version restores, slash transformations, undo — apply without
+  // clobbering the live cursor).
   useEffect(() => {
     if (!ref.current) return;
     const content = (block as { content?: string }).content ?? "";
@@ -309,7 +311,7 @@ function useEditable(
     if (ref.current.innerHTML !== content && !isFocused) {
       ref.current.innerHTML = content;
     }
-  }, [block.id, (block as { content?: string }).content, block.type]);
+  }, [block.id, (block as { content?: string }).content, (block as { updatedAt?: number }).updatedAt, block.type]);
 
   const focus = useCallback(() => {
     ref.current?.focus();
@@ -1321,12 +1323,13 @@ function AIBlockEl({ block, pageId }: { block: Block; pageId: string }) {
 function ButtonBlockEl({ block, pageId }: { block: Block; pageId: string }) {
   const btn = block as Extract<Block, { type: "button" }>;
   function run() {
-    // Run actions in order
+    let ran = 0;
     for (const action of btn.actions ?? []) {
       if (action.kind === "show-confirmation") {
-        alert(action.message);
+        import("@/components/ui/Toast").then((m) => m.toast(action.message, "info"));
       } else if (action.kind === "send-webhook") {
         fetch(action.url, { method: "POST", body: action.payload ?? "{}" }).catch(() => undefined);
+        import("@/components/ui/Toast").then((m) => m.toast(`Sent webhook to ${action.url}`, "info"));
       } else if (action.kind === "insert-block") {
         createBlock(pageId, {
           type: action.blockType,
@@ -1334,7 +1337,15 @@ function ButtonBlockEl({ block, pageId }: { block: Block; pageId: string }) {
           order: block.order + 1,
           content: action.content ?? "",
         } as Omit<Block, "id" | "createdAt" | "updatedAt">, block.id);
+      } else if (action.kind === "open-page") {
+        window.location.href = `/app/p/${action.pageId}`;
       }
+      ran += 1;
+    }
+    if (ran === 0) {
+      import("@/components/ui/Toast").then((m) =>
+        m.toast(`Ran "${btn.label || "Button"}" — open block menu to add actions.`, "info"),
+      );
     }
   }
   return (

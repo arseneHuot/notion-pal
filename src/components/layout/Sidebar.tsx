@@ -82,16 +82,7 @@ export function Sidebar() {
             onNewPage={() => handleNewPage(ts.id)}
           />
         ))}
-        <button
-          onClick={() => {
-            const name = prompt("Teamspace name?");
-            if (name) createTeamspace({ name });
-          }}
-          className="w-full flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
-          data-testid="add-teamspace"
-        >
-          <Plus className="size-3.5" /> Add teamspace
-        </button>
+        <AddTeamspaceForm />
       </div>
 
       <div className="mt-2 px-2 pb-3 border-t border-sidebar-border pt-3 space-y-0.5">
@@ -289,6 +280,54 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function AddTeamspaceForm() {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground hover:text-foreground"
+        data-testid="add-teamspace"
+      >
+        <Plus className="size-3.5" /> Add teamspace
+      </button>
+    );
+  }
+  return (
+    <div className="px-3 py-1 flex gap-1">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && name.trim()) {
+            createTeamspace({ name: name.trim() });
+            setName("");
+            setOpen(false);
+          }
+          if (e.key === "Escape") setOpen(false);
+        }}
+        placeholder="Teamspace name"
+        className="flex-1 bg-background border border-input rounded text-xs px-1 py-0.5"
+        data-testid="add-teamspace-input"
+      />
+      <button
+        onClick={() => {
+          if (name.trim()) {
+            createTeamspace({ name: name.trim() });
+            setName("");
+            setOpen(false);
+          }
+        }}
+        className="text-xs bg-primary text-primary-foreground rounded px-2"
+      >
+        Add
+      </button>
     </div>
   );
 }

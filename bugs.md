@@ -1314,3 +1314,188 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - End-to-end: typed "NewProp" + Enter on the property input, the database properties list grew from 6 to 7 with a new `{type:"text", name:"NewProp"}` property appended. UI is fully non-blocking.
 
 
+
+
+## 2026-05-12 22:30 — Test agent batch 13
+
+### B-1100 — Verification: Mail Compose Send actually saves (P3, info)
+- Steps: /app/mail → Compose → fill To/Subject/Body → Send.
+- Result: a new mail record is created in `mails` with `labels: ["sent"]`, `from: "me@notionclone.app"`, `to: ["bob@example.com"]`, `subject`, `body`, `snippet`, `read: true`, `receivedAt`, plus `archived/trash/starred: false`. The inbox list immediately renders the new message with a "sent" badge. FIX VERIFIED.
+
+### B-1101 — Verification: Comments author snapshot survives cross-user view (P3, info)
+- Steps: post a comment as user A (TestBatch12, `7153c57b…`). Log out. Sign up/sign in as user B (TestBatch12B). Because the store is per-user (namespaced by `notion-clone:user:<uid>`), I copied A's comment object into B's `comments` map to simulate a shared comment, then re-rendered.
+- Result: the rendered author chip in the comments panel reads "TestBatch12" (the original author snapshot) even though `currentUser.name` is "TestBatch12B". `authorName` and `authorAvatar` are baked into the comment record at write time. FIX VERIFIED.
+
+### B-1102 — Verification: Synced block source + ref live mirroring (P3, info)
+- Steps: programmatically seeded `pg_b13_synced_*` with a `synced-block` (one text child) and an unlinked `synced-block-ref`. Pasted the source id into `synced-source-input-…` and clicked `synced-source-link-…`. The ref switched from "NO SOURCE" state to a mirrored body showing "Source content line 1". Edited the source's text inline to "Source content EDITED LIVE" — ref updated in the same frame. Reloaded the page — mirror still rendered. FIX VERIFIED.
+
+### B-1103 — Verification: Calendar Week view renders 7-day strip (P3, info)
+- Steps: /app/calendar → view=week. Found `[data-testid="calendar-week-grid"]` and exactly 7 `week-day-YYYY-MM-DD` cells (Mon-Sun, 2026-05-11..2026-05-17). Locale header is "lun. 11 / mar. 12 / mer. 13 / jeu. 14 / ven. 15 / sam. 16 / dim. 17". B-913 FIX VERIFIED for Week.
+
+### B-1104 — Verification: Calendar Day view renders 24 hour rows (P3, info)
+- Steps: /app/calendar → view=day. Found `[data-testid="calendar-day-grid"]` and exactly 24 hour rows `day-hour-0..day-hour-23`. Day header reads "mardi 12 mai 2026" plus an "+ Event" button. B-913 FIX VERIFIED for Day.
+
+### B-1105 — Verification: Calendar "+" day-add uses inline compose, not native prompt (P3, info)
+- Steps: month view. Stubbed `window.prompt` with a counter, then clicked `[data-testid="day-add-2026-05-12"]`. Result: counter stayed 0; a new `<input placeholder="Event title…">` appeared inline on that day's cell. Native `prompt` is no longer used for event creation.
+
+### B-1106 — Sidebar Favorites are rendered in arbitrary order; no sort/reorder UI (P2, open)
+- File: src/components/layout/Sidebar.tsx line 22 — `Object.values(pages).filter((p) => p.isFavorite && !p.isInTrash)`. No `.sort()` and no drag-handle.
+- Steps: favorite three pages in a specific intended order (e.g., Roadmap, Welcome, Getting Started). Reload.
+- Observed: the FAVORITES section lists them in `Object.values(pages)` insertion order (Welcome, Getting Started, Roadmap), not the order the user starred them, and certainly not a reorderable order. Even programmatically setting `favoriteSortOrder` on each page has no effect.
+- Expected: either preserve favoriting timestamp (sort by `favoritedAt` desc) or expose drag handles to reorder.
+
+### B-1107 — Database button cell ignores `label`; renders fallback "Run" for every action (P2, fixed)
+- File: src/components/database/PropertyEditor.tsx line ~582 — `{bp.label || "Run"}`.
+- Steps: a `button` property with `label: "Confirm me"` and `actions:[{kind:"show-confirmation"}]` was rendered.
+- Observed: every button cell shows "Run" instead of the configured label; only the column header reflects the property name. Combined with the fact that you can have N buttons in one row, the user can't tell them apart from the cell alone.
+- Expected: render `bp.label` (already on the type) — fall back to `property.name` before "Run", and prepend the `bp.emoji` if set.
+
+### B-1108 — Database button cell only handles 3 of the action kinds (P2, fixed)
+- File: src/components/database/PropertyEditor.tsx ~563–574.
+- The cell only branches on `edit-property`, `show-confirmation`, `send-webhook`. The `ButtonAction` type allows more (e.g., `insert-block` used in Block.tsx 1330), and the user-facing slash-button supports `add-page`, `add-row`, etc. The cell silently drops unrecognized kinds (no toast, no log).
+- Expected: at minimum support the same kinds Block.tsx button supports (so block buttons and DB buttons behave consistently), and on an unknown kind emit `toast(...)` rather than dropping silently.
+
+### B-1109 — Database row's button column header shows the ▶ emoji icon even when no emoji is set, with no way to override (P3, open)
+- Steps: button property with no `emoji` field. Column header still renders "▶<name>" by default. There's no surface to set a custom emoji per property in the property editor.
+- Expected: allow choosing an emoji (the type already has `emoji?: string`), or drop the default ▶ when empty.
+
+### B-1110 — Slash menu performance with rapid typing is fine (P3, info)
+- Steps: opened slash menu on a new text block. Programmatically typed 15 chars in succession via execCommand("insertText").
+- Observed: 5 ms total / 0.3 ms per char. Filter narrows correctly: typing "head" reduces 41 items to 7 (h1/h2/h3 + toggle-h1/2/3 + slash-menu itself). Typing a gibberish string closes the menu (empty results). PERF OK.
+
+### B-1111 — Cmd+K palette ArrowDown/Up + Enter all work (P3, info)
+- Steps: ⌘K, type "Wel" → list narrows to two pages (Welcome, Getting Started — both match "we" / "ge"). ArrowDown highlights second item (`bg-accent` class applied); ArrowDown again at the bottom doesn't wrap; ArrowUp moves back to first. Enter navigates to the highlighted page (verified URL change to its `/app/p/<id>`).
+- Note: cmdk does NOT use `aria-selected`; relies purely on a `bg-accent` class. Screen readers won't know which item is current. See I-1100 below.
+
+### B-1112 — Database table page crashes when a row lacks `createdBy` / `lastEditedBy` and the view shows those columns (P2, fixed)
+- File: src/components/database/PropertyEditor.tsx line 84/87 — `row.createdBy.slice(-6)` and `row.lastEditedBy.slice(-6)`.
+- Steps: seed a row with no `createdBy` or `lastEditedBy` fields (which can happen on partial imports / older rows from B-910 if anyone re-imports JSON), display in a view that exposes the `created-by` / `last-edited-by` property type.
+- Observed: top-level CatchBoundary fires with "Cannot read properties of undefined (reading 'slice')"; the entire page becomes a "This page didn't load" screen.
+- Expected: guard with `row.createdBy ? row.createdBy.slice(-6) : "—"` (and respect I-809).
+
+### B-1113 — Wide tables horizontally scroll but the Name (title) column is not sticky (P2, fixed)
+- File: src/components/database/DatabaseTableView (the `overflow-x-auto rounded border border-border` wrapper).
+- Steps: open a table with ~22 visible properties; scrollWidth=1851 vs clientWidth=662. Scroll the container 1000px right.
+- Observed: the title column scrolls off the left edge of the viewport (its x = -599); user loses row context.
+- Expected: make the first (title) column `position: sticky; left: 0` with a solid background, matching Notion / Airtable / Linear behaviour.
+
+### B-1114 — Page-level button block has no UI to add/edit/remove actions (P2, fixed)
+- Steps: insert `/button` → a "Click me" button appears with a small Label input next to it. Clicking the button when `actions = []` does literally nothing (no toast, no alert, no error).
+- Observed: the only editor surface is the label input. There is no menu/popover to configure actions and no fallback toast like the DB ButtonCell has ("Ran '..' — configure actions in property settings.").
+- Expected: a "Configure actions" affordance on the button block (matches I-816), plus a no-op-toast so the user knows their click was received.
+
+### B-1115 — Settings → Export workspace creates a download but has no matching Import path (P3, open)
+- File: src/routes/app.settings.tsx — only "Export workspace as JSON". Pairs with I-807 already filed.
+- Steps: click "Export workspace as JSON". File `notion-clone-export-YYYY-MM-DD.json` downloads. Settings has no input/upload control to load it back.
+- Expected: see I-807 — accept the same JSON via `<input type="file" accept="application/json">` plus schemaVersion validation.
+
+### B-1116 — Sharing UI offers only public publish; there is no per-person ACL (P2, open)
+- File: src/components/page/ShareDialog.tsx — "People with access" section is hard-coded to "Workspace members get access automatically" with no controls.
+- Observed: no email-invite input, no permission level dropdown (view/comment/edit), no per-user list.
+- Expected: even an MVP could store `page.permissions: PagePermission[]` (the type already exists on Page) and render an invite input + per-row dropdown.
+
+### B-1117 — No per-page export to PDF or Markdown (P3, open)
+- File: nothing — there's no PDF/Markdown export anywhere. `grep -r "export.*pdf\|export.*markdown"` returns 0 hits.
+- Steps: open a page → header has Share/History/Comments/Favorite/AI/dark-mode buttons but no "Export" menu. The page menu in the sidebar (the ⋯ "More" button) also offers no export.
+- Expected: at minimum a "Copy as Markdown" action on the page menu — this is one of the most-requested Notion features and the editor block tree maps trivially to MD. PDF can come later via `window.print()`-friendly stylesheet.
+
+### B-1118 — Page button block: store `actions` array is initialised to `[]` but never editable through the UI (P3, open)
+- See B-1114. Without an editor, the only way to set actions is to hand-edit localStorage. Pair with I-816.
+
+### B-1119 — No web clipper (out-of-scope per task brief, P3, info)
+- Confirmed: the codebase has no browser-extension or bookmarklet for clipping web pages. Documented here so it's clearly captured as a "not in scope" gap rather than a missed bug.
+
+### B-1120 — Public viewer renders synced-block / synced-block-ref as "(Synced content)" placeholder (P2, fixed)
+- File: src/routes/p.$slug.tsx line ~249-251.
+- Steps: create a synced-block + ref in the editor, link them and verify mirror works in editor. Publish the page → /p/<slug>.
+- Observed: both source and ref render as the literal italic text "(Synced content)" — children of the source are not walked. The public viewer therefore strips all synced content silently.
+- Expected: in the public viewer, walk `source.blockIds` (for synced-block) or `blocks[ref.sourceId].blockIds` (for ref) and render each child via the existing readonly Block component.
+
+### B-1121 — Cmd+Z on contenteditable title does not undo the title change (P3, open)
+- Steps: focus the page title h1, select-all, type "NEW TITLE". Trigger Cmd+Z on the element.
+- Observed: title stays "NEW TITLE" — neither browser-native nor app-level undo restored the previous value. Same problem on block text content (likely a broader undo-history gap; see existing notes about history block in store).
+- Expected: undo restores the previous text. Since store.history exists per-page, a Cmd+Z handler could traverse it.
+
+### B-1122 — Block type transformation leaves leftover button-only fields on the new block (P3, open)
+- File: src/components/editor/Block.tsx — block-menu "transform to <type>" handler.
+- Steps: insert `/button` → use the block handle menu to convert to heading-1.
+- Observed: the block becomes `{type:"heading-1", label:"Click me", actions:[]}` — `label` and `actions` aren't stripped even though heading-1 has no such fields.
+- Expected: when transforming to a different type, drop fields that aren't part of the target type's schema (or at least the union-narrowed ones), or run the new shape through a sanitiser.
+
+### B-1123 — Cmd+D duplicate-block keybinding still missing (P3, open) — overlap with I-719
+- Steps: focus a block's contenteditable, dispatch keydown {key:'d', metaKey:true}.
+- Observed: no handler runs; block list size doesn't change.
+- Expected: see I-719. The block menu already shows the "⌘D" hint, so the absence is doubly confusing.
+
+### B-1124 — B-912 block-content search VERIFIED FIXED (P3, info)
+- Steps: instantiate template "Meeting notes" (creates a page with body "Agenda / Decisions / Action items"). ⌘K, type "Attendees" or "Decisions".
+- Observed: command palette returns "Meeting notes" page even though the title doesn't contain that text. CommandPalette.tsx already does `stripHtml(b.content).toLowerCase().includes(q)` for each block of the page. B-912 IS NO LONGER A BUG.
+
+### B-1125 — `add-block` UI button doesn't trigger slash menu for the same input session (P3, info)
+- Steps: click `+ New block` (data-testid="add-block") → focus moves to a new contenteditable. Type "/code" — slash menu doesn't immediately open in some cases unless you press `/` and let the input flush; calling `execCommand("insertText", "/code")` programmatically sometimes also fails. Workaround: type just `/`, wait, then type the rest.
+- Expected: insertion of `/` should open the menu regardless of how it was typed.
+
+### B-1126 — Code block copy works; "javascript" default language is bundled into the select label (P3, info)
+- The `<select data-testid="code-lang-…">` aggregates options as visible text rendering with no separators ("javascripttypescriptpython…") in the slash menu fallback view (the select itself is fine when expanded). Cosmetic.
+
+### B-1127 — Mobile sidebar still overlays (B-911) and there is no scrim (P2, open) — verified
+- 375x812 viewport. Sidebar slides over content; tap a page link, sidebar persists. Existing B-911 unchanged.
+
+### B-1128 — Wide-table seed shows 22 columns even though I requested 26 (P3, info)
+- After dropping created-by/last-edited-by columns (to avoid B-1112 crash), 24 remained but only 22 prop-header testids appear. Likely a hidden-properties filter or a non-rendered column type. Minor diagnostic.
+
+### B-1129 — Board view "Add card" works (P3, info)
+- Steps: switched to a board view grouped by a select property → `board-add-o` creates a new row with `{p_extra_2: 'o', p_title: ''}`. No crashes.
+
+### B-1130 — `add-block` floating + button doesn't create a block at end of page (P3, info)
+- Steps: click `[data-testid="add-block"]`. The function call seems to be a no-op when the last block is already empty; doesn't always add a new one.
+
+### B-1131 — "Add teamspace" still uses native window.prompt (P2, fixed)
+- File: src/components/layout/Sidebar.tsx line 87 — `const name = prompt("Teamspace name?")`.
+- Steps: stub window.prompt → click "Add teamspace" in sidebar. A teamspace named "auto" was silently created (matched the stub's return).
+- Expected: open the same inline-rename input pattern that B-1005 introduced for "Rename view" / "+ Add property". No native dialogs.
+
+### B-1132 — Sidebar pages aren't draggable for reorder (P3, open)
+- Steps: scan `document.querySelectorAll('[draggable="true"]')` after page load. Only block handles in the editor are draggable. The pages list inside teamspaces (`[data-testid^="ts-"]` children) has no draggable wrappers.
+- Expected: drag-handle in front of each sidebar page row for in-teamspace and cross-teamspace reorder.
+
+### B-1133 — New Timeline view added on an existing DB silently renders "Name" header with no rows (P3, open)
+- File: src/components/database/views/TimelineView.tsx — early-return "Timeline requires a start date property." only if `startProperty` is undefined. After clicking the timeline preset under "+ Add view" the new view has no `startProperty` set (default for board → groupByProperty similarly may need a default), so the placeholder message should appear; but the table-style header still renders, masking the issue.
+- Expected: when a view is missing required configuration, show a clear "Set start date property →" CTA, and don't fall back to the regular table-like row dump.
+
+### B-1134 — Automations exported in JSON but no UI to author them (P3, info)
+- File: src/routes/app.settings.tsx — `automations: Object.values(s.automations ?? {})` appears in the export, but no app surface lets a user create or edit automations. Matches Notion's "Automations" gap; document here so it's clear.
+
+### B-1135 — Calendar inline-created event can't be deleted because of `source` / `calendarSource` field mismatch (P2, fixed)
+- File: src/routes/app.calendar.tsx — `quickCreateEvent` writes `calendarSource: "personal"`. The selected-day list renders a Trash button conditional on `e.source === "calendar"` (line ~250). The reduced display object has `source: db.name` only for database-derived events; user-created events have no `source` field set.
+- Steps: open Calendar → click "+ Event" on day 2026-05-15 → type "Test event B13" + Enter. Click the day cell to see the event list. No delete button is shown; there's no edit either.
+- Expected: user-created calendar events should be deletable / editable. The simple fix is to either (a) map `calendarSource === "personal"` to `source: "calendar"` when building eventsByDay, or (b) change the conditional to check the raw event's `calendarSource`.
+
+### B-1136 — Restoring a page snapshot updates the store but doesn't refresh contenteditable DOM (P3, fixed)
+- File: src/components/page/PageHistoryPanel.tsx (or whichever owns the Restore button).
+- Steps: open page Welcome → History → "Save snapshot now". Edit the title to "XX broken title". Click Restore.
+- Observed: store-level title rolls back to "Welcome" (verified via localStorage), but the on-screen H1 contenteditable still reads "XX broken title" until a full reload.
+- Expected: when restoring, force a re-mount or set `key` on the page wrapper / `contentEditable.textContent` to the restored value. Otherwise users think the restore failed.
+
+### B-1137 — No event-edit affordance on Calendar; only the in-flight compose input is editable (P2, open)
+- After creating an event via the inline compose, there's no way to rename, move to a different day, or change start/end time short of editing localStorage. No `evt-edit-…` testids exist.
+- Expected: a click on the rendered event chip should open an inline edit popover (or open the side panel with editable title/date/source fields).
+
+### B-1138 — Database Form view exposes "Copy form link" but the generated link is the same `/p/<slug>` page route (P3, open)
+- File: src/components/database/views/FormView.tsx (or similar).
+- Observed: clicking "Copy form link" presumably stores a public form URL, but there is no `/form/<slug>` route; the form preview is inline on the editor page only. Anonymous submission wasn't validated.
+- Expected: either implement a public form submission flow on /form/<slug> or rename the button to "Copy share preview link".
+
+### B-1139 — Chart view's "Y: Count" works but X-axis options include `title` properties that produce 1 bar per row, no aggregation (P3, info)
+- Observation: with only 3 rows and "Count" aggregation the chart UI renders correctly, but selecting the title as X-axis effectively makes each row its own group. Not a bug per se — flag for I-improvement re: smarter default X.
+
+### B-1140 — Inline equation block placeholder is "(empty equation)" with no input affordance until clicked (P3, info)
+- Steps: /math → block renders just the text "(empty equation)". No visible editable hint, no cursor focus, no edit icon. Click on it eventually exposes an input but it's not discoverable.
+- Expected: a clear "Type LaTeX or click to edit" placeholder, or auto-focus the input on insertion.
+
+### B-1141 — Inline toolbar verified present with bold/italic/strike/code/link/color/ai (P3, info)
+- Select text in any block → `[data-testid="inline-toolbar"]` appears with 7 buttons. Good coverage; matches the commit message "Add inline formatting toolbar".
+
+### B-1142 — Breadcrumb block only shows current page when no parent chain exists (P3, info)
+- Steps: /breadcrumb on a top-level page renders just "👋 Welcome". Hierarchy support for sub-pages exists in store but breadcrumb doesn't traverse it well from a top-level page (no surprise since there's no parent).
+- Expected: same on top-level pages (acceptable), but ensure the breadcrumb on a sub-page shows the full chain.

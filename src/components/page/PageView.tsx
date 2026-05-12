@@ -112,7 +112,15 @@ function PageHeader({ page }: { page: ReturnType<typeof useStore<NonNullable<Ret
   const [title, setTitle] = useState((page as { title?: string }).title ?? "");
   const titleRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => setTitle((page as { title?: string }).title ?? ""), [(page as { id?: string }).id]);
+  // Sync local title state from the store on page.id change OR when the
+  // page.title is updated externally (e.g. history restore — B-1136).
+  useEffect(() => {
+    const t = (page as { title?: string }).title ?? "";
+    setTitle(t);
+    if (titleRef.current && document.activeElement !== titleRef.current) {
+      titleRef.current.innerText = t;
+    }
+  }, [(page as { id?: string }).id, (page as { title?: string }).title, (page as { updatedAt?: number }).updatedAt]);
 
   function commitTitle(t: string) {
     if (t !== (page as { title?: string }).title) {

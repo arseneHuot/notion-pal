@@ -81,10 +81,10 @@ export function PropertyCell({
     return <span className="text-xs text-muted-foreground">{new Date(row.updatedAt).toLocaleString()}</span>;
   }
   if (property.type === "created-by") {
-    return <span className="text-xs">{row.createdBy.slice(-6)}</span>;
+    return <span className="text-xs text-muted-foreground">{row.createdBy ? row.createdBy.slice(-6) : "—"}</span>;
   }
   if (property.type === "last-edited-by") {
-    return <span className="text-xs">{row.lastEditedBy.slice(-6)}</span>;
+    return <span className="text-xs text-muted-foreground">{row.lastEditedBy ? row.lastEditedBy.slice(-6) : "—"}</span>;
   }
   if (property.type === "unique-id") {
     return <UniqueIdCell row={row} property={property} database={database} />;
@@ -569,16 +569,40 @@ function ButtonCell({ row, property, database }: { row: DatabaseRow; property: P
           } else if (action.kind === "send-webhook") {
             fetch(action.url, { method: "POST", body: action.payload ?? "{}" }).catch(() => undefined);
             toast(`Sent webhook to ${action.url}`, "info");
+          } else if (action.kind === "insert-block") {
+            // Insert a block at end of the database parent page (best-effort).
+            if (database.parentId) {
+              import("@/lib/store").then((m) => {
+                const blockType = (action as { blockType: string }).blockType ?? "text";
+                const content = (action as { content?: string }).content ?? "";
+                m.createBlock(database.parentId!, {
+                  type: blockType,
+                  parentId: database.parentId!,
+                  order: Date.now(),
+                  content,
+                } as never);
+              });
+            }
+            toast("Inserted block", "info");
+          } else if (action.kind === "open-page") {
+            const pid = (action as { pageId: string }).pageId;
+            if (pid) window.location.href = `/app/p/${pid}`;
+          } else if (action.kind === "add-page-to") {
+            // No-op for now: the action targets a different DB and we don't have
+            // a sensible default values map. Toast so the user knows it ran.
+            toast("Add-page-to actions are not yet implemented", "info");
+          } else {
+            toast(`Unknown button action: ${(action as { kind: string }).kind}`, "error");
           }
         }
         if (!bp.actions || bp.actions.length === 0) {
-          toast(`Ran "${bp.label || "Button"}" — configure actions in property settings.`, "info");
+          toast(`Ran "${bp.label || property.name || "Button"}" — configure actions in property settings.`, "info");
         }
       }}
       className="text-xs bg-primary text-primary-foreground rounded px-2 py-1"
       data-testid={`cell-button-${row.id}-${property.id}`}
     >
-      {bp.label || "Run"}
+      {bp.emoji ? `${bp.emoji} ` : ""}{bp.label || property.name || "Run"}
     </button>
   );
 }

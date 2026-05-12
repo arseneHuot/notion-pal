@@ -32,8 +32,8 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
       <table className="border-collapse w-full text-sm">
         <thead>
           <tr className="bg-muted/40">
-            {visibleProps.map((p) => (
-              <PropertyHeader key={p.id} property={p} databaseId={databaseId} />
+            {visibleProps.map((p, idx) => (
+              <PropertyHeader key={p.id} property={p} databaseId={databaseId} sticky={idx === 0 && p.type === "title"} />
             ))}
             <th className="w-8"></th>
             <th className="w-8 border-b border-border">
@@ -44,8 +44,11 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
         <tbody>
           {sorted.map((row) => (
             <tr key={row.id} className="hover:bg-muted/20 group">
-              {visibleProps.map((p) => (
-                <td key={p.id} className="border border-border px-2 py-1 align-top">
+              {visibleProps.map((p, idx) => (
+                <td
+                  key={p.id}
+                  className={`border border-border px-2 py-1 align-top ${idx === 0 && p.type === "title" ? "sticky left-0 bg-card z-[1]" : ""}`}
+                >
                   <PropertyCell database={db} property={p} row={row} />
                 </td>
               ))}
@@ -79,13 +82,13 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
   );
 }
 
-function PropertyHeader({ property, databaseId }: { property: Property; databaseId: string }) {
+function PropertyHeader({ property, databaseId, sticky }: { property: Property; databaseId: string; sticky?: boolean }) {
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [name, setName] = useState(property.name);
 
   return (
-    <th className="border border-border px-2 py-1 text-left font-medium text-xs text-muted-foreground relative">
+    <th className={`border border-border px-2 py-1 text-left font-medium text-xs text-muted-foreground relative ${sticky ? "sticky left-0 bg-muted/60 z-[2]" : ""}`}>
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1 w-full text-left"

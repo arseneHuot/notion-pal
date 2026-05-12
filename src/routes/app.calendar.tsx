@@ -49,7 +49,8 @@ function CalendarPage() {
       out.push({
         id: e.id,
         title: e.title,
-        date: new Date(e.start).toISOString().slice(0, 10),
+        // Use the local-time date key so it matches the grid (B-1135).
+        date: keyForDate(new Date(e.start)),
         color: e.color,
         source: "calendar",
       });

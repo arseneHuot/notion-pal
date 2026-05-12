@@ -246,8 +246,28 @@ function ReadonlyBlock({
       </div>
     );
   }
-  if (block.type === "synced-block" || block.type === "synced-block-ref") {
-    return <div className="text-xs text-muted-foreground italic my-2">(Synced content)</div>;
+  if (block.type === "synced-block") {
+    const children = Object.values(blocks).filter((b) => b.parentId === block.id).sort((a, b) => a.order - b.order);
+    return (
+      <div className="border-l-4 border-pink-400 pl-3 py-2 my-2">
+        {children.map((c) => (
+          <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} />
+        ))}
+      </div>
+    );
+  }
+  if (block.type === "synced-block-ref") {
+    const sourceId = (block as { sourceId?: string }).sourceId;
+    const source = sourceId ? blocks[sourceId] : undefined;
+    if (!source) return <div className="text-xs text-muted-foreground italic my-2">(Synced content — source unavailable)</div>;
+    const children = Object.values(blocks).filter((b) => b.parentId === source.id).sort((a, b) => a.order - b.order);
+    return (
+      <div className="border-l-4 border-pink-400 pl-3 py-2 my-2">
+        {children.map((c) => (
+          <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} />
+        ))}
+      </div>
+    );
   }
   if (block.type === "button") {
     const b = block as Extract<Block, { type: "button" }>;
