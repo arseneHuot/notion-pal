@@ -539,6 +539,27 @@ function useEditable(
     } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "s") {
       e.preventDefault();
       document.execCommand("strikeThrough");
+    } else if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+      // Cmd+/ — open the slash menu for the current block (B-1707).
+      e.preventDefault();
+      const rect = ref.current?.getBoundingClientRect();
+      if (rect) {
+        setSlashPos({ x: rect.left, y: rect.bottom + 4 });
+        setSlashQuery("");
+        setSlashOpen(true);
+      }
+    } else if ((e.metaKey || e.ctrlKey) && e.key === "d" && !e.shiftKey) {
+      // Cmd+D — duplicate block (B-1123 / I-719).
+      e.preventDefault();
+      const newId = createBlock(
+        pageId,
+        { ...block, parentId: pageId, order: block.order + 1 } as Omit<Block, "id" | "createdAt" | "updatedAt">,
+        block.id,
+      );
+      setTimeout(() => {
+        const el = document.querySelector(`[data-block-id="${newId}"] [contenteditable]`) as HTMLElement;
+        el?.focus();
+      }, 0);
     } else if ((e.metaKey || e.ctrlKey) && e.key === "e") {
       e.preventDefault();
       // Inline code

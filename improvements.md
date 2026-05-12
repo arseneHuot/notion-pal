@@ -33,7 +33,7 @@ Priority: high / medium / low.
 ### I-008 — Keyboard shortcut reference panel (low, open)
 - Cmd/Ctrl+? should open a modal listing all keyboard shortcuts.
 
-### I-009 — Page banner cover image curated library (low, open)
+### I-009 — Page banner cover image curated library (low, done)
 - Quick-pick gradients/unsplash thumbnails when adding a cover.
 
 ### I-010 — Search highlighting in command palette results (low, open)
@@ -858,3 +858,53 @@ Priority: high / medium / low.
 ### I-1613 — Render database-inline and columns on /p/<slug> instead of placeholder text (medium, open)
 - See B-1623.
 
+
+## 2026-05-13 03:00 — Test agent batch 29
+
+### I-1700 — Inline-DB toolbar should wrap or condense at narrow viewports (medium, open)
+- See B-1705. Mobile workflows break because the toolbar pushes the inline DB beyond viewport.
+
+### I-1701 — Implement timeline drag-to-change-date + edge resize handles (high, open)
+- See B-1706. Core Notion timeline interaction; today the bar only opens a drawer when clicked.
+
+### I-1702 — Implement Cmd+/ block actions shortcut (medium, open)
+- See B-1707. Notion's keyboard parity.
+
+### I-1703 — Make public `/p/<slug>` route reactive to unpublish (low, open)
+- See B-1708.
+
+### I-1704 — Clear `verifiedAt/verifiedBy/expires` when wiki is turned off (low, open)
+- See B-1709.
+
+### I-1705 — Use local date (or UTC ISO with time) in export filename (low, open)
+- See B-1710.
+
+### I-1706 — Add `search-result-*` testids (low, open)
+- See B-1712. Helps automation, and gives keyboard users an anchor for j/k navigation.
+
+### I-1707 — Calendar: add `cal-today` + `cal-add-event` (medium, open)
+- See B-1713. Today is missing two critical affordances.
+
+### I-1708 — Replace `window.prompt()` cover URL with proper cover picker (high, open)
+- See B-1714. Important UX gap; prompt() blocks page and is hostile to keyboard/mobile.
+
+### I-1709 — Comment threading: add Reply UI; surface `comment-input-<parentId>` (high, open)
+- See B-1716. The data model supports `parentId` but no UI.
+
+### I-1710 — Add `filter-remove-<index>` testid on filter row × (low, open)
+- See B-1717.
+
+### I-1711 — Table column drag-reorder + resize (medium, open)
+- See B-1718.
+
+### I-1712 — Standardise destructive-action testids (`db-delete` vs `delete-forever`) (low, open)
+- See B-1719/B-1711.
+
+### I-1713 — Slugify template testids: `template-decision-log-adr` etc. (low, open)
+- See B-1721.
+
+### I-1714 — Inbox: separate `mark-read` and `resolve` actions (medium, open)
+- See B-1720.
+
+### I-1715 — Surface `show-resolved` testid on comments toggle (low, open)
+- See B-1715.

@@ -9,9 +9,24 @@ interface Message {
   sources?: { pageId: string; title: string }[];
 }
 
+const AI_CHAT_STORAGE_KEY = "notion-clone:ai-chat";
+
+function loadStoredMessages(): Message[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(AI_CHAT_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.slice(-50);
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
 export function AIChat() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<Message[]>(() => loadStoredMessages());
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const workspace = useStore((s) => (s.currentWorkspaceId ? s.workspaces[s.currentWorkspaceId] : null));
@@ -26,6 +41,16 @@ export function AIChat() {
     window.addEventListener("open-ai-chat", show);
     return () => window.removeEventListener("open-ai-chat", show);
   }, []);
+
+  // Persist messages across reloads (B-1722 / B-1618).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-50)));
+    } catch {
+      // ignore quota errors
+    }
+  }, [messages]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -90,6 +115,15 @@ export function AIChat() {
         <Sparkles className="size-4 text-violet-500" />
         <span className="font-semibold text-sm">Ask AI</span>
         <span className="ml-auto text-xs text-muted-foreground">{workspace?.aiCredits ?? 0} credits</span>
+        <button
+          onClick={() => setMessages([])}
+          className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+          title="Start a new thread"
+          aria-label="New thread"
+          data-testid="ai-new-thread"
+        >
+          New
+        </button>
         <button onClick={() => setOpen(false)} className="p-1 hover:bg-accent rounded" data-testid="close-ai">
           <X className="size-4" />
         </button>

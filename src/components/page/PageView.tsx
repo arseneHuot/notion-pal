@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useMemo } from "react";
 import { useStore, updatePage, createBlock, deletePage, restorePage, restorePageCascade, permanentlyDeletePage } from "@/lib/store";
 import { BlockComponent } from "@/components/editor/Block";
 import { EmojiOrCoverPicker } from "@/components/page/EmojiOrCoverPicker";
+import { CoverPicker } from "@/components/page/CoverPicker";
 import { PageComments } from "@/components/page/PageComments";
 import { useAuth } from "@/hooks/use-auth";
 import type { Block } from "@/lib/types";
@@ -118,6 +119,10 @@ export function PageView({ pageId }: { pageId: string }) {
 
 function PageCover({ page }: { page: { id: string; cover: string | null } }) {
   if (!page.cover) return null;
+  const isGradient = /^(linear|radial)-gradient\(/.test(page.cover);
+  if (isGradient) {
+    return <div className="h-48" style={{ background: page.cover }} aria-label="cover" />;
+  }
   return (
     <div className="h-48 overflow-hidden">
       <img src={page.cover} className="w-full h-full object-cover" alt="cover" />
@@ -127,6 +132,7 @@ function PageCover({ page }: { page: { id: string; cover: string | null } }) {
 
 function PageHeader({ page }: { page: ReturnType<typeof useStore<NonNullable<ReturnType<typeof useStore<Record<string, unknown>>>>>> & Record<string, unknown> }) {
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [coverPickerOpen, setCoverPickerOpen] = useState(false);
   const [title, setTitle] = useState((page as { title?: string }).title ?? "");
   const titleRef = useRef<HTMLDivElement>(null);
 
@@ -157,10 +163,7 @@ function PageHeader({ page }: { page: ReturnType<typeof useStore<NonNullable<Ret
           {(page as { icon?: string | null }).icon ? "Change icon" : "Add icon"}
         </button>
         <button
-          onClick={() => {
-            const url = prompt("Cover image URL (unsplash works great):");
-            if (url) updatePage((page as { id: string }).id, { cover: url });
-          }}
+          onClick={() => setCoverPickerOpen(true)}
           className="text-xs px-2 py-1 rounded hover:bg-accent text-muted-foreground"
           data-testid="add-cover"
         >
@@ -214,6 +217,16 @@ function PageHeader({ page }: { page: ReturnType<typeof useStore<NonNullable<Ret
             setIconPickerOpen(false);
           }}
           onClose={() => setIconPickerOpen(false)}
+        />
+      )}
+      {coverPickerOpen && (
+        <CoverPicker
+          current={(page as { cover?: string | null }).cover ?? null}
+          onPick={(url) => {
+            updatePage((page as { id: string }).id, { cover: url });
+            setCoverPickerOpen(false);
+          }}
+          onClose={() => setCoverPickerOpen(false)}
         />
       )}
     </div>
