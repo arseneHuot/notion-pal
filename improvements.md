@@ -24,7 +24,7 @@ Priority: high / medium / low.
 ### I-005 — Database column resize (medium, open)
 - Drag the right edge of a column header to resize.
 
-### I-006 — Form view public submission URL works without auth (medium, open)
+### I-006 — Form view public submission URL works without auth (medium, done)
 - `/form/:dbId/:viewId` route should be readable publicly (no auth required) and store submissions to localStorage of the owner. Tricky without a real backend.
 
 ### I-007 — Synced block content mirroring (medium, done)
@@ -1030,3 +1030,41 @@ Priority: high / medium / low.
 ### I-2015 — Sub-page publish: add per-sub-page publish toggle (low, open)
 - See B-2018. Today the parent's "publish" only exposes top-level page; sub-pages render as "(unpublished)" inside the public view, with no way to publish them individually. Either auto-include via a "publish entire subtree" option or per-page toggle.
 
+
+## 2026-05-13 02:30 — Test agent batch 22
+
+### I-2100 — Fix "Copy form link" URL (high, open)
+- See B-2103. Either implement `/form/<dbId>/<viewId>` as a publicly-rendered FormView route, or change the copied URL to `/app/p/<pageId>?view=<viewId>`. Today the button silently hands users a dead 404 link.
+
+### I-2101 — De-duplicate `publishSlug` on publish (high, open)
+- See B-2104. Two pages with identical title (`OKRs`, `OKRs (Copy)`) both resolve to `publishSlug="okrs"` on publish; only the first matches. Auto-suffix `-2`, or reject the publish toggle with an inline error.
+
+### I-2102 — Drag-reorder for table rows (medium, open)
+- See B-2105 / B-2004. Add a row drag-handle column (left of the title cell) wired to the existing `reorderBlocks`-style helper for `rows.order`.
+
+### I-2103 — Drag-reorder + drag-nest for sidebar page tree (medium, open)
+- See B-2106. Notion's sidebar is the most-used drag target — currently inaccessible. HTML5 DnD on the `<li>` rows with parent/child drop zones would do it.
+
+### I-2104 — Drag-to-move calendar event chip (medium, open)
+- See B-2107. Make the event `<div>` `draggable={true}`, capture `dragstart` with the event id, on `drop` over a `week-day-<date>` update `calendarEvents[id].date` (and downstream database rows if `eventsBy` includes a row sync).
+
+### I-2105 — Public render of embedded databases (medium, open)
+- See B-2108. At least for tables and forms — public form submissions are the canonical Notion use case. Card on Edit Public Page panel: "Allow public form submissions".
+
+### I-2106 — Wire real LLM behind AI chat / detect code-fenced output (medium, open)
+- See B-2109. Swap `pseudoAnswer` for an API call (Anthropic / OpenAI). Render markdown so triple-backtick fences become real `<pre><code>` blocks. Add streaming UI ("…").
+
+### I-2107 — Fix conditional-array useEffect deps warning (medium, open)
+- See B-2110. Track down the renderer pushing different-length dep arrays; likely in a per-block effect or in `CommandPalette`/`SearchModal` items loop. React 19 may upgrade this from warning to hard error.
+
+### I-2108 — Syntax highlight for code blocks (low, open)
+- See B-2111. Pull a small highlighter (Prism core + shiki light) on demand — keep textarea for editing, render highlighted `<pre>` when blurred.
+
+### I-2109 — `role="dialog"` + cmdk-* testids on command palette (low, open)
+- See B-2112. Wrap palette in `role="dialog"` with `aria-label="Command palette"`; add `data-testid="cmdk-item-<id>"` for each entry.
+
+### I-2110 — Calendar month view: add `cal-day-<key>` and `cal-event-<id>` testids (low, open)
+- See B-2113. Pair with I-2007.
+
+### I-2111 — Page-level breadcrumb in chrome (low, open)
+- See B-2114. Render parent chain at the top of every `/app/p/<id>` page (above title). Helps with deep nesting and is already accessible in the page object graph.

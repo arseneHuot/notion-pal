@@ -400,7 +400,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: no autocomplete, no person picker, no styling. The comment text is plain text.
 - Expected: an @ menu listing workspace members (and pages).
 
-### B-424 — Form view "Copy form link" creates a /form/:dbId/:viewId URL that has no route handler (P1, open)
+### B-424 — Form view "Copy form link" creates a /form/:dbId/:viewId URL that has no route handler (P1, fixed)
 - File: src/components/database/views/FormView.tsx line 31; no matching route in src/routes/.
 - Steps: in a database, add a Form view → switch to Preview → click "Copy form link" → paste in the address bar.
 - Observed: 404 / app shell with "Not Found".
@@ -1481,7 +1481,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - After creating an event via the inline compose, there's no way to rename, move to a different day, or change start/end time short of editing localStorage. No `evt-edit-…` testids exist.
 - Expected: a click on the rendered event chip should open an inline edit popover (or open the side panel with editable title/date/source fields).
 
-### B-1138 — Database Form view exposes "Copy form link" but the generated link is the same `/p/<slug>` page route (P3, open)
+### B-1138 — Database Form view exposes "Copy form link" but the generated link is the same `/p/<slug>` page route (P3, fixed)
 - File: src/components/database/views/FormView.tsx (or similar).
 - Observed: clicking "Copy form link" presumably stores a public form URL, but there is no `/form/<slug>` route; the form preview is inline on the editor page only. Anonymous submission wasn't validated.
 - Expected: either implement a public form submission flow on /form/<slug> or rename the button to "Copy share preview link".
@@ -1601,7 +1601,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: there is no UI to set or change `groupByProperty`; the board's group-by must be set via direct state mutation (or it falls back to `_all`).
 - Expected: a "Group by" select / picker in view-menu (especially for board / list / chart views).
 
-### B-1220 — Form view exposes "Copy form link" that points to a non-existent /form/... route (P2, open) — relates to B-1138
+### B-1220 — Form view exposes "Copy form link" that points to a non-existent /form/... route (P2, fixed) — relates to B-1138
 - Steps: created a DB → added Form view → clicked `form-copylink-...` (with clipboard stub). Returns `http://localhost:8080/form/<dbId>/<viewId>`. Navigating to that URL renders the 404 page.
 - Expected: either implement the /form route as a public submission form (writes rows to the target DB), or remove / re-label the button (e.g., "Copy preview link" pointing back to the editor).
 
@@ -2835,3 +2835,88 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: share-btn → publish-toggle on a page titled "Misc Export".
 - Observed: `pages[…].publishSlug = "misc-export"`, `isPublished = true`, URL `/p/misc-export` renders public read-only view immediately. No path collision check tested.
 
+
+## 2026-05-13 02:10 — Test agent batch 22
+
+### B-2100 — Templates slug testids present; click creates 9-block page (P3, info)
+- Steps: `/app/templates` → query `[data-testid^="template-"]`.
+- Observed: all 8 slug testids found (`template-meeting-notes`, `template-project-brief`, `template-daily-journal`, `template-reading-list`, `template-okrs`, `template-runbook`, `template-decision-log-adr`, `template-1-1-agenda`). Click on `template-meeting-notes` navigates from `/app/templates` → `/app/p/pg_<id>` and inserts exactly **9** `[data-block-id]` blocks. Resolves I-2006 / B-2008.
+
+### B-2101 — FormView conditional logic show/hide works (P3, info)
+- Steps: set `databases.db_dates_test.views[v_form].conditionalLogic = [{ifPropertyId:p_dn, operator:"equals", value:42, showPropertyIds:[p_dms]}]`, reload, open db-view `v_form`.
+- Observed: initial render hides `form-field-p_dms`. Typing `42` into `form-field-p_dn` reveals `form-field-p_dms`. Changing back to `7` re-hides it. Both directions live without re-mount. Resolves B-2003.
+
+### B-2102 — Markdown export of sub-page block emits emoji + link (P3, info)
+- Steps: `import('/src/lib/export-markdown.ts')` → `pageToMarkdown(s.pages.pg_export_misc, s.blocks, s.pages)`.
+- Observed: output contains `🌱 [Sub Child](/app/p/pg_export_subpage)`. (Icon comes from target page's `icon` field; falls back to `📄` when unset per source.) Resolves I-1707 / B-1717.
+
+### B-2103 — `/form/<dbId>/<viewId>` URL copied by "Copy form link" 404s (P1, fixed)
+- Steps: open db with form view → `form-copylink-<viewId>` button → URL `/form/db_dates_test/v_form` copied → visit it.
+- Observed: "404 / Page not found / The page you're looking for doesn't exist or has been moved." Either the public form-render route is missing, or the FormView should copy `/app/p/<pageId>?view=<viewId>` instead. Today the button silently hands users a dead link.
+
+### B-2104 — Two pages with same publish slug coexist; first match wins silently (P1, open)
+- Steps: duplicate "OKRs" → publish both → both end up with `publishSlug="okrs"` → visit `/p/okrs`.
+- Observed: original "OKRs" renders; "OKRs (Copy)" is shadowed with no warning and no alternate URL. Should append `-2` or otherwise dedupe, and surface a "slug already taken" error in the share dialog.
+
+### B-2105 — Database table rows have no drag handle (P2, open)
+- Steps: visit `pg_mp33cd7d01u4huok` → table view of `db_dates_test` → inspect every `<tr>`.
+- Observed: `tr.draggable` is `null` on all rows; no row-handle testid; no `data-rbd-*`; dispatching synthetic `dragstart`/`drop` between TRs leaves the order unchanged. (Extends B-2004 to confirm fix not yet in.)
+
+### B-2106 — Sidebar page tree has no drag-reorder (P2, open)
+- Steps: query `aside [draggable="true"]` after navigating to `/app`.
+- Observed: 0 elements (the 22 draggables on the page are all block-level `handle-blk_*` inside the editor). Sidebar page rows are click-only — no way to drag-nest or reorder a page in the tree.
+
+### B-2107 — Calendar event chip not draggable (P2, open)
+- Steps: calendar week view → add event "Wed event" on Wed → grab the chip → drop on Fri.
+- Observed: chip's `draggable` attr is `null`; synthetic dragstart/dragover/drop does not move it. WeekStrip render path has no drag handlers attached to the colored chip `<div>` (`app.calendar.tsx:305-313`).
+
+### B-2108 — Public page hides embedded databases with terse fallback (P2, open)
+- Steps: publish `pg_mp33cd7d01u4huok` (contains a database-inline of `db_dates_test`) → visit `/p/getting-started`.
+- Observed: shows "(Embedded database — open the workspace to view)" instead of a public read-only view of the table/board/form. Forms in particular would benefit from public render so a `conditionalLogic` form can collect submissions from the outside world.
+
+### B-2109 — AI assistant has no LLM / code-block rendering (P2, open)
+- Steps: open `sidebar-ai` → submit "give me a python hello world in a code block" → inspect response.
+- Observed: response is a pseudo workspace-search result (`pseudoAnswer` in `src/components/ai/AIChat.tsx:70-105`). Output is whitespace-pre-wrap raw text — no markdown fenced-code-block parsing, no `<pre>` rendering even when the assistant returns "```py … ```". Demo "Models: GPT-5.2 · Claude Opus 4.7 · Gemini 3" footer is decorative only.
+
+### B-2110 — useEffect dep-array size changes on rerender (P2, open)
+- Steps: open `/app/p/pg_mp3a13swy7oe9zf8`, paste 10kb+ text into the first text block, observe console errors.
+- Observed: repeated `Warning: The final argument passed to %s changed size between renders. The order and size of this array must remain constant.` followed by `useEffect [[object Object], [object Object]] [[object Object], [object Object], [object Object]]`. Indicates a useEffect dep list is being built conditionally — likely in a block-list renderer. Should be a stable array (use refs or unconditional `useEffect` per item).
+
+### B-2111 — Code block has no syntax highlighting (P3, info)
+- Steps: insert a `code` block with language="python", content `print('hello')`.
+- Observed: rendered as a plain `<textarea>` (font-mono) with a language `<select>` and Copy button. No Prism/highlight.js coloring. Acceptable for a clone but downgrades developer feel.
+
+### B-2112 — Search command palette lacks `role="dialog"` and `cmdk-*` testids (P3, info)
+- Steps: open via `sidebar-search` click → query `[role="dialog"]`.
+- Observed: 0 dialogs; only the search `<input placeholder="Search pages, run a command...">`. Items rendered as plain divs without `data-testid` (no `search-item-<id>` / `cmdk-<group>-<i>`). Filtering works ("okr" returns both OKR pages), just no machine-readable hooks.
+
+### B-2113 — Calendar month view: no `cal-day-*` testid (P3, info)
+- Steps: month mode → inspect grid cells.
+- Observed: 0 `cal-day-*` testids; 0 `cal-event-*`; the only calendar testids in the global app are `cal-prev`, `cal-next`, `calendar-week-grid`, `week-day-<date>`, `calendar-day-grid`, `day-hour-<h>`. Aligned with I-2007.
+
+### B-2114 — Page view has no top breadcrumb for nested sub-pages (P3, info)
+- Steps: navigate directly to `/app/p/pg_export_subpage` (a sub-page child of `pg_export_misc`).
+- Observed: no `[data-testid="breadcrumb"]`; no "Misc Export › Sub Child" trail at the top of the page. There is a `breadcrumb` *block* type but no chrome-level breadcrumb on every page. Most users land here through the sidebar and have no quick way to navigate to the parent.
+
+### B-2115 — Inbox row/page-link/date testids still missing (P3, info)
+- Steps: `/app/inbox` → query `[data-testid*="inbox"]`.
+- Observed: only `sidebar-inbox` and `inbox-resolve-<commentId>` present. Confirms I-2011 (B-2013) unresolved.
+
+### B-2116 — Home page has no testids (P3, info)
+- Steps: `/app` → query `main [data-testid]`.
+- Observed: 0 testids inside `<main>`. Sidebar has plenty. Confirms I-2008 (B-2010) unresolved.
+
+### B-2117 — Public page slug "okrs" silently shadows duplicate (paired with B-2104, P3, info)
+- Notes: dedup observed only on second visit; see B-2104.
+
+### B-2118 — Mail compose flow works end-to-end (P3, info)
+- Steps: `mail-compose` → fill `compose-to`/`-subject`/`-body` → `compose-send`.
+- Observed: new `mail-mail_<id>` row appears at the top of the inbox list. Mail count went 6 → 7. Good.
+
+### B-2119 — Chart view donut renders SVG arcs cleanly (P3, info)
+- Steps: `db-view-v_a_chart` → `chart-type-v_a_chart` `<select>` value "donut".
+- Observed: chart re-renders to a donut without console errors; >0 `<svg> circle/path` elements appear.
+
+### B-2120 — Long-form paste perf is excellent (P3, info)
+- Steps: focus a text block contentEditable → execCommand("insertText", 10800 chars). Then a second pass with 20kb.
+- Observed: insert time 14ms (10kb) and 21ms (20kb); blocks[].content reflects exactly 10818/20005 chars after blur. No layout jank, no console errors caused by the paste itself.
