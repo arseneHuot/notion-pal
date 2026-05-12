@@ -57,7 +57,8 @@ export function TimelineView({ databaseId, viewId }: { databaseId: string; viewI
             <div key={r.id} className="relative h-7 border-b border-border">
               <div
                 style={{ left: pos.x * 48, width: w * 48 }}
-                className="absolute top-1 bottom-1 bg-blue-200 dark:bg-blue-900 rounded px-2 text-xs flex items-center"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-row-detail", { detail: { rowId: r.id } }))}
+                className="absolute top-1 bottom-1 bg-blue-200 dark:bg-blue-900 rounded px-2 text-xs flex items-center cursor-pointer hover:brightness-95"
                 data-testid={`tl-bar-${r.id}`}
               >
                 {titleProp ? (r.values[titleProp.id] as string) || "Untitled" : "Item"}

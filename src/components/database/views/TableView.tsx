@@ -52,7 +52,16 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
                   <PropertyCell database={db} property={p} row={row} />
                 </td>
               ))}
-              <td className="border border-border px-1 text-center">
+              <td className="border border-border px-1 text-center whitespace-nowrap">
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent("open-row-detail", { detail: { rowId: row.id } }))}
+                  className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 mr-1"
+                  aria-label="Open row"
+                  data-testid={`row-open-${row.id}`}
+                  title="Open row"
+                >
+                  ⤢
+                </button>
                 <button
                   onClick={() => deleteRow(row.id)}
                   className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"

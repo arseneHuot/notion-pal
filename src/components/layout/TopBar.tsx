@@ -1,5 +1,5 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useStore, setUI, toggleDarkMode, toggleFavorite, updatePage } from "@/lib/store";
+import { useStore, setUI, toggleDarkMode, toggleFavorite, updatePage, deletePage, duplicatePage } from "@/lib/store";
 import { PanelLeftOpen, MoreHorizontal, Star, Share, MessageCircle, Clock, Sun, Moon, ChevronRight, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { PageHistoryDialog } from "@/components/page/PageHistoryDialog";
@@ -140,14 +140,30 @@ export function TopBar() {
   );
 }
 
-function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean }; close: () => void }) {
+function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean; isFavorite?: boolean }; close: () => void }) {
+  const navigate = useNavigate();
   return (
-    <div className="absolute right-4 top-12 bg-card border border-border rounded-md shadow-lg py-1 w-64 z-40">
-      <MenuItem label="Customize page">
-        <Sparkles className="size-3.5" />
-      </MenuItem>
+    <div className="absolute right-4 top-12 bg-card border border-border rounded-md shadow-lg py-1 w-64 z-40" data-testid="page-options-menu">
+      <MenuItem
+        label={page.isFavorite ? "Remove from favorites" : "Add to favorites"}
+        testid="page-opt-favorite"
+        onClick={() => {
+          toggleFavorite(page.id);
+          close();
+        }}
+      />
+      <MenuItem
+        label="Duplicate"
+        testid="page-opt-duplicate"
+        onClick={() => {
+          const newId = duplicatePage(page.id);
+          close();
+          if (newId) navigate({ to: "/app/p/$pageId", params: { pageId: newId } });
+        }}
+      />
       <MenuItem
         label={page.isWiki ? "Undo wiki" : "Turn into wiki"}
+        testid="page-opt-wiki"
         onClick={() => {
           updatePage(page.id, { isWiki: !page.isWiki });
           close();
@@ -155,6 +171,7 @@ function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean 
       />
       <MenuItem
         label="Word count"
+        testid="page-opt-wordcount"
         onClick={() => {
           window.dispatchEvent(new CustomEvent("show-word-count"));
           close();
@@ -162,6 +179,7 @@ function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean 
       />
       <MenuItem
         label="Copy link"
+        testid="page-opt-copylink"
         onClick={() => {
           if (typeof window !== "undefined") {
             navigator.clipboard?.writeText(window.location.href).catch(() => undefined);
@@ -169,15 +187,43 @@ function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean 
           close();
         }}
       />
+      <MenuItem
+        label="Export as Markdown"
+        testid="page-opt-export-md"
+        onClick={() => {
+          window.dispatchEvent(new CustomEvent("export-page-markdown"));
+          close();
+        }}
+      />
+      <MenuItem
+        label="Print / save as PDF"
+        testid="page-opt-print"
+        onClick={() => {
+          close();
+          setTimeout(() => window.print(), 100);
+        }}
+      />
+      <div className="border-t border-border my-1" />
+      <MenuItem
+        label="Move to Trash"
+        testid="page-opt-trash"
+        destructive
+        onClick={() => {
+          deletePage(page.id);
+          close();
+          navigate({ to: "/app" });
+        }}
+      />
     </div>
   );
 }
 
-function MenuItem({ label, onClick, children }: { label: string; onClick?: () => void; children?: React.ReactNode }) {
+function MenuItem({ label, onClick, children, testid, destructive }: { label: string; onClick?: () => void; children?: React.ReactNode; testid?: string; destructive?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent text-left"
+      data-testid={testid}
+      className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent text-left ${destructive ? "text-destructive" : ""}`}
     >
       {children}
       {label}

@@ -18,8 +18,15 @@ export function RowDetailDrawer() {
       const detail = (e as CustomEvent<{ rowId: string }>).detail;
       if (detail?.rowId) setRowId(detail.rowId);
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setRowId(null);
+    }
     window.addEventListener("open-row-detail", open);
-    return () => window.removeEventListener("open-row-detail", open);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("open-row-detail", open);
+      window.removeEventListener("keydown", onKey);
+    };
   }, []);
 
   if (!rowId || !row || !db) return null;

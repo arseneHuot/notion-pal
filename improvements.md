@@ -742,3 +742,72 @@ Priority: high / medium / low.
 
 ### I-1421 — Build a row-detail drawer for board / gallery / list / calendar views (high, open)
 - See B-1437. Required for parity with Notion's database UX (clicking a row in any view should open a side drawer with all properties + the row's child blocks).
+
+
+## 2026-05-12 23:50 — Test agent batch 22
+
+### I-1500 — Add Escape-to-close on RowDetailDrawer (low, open)
+- See B-1500. Standard modal hotkey.
+
+### I-1501 — Add click-outside dismissal to RowDetailDrawer with a transparent backdrop overlay (low, open)
+- See B-1501.
+
+### I-1502 — Fully delete row from `state.rows` (not just `db.rows`) when delete is invoked from drawer (medium, open)
+- See B-1502. Today the row stays in `state.rows` as an orphan. Either fully delete or move to trash.
+
+### I-1503 — Make Table title cell also open the row drawer (high, open)
+- See B-1503. Notion exposes the drawer affordance on every view. Add a leading "Open" icon button on hover for each table row.
+
+### I-1504 — Register a public `/form/:databaseId/:viewId` route so `form-copylink` URLs actually work (high, open)
+- See B-1504. Build a `routes/form.$databaseId.$viewId.tsx` route that renders the same FormField preview (no auth wall, just a single-page form). Otherwise the "Copy form link" feature is misleading.
+
+### I-1505 — Add `onClick={openRow}` to Timeline bars and Calendar event chips (high, open)
+- See B-1507, B-1508. Once these are wired, the drawer is reachable from every view type — parity with Notion.
+
+### I-1506 — Add testids inside ViewSortPanel and ViewFilterPanel (low, open)
+- See B-1513, B-1514.
+
+### I-1507 — Implement persistent undo/redo (Cmd+Z / Cmd+Shift+Z) — keep I-1415 (high, open)
+- See B-1509.
+
+### I-1508 — Add Sent/Drafts folder filter to Mail list (low, open)
+- See B-1517.
+
+### I-1509 — Add drop handlers to Calendar grid cells so the draggable=true event chips can be repositioned (medium, open)
+- See B-1512.
+
+### I-1510 — RowDetailDrawer should render every property type (read-only for formula/rollup, edit for the rest) (medium, open)
+- See B-1521.
+
+### I-1511 — Calendar view should refuse / display warning when no date property exists (low, open)
+- See B-1511.
+
+
+## 2026-05-13 00:25 — Test agent batch 24
+
+### I-1512 — Add testids to sidebar page-menu items (Duplicate/Move to Trash/Favorite/Rename) (low, open)
+- See B-1533. `pmenu-duplicate-<id>`, etc.
+
+### I-1513 — Add testids to PageOptionsMenu items in TopBar (low, open)
+- See B-1528.
+
+### I-1514 — Extend PageOptionsMenu with Duplicate / Move to / Export / Delete / Page history / Lock (medium, open)
+- See B-1529. Match Notion's "..." menu.
+
+### I-1515 — Make link button mousedown preventDefault to preserve selection (low, open)
+- See B-1530. Standard rich-text editor pattern. Currently the popover only mounts when there's a non-empty selection.
+
+### I-1516 — Add row-body block editor below property cells in RowDetailDrawer (high, open)
+- See B-1523. Critical for parity — every Notion DB row has a "page body" of blocks. Schema already has `row.blocks`.
+
+### I-1517 — Use semantic `<strong>/<em>/<s>` instead of `<b>/<i>` in InlineToolbar (re-state of I-1416) (low, open)
+- See B-1526.
+
+### I-1518 — Add a sub-menu of AI actions on the inline toolbar (Improve/Translate/Summarize) (medium, open)
+- See B-1527. Match Notion's selection-driven AI.
+
+### I-1519 — Commit `page-title` contenteditable on blur as well as keystroke (low, open)
+- See B-1538. Today a quick navigation before the next input fires can lose unsaved input.
+
+### I-1520 — Close any other open sidebar page-menu when opening a new one (low, open)
+- See B-1539.

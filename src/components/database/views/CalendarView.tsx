@@ -130,7 +130,11 @@ export function CalendarView({ databaseId, viewId }: { databaseId: string; viewI
                   key={r.id}
                   draggable
                   onDragStart={(e) => e.dataTransfer.setData("text/x-row-id", r.id)}
-                  className="mt-0.5 px-1 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-200 rounded text-xs truncate"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.dispatchEvent(new CustomEvent("open-row-detail", { detail: { rowId: r.id } }));
+                  }}
+                  className="mt-0.5 px-1 py-0.5 bg-blue-100 dark:bg-blue-900/40 text-blue-900 dark:text-blue-200 rounded text-xs truncate cursor-pointer hover:brightness-95"
                   data-testid={`cal-event-${r.id}`}
                 >
                   {titleProp ? (r.values[titleProp.id] as string) || "Untitled" : "Event"}

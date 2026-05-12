@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/use-auth";
 import type { Block } from "@/lib/types";
 import { stripHtml, wordCount } from "@/lib/text";
 import { toast } from "@/components/ui/Toast";
+import { pageToMarkdown } from "@/lib/export-markdown";
 
 export function PageView({ pageId }: { pageId: string }) {
   const page = useStore((s) => s.pages[pageId]);
@@ -51,7 +52,24 @@ export function PageView({ pageId }: { pageId: string }) {
       toast(`${words} words · ${chars} characters`, "info");
     }
     window.addEventListener("show-word-count", showCount);
-    return () => window.removeEventListener("show-word-count", showCount);
+    function exportMd() {
+      if (!page) return;
+      const md = pageToMarkdown(page, blocks);
+      const blob = new Blob([md], { type: "text/markdown" });
+      const url = URL.createObjectURL(blob);
+      const slug = (page.title || page.id).replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase();
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${slug || "page"}.md`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Exported as Markdown", "success");
+    }
+    window.addEventListener("export-page-markdown", exportMd);
+    return () => {
+      window.removeEventListener("show-word-count", showCount);
+      window.removeEventListener("export-page-markdown", exportMd);
+    };
   }, [page, blocks]);
 
   if (!page) {

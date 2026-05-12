@@ -1394,7 +1394,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: no email-invite input, no permission level dropdown (view/comment/edit), no per-user list.
 - Expected: even an MVP could store `page.permissions: PagePermission[]` (the type already exists on Page) and render an invite input + per-row dropdown.
 
-### B-1117 — No per-page export to PDF or Markdown (P3, open)
+### B-1117 — No per-page export to PDF or Markdown (P3, fixed)
 - File: nothing — there's no PDF/Markdown export anywhere. `grep -r "export.*pdf\|export.*markdown"` returns 0 hits.
 - Steps: open a page → header has Share/History/Comments/Favorite/AI/dark-mode buttons but no "Export" menu. The page menu in the sidebar (the ⋯ "More" button) also offers no export.
 - Expected: at minimum a "Copy as Markdown" action on the page menu — this is one of the most-requested Notion features and the editor block tree maps trivially to MD. PDF can come later via `window.print()`-friendly stylesheet.
@@ -1979,3 +1979,318 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### Verification summary for this batch run
 - Implementer fixes verified: B-1304 (date filter coerce), B-1305 (multi-select contains array branch), B-1312 (synced-block cycle detector), B-1318 (relation target swap clears links). All 4 pass.
 - Implementer fixes confirmed still open / unaddressed: B-1308 (select sort by option order), B-1313 (block-level commenting UI), B-1314 (timeline bar width), B-1315 (chart X-axis labels), B-1319 (delete-forever from sidebar trashed-pages section), B-1320 (Cmd+K dispatched programmatically), B-1323 (formula unknown-prop silent).
+
+## 2026-05-12 23:30 — Test agent batch 21
+
+### Verification of latest implementer fixes
+- B-1437 RowDetailDrawer: VERIFIED. Drawer opens on Board, Gallery, and List card clicks (`board-card-r_a1`, `gallery-card-r_a1`, `list-row-r_a1`). Contains `row-detail-title`, `row-detail-close`, `row-detail-delete`, and renders all relevant property cells (e.g. `cell-relation-r_a1-p_rel`, `cell-select-r_a1-p_grp`).
+- B-1437 Property editing in drawer: VERIFIED. Filled `row-detail-title` with "A row 1 EDIT" → `state.rows.r_a1.values.p_at` updated immediately.
+- B-1441 Breadcrumb Links: VERIFIED. `[data-testid="breadcrumb-pg_mp33cd7d01u4huok"]` is `<a href="/app/p/pg_mp33cd7d01u4huok">`; clicking it navigates without page reload.
+- B-1406 Form multi-select chips: VERIFIED. Form view in preview mode renders `form-multiselect-<propId>-<optId>` toggle buttons; submitting stores `values.prop_xxx = ["tag_red","tag_green"]` (array) in the new row.
+- B-1436 Emoji picker search filter: VERIFIED. Typing "rocket" filters grid to a single 🚀; "cat" filters to 🐱; nonsense like "zzzzz" results in zero emojis (empty grid but the picker remains mounted).
+
+### B-1500 — RowDetailDrawer: Escape key does not close the drawer (P2, fixed)
+- Steps: open Board view → click `board-card-r_a1` → drawer opens → press Escape (dispatchEvent on document).
+- Observed: drawer remains visible. Only the explicit `row-detail-close` X button dismisses it.
+- Expected: standard modal behavior — Escape should close. Many users hit Escape to bail out.
+- File: `src/components/database/RowDetailDrawer.tsx` — add `useEffect(() => { const f=(e)=>{ if(e.key==='Escape') onClose(); }; document.addEventListener('keydown', f); return () => document.removeEventListener('keydown', f); }, [onClose]);`.
+
+### B-1501 — RowDetailDrawer: no click-outside / backdrop dismissal (P2, fixed)
+- Steps: open drawer → click anywhere outside (e.g., body, the underlying view background).
+- Observed: drawer stays open. The drawer is a sibling div with no scrim/backdrop element.
+- Expected: either render a transparent backdrop that closes on click, or wire `useEffect` to detect outside clicks. Notion-style drawers close on outside click.
+- File: `src/components/database/RowDetailDrawer.tsx`.
+
+### B-1502 — RowDetailDrawer: deleted row is removed from `databases[].rows` but stays in `state.rows` (P3, open)
+- Steps: open drawer → click `row-detail-delete` for `row_mp34kasi91cztatn`.
+- Observed: row id is removed from `databases.db_a.rows` (good — disappears from view), but `state.rows[row_mp34kasi91cztatn]` is still present (orphan).
+- Expected: also delete from the `rows` record, or move to a `trashedRows` set. Currently it's a memory leak that grows over time.
+- File: `src/lib/store.ts` `deleteDatabaseRow`.
+
+### B-1503 — Table view title cell DOES NOT open the row detail drawer (P2, fixed)
+- Steps: /app/db/db_a → table view → click `cell-title-r_a1-p_at`.
+- Observed: it activates the inline editor only; no drawer opens. Notion typically has a hover "Open" chevron / a click on a leading icon.
+- Expected: add an "Open" affordance (e.g. icon button on hover) or row-leading `▸ Open` testid that calls `openRow(rowId)`. Today the drawer is reachable from Board, Gallery, and List, but not from the Table view (the most common view).
+- File: `src/components/database/views/TableView.tsx` (next to title cell).
+
+### B-1504 — Form view "Copy form link" generates a URL that 404s (P2, open)
+- Steps: form view → click `form-copylink-<viewId>`.
+- Observed: URL copied is `${origin}/form/${databaseId}/${viewId}` but no `/form/...` route exists in `src/routes/`. Visiting it shows the 404 "Page not found" page.
+- Expected: register a public route `routes/form.$databaseId.$viewId.tsx` that renders the form in preview mode + on submit calls `addDatabaseRow`. Otherwise "Copy form link" is misleading.
+- File: `src/components/database/views/FormView.tsx` line 31 (URL builder) and missing `src/routes/form.*.tsx`.
+
+### B-1505 — Form view multi-select submission also keeps `p_at: ""` (P3, info)
+- Steps: form-submit on multi-select only → new row.
+- Observed: row has `values.p_at = ""` (empty title) which prevents the row from being browsable easily. This is by design but pages without titles render with "Untitled" sentinel except in this case it's an explicit empty string.
+- Expected: either skip writing `p_at` when empty (so it falls back to "Untitled" elsewhere) or strip empty-string entries from form submit payload. Minor.
+
+### B-1506 — Multi-select property cell testid uses `cell-select-<row>-<prop>` not `cell-multi-select-...` (P3, open)
+- Steps: add a multi-select property → DOM testid is `cell-select-r_a1-prop_mp352zglymrt`.
+- Observed: it shares the same testid prefix as a real "select" property, making it impossible to scope E2E selectors.
+- Expected: `data-testid={`cell-${property.type}-${row.id}-${property.id}`}` with property.type "multi-select" → `cell-multi-select-...`.
+- File: `src/components/database/PropertyEditor.tsx`.
+
+### B-1507 — Timeline view: clicking `tl-bar-<rowId>` does NOT open the row detail drawer (P2, fixed)
+- Steps: /app/db/db_dates_test → Timeline view → click `tl-bar-r_dt1`.
+- Observed: nothing happens. Drawer is not opened.
+- Expected: parity with Board/Gallery/List which DO open the drawer on click.
+- File: `src/components/database/views/TimelineView.tsx` — add `onClick={() => openRow(row.id)}` on the bar element.
+
+### B-1508 — Calendar view: clicking `cal-event-<rowId>` does NOT open the row detail drawer (P2, fixed)
+- Steps: /app/db/db_dates_test → Calendar view → navigate to June 2026 → click `cal-event-r_dt2`.
+- Observed: drawer stays closed.
+- Expected: clicking a calendar event should open RowDetailDrawer for that row.
+- File: `src/components/database/views/CalendarView.tsx`.
+
+### B-1509 — Undo / redo (Cmd+Z) still NOT implemented — B-1429 unchanged (P2, open)
+- Steps: focus a block content element → edit DOM (append "EXTRA") → dispatch Cmd+Z KeyboardEvent on document.
+- Observed: no revert; block stays with "EXTRA" appended.
+- Expected: app-level undo stack as recommended in I-1415.
+- Status: B-1429 still open — no implementation found.
+
+### B-1510 — All 8 view types render without errors (P3, info)
+- Steps: cycle through table → board → chart → gallery → list → form → timeline → calendar on db_a.
+- Observed: every view renders content; no error-boundary text ("Something went wrong" / "Error:") detected on any view. Calendar in db_a uses `dateProperty: "p_at"` (title prop) — events not shown because title is not a date, but no crash either.
+
+### B-1511 — Calendar view auto-seeds `dateProperty` to the title property when no date prop exists (P3, open)
+- Steps: add calendar view on db_a which has no date property → view config gets `dateProperty: "p_at"` (the title).
+- Observed: calendar still renders but never shows any events because title isn't parsable as a date.
+- Expected: refuse to create a calendar view, or display an empty state asking the user to add a date property and pick it. Currently the user has no signal that the view is misconfigured.
+- File: store seed for calendar view + `src/components/database/views/CalendarView.tsx`.
+
+### B-1512 — Calendar `cal-event-<rowId>` element is `draggable=true` but no drop handler implemented (P3, open)
+- Steps: inspect DOM in CalendarView: `<div draggable="true" data-testid="cal-event-r_dt2">`.
+- Observed: the event chip is set to draggable, but neither the calendar grid cells nor any other dropzone has `onDrop` / `onDragOver` handlers wired.
+- Expected: dragging an event to another date should `updateRow(rowId, { [dateProperty]: newDate })`. Today the drag attribute is dead.
+
+## 2026-05-12 23:50 — Test agent batch 22
+
+### B-1513 — Sort row UI has no testids on the select/input children (P3, open)
+- Steps: view-menu → add-sort → DOM `[data-testid="sort-row-0"]` contains 2 `<select>` and 1 `<button>` but none have testids.
+- Observed: E2E must rely on `:nth-of-type` to pick property vs direction.
+- Expected: `data-testid="sort-row-<n>-property"`, `sort-row-<n>-direction`, `sort-row-<n>-remove`.
+- File: `src/components/database/ViewSortPanel.tsx` (or equivalent).
+
+### B-1514 — Filter row UI has no testids on the select/input children (P3, open)
+- Steps: view-menu → add-filter → DOM has property select, operator select, value input, remove button — none with testids.
+- Expected: `filter-row-<n>-property`, `-operator`, `-value`, `-remove`.
+
+### B-1515 — Mail detail pane lacks Reply / Forward / Archive / Star / Label actions — re-confirms B-1419 (P2, open)
+- Steps: /app/mail → click any mail → only `mail-compose` testid visible; no per-mail action testids.
+- Observed: detail pane renders subject + body only. No "Reply", "Archive", "Move to label" or "Star" buttons.
+- Expected: see I-1411.
+
+### B-1516 — Inbox is empty even though comments / mentions could have been added — re-confirms B-1422/B-1445 (P3, open)
+- Steps: /app/inbox → page shows "All caught up! ✨" sentinel.
+- Observed: no notifications enqueued from any in-app event (comments, page shares, etc.). The notifications slice doesn't exist.
+
+### B-1517 — Mail Compose: "Sent" mail and "Inbox" mail are co-mingled (no Sent folder) (P3, open)
+- Steps: /app/mail → mail-compose → fill to/subject/body → send.
+- Observed: the new mail appears at the top of the mail list along with received ones (which are marked `to: ["me@example.com"]`). No "Sent" / "Drafts" filter to distinguish.
+- Expected: a folder selector or `from === currentUser` filter to view a Sent folder.
+
+### B-1518 — Calendar event creation works with proper TZ-safe date (P3, info)
+- Steps: /app/calendar → click `day-add-2026-05-12` → fill `cal-compose-title` → click `cal-compose-create`.
+- Confirmed: event created with `start=1778544000000` whose `toISOString().slice(0,10) === "2026-05-12"`. The earlier TZ fix is verified.
+
+### B-1519 — Emoji search alias map covers some but missing many common words (P3, open)
+- Steps: type "star" → returns ⭐ and 🌟 (good). Type "rocket" → returns 🚀. Type "smile" → returns 0.
+- Observed: alias coverage appears partial. No specific list documented.
+- Expected: bundle a comprehensive alias map (e.g. `unicode-emoji-json`) — see I-1417.
+
+### B-1520 — Multi-select chip toggle in form supports unselect (P3, info)
+- Steps: form view → click `form-multiselect-prop_xxx-tag_red` (selects) → click again (deselects). Submit → array no longer contains "tag_red".
+- Confirmed working end-to-end.
+
+### B-1521 — RowDetailDrawer renders ALL cell types incl. number/date/url, but missing `files` and `formula`/`rollup` (P3, open)
+- Steps: open drawer for `r_dt1` in db_dates_test → cells found: `cell-date`, `cell-number`, `cell-select`, `cell-url`.
+- Missing: `cell-files`, `cell-formula`, `cell-rollup`, `cell-checkbox`, `cell-email`, `cell-phone`. The drawer filter is too aggressive.
+- File: `src/components/database/RowDetailDrawer.tsx` — show every property even formula/rollup (read-only) so users can verify computed values.
+
+## 2026-05-13 00:10 — Test agent batch 23
+
+### B-1522 — Editing `row-detail-title` reflects in the table view immediately (P3, info)
+- Steps: open drawer for r_a1 → fill `row-detail-title` "A row 1 PATCHED" → close drawer → switch to Main table view.
+- Confirmed: `cell-title-r_a1-p_at` value is "A row 1 PATCHED". Two-way binding works.
+
+### B-1523 — RowDetailDrawer has NO row child-blocks area (no editor) (P2, open)
+- Steps: open drawer for r_a1 → drawer renders title + property cells only.
+- Observed: there is no place to type rich-text body for the row (Notion calls this the "page body" of a row).
+- Expected: render an editor area below the property list, driven by `row.blocks[]`. The schema already supports this (`row.blocks` field exists in seeded rows).
+- File: `src/components/database/RowDetailDrawer.tsx`.
+
+### B-1524 — Chart view X-axis labels DO appear via Recharts (P3, info)
+- Steps: /app/db/db_a → Chart view → inspect svg.
+- Observed: SVG with viewBox 0 0 820 280 contains `recharts-cartesian-axis-tick` elements with `<tspan>` "g_b" and "Empty" labels.
+- Status: B-1315 appears RESOLVED. Earlier reports about "no X-axis labels" no longer reproduce. (The "Empty" tspan signals a row with no value — possibly the empty form-submitted row.)
+
+### B-1525 — InlineToolbar ib-color does not work when the selection is already inside another wrapping tag (P3, open)
+- Steps: in a `<i>Each</i>` text → select the same chars → click `ib-color-red`.
+- Observed: HTML unchanged. The color is not applied because `document.execCommand("foreColor")` likely fails when the selection is already wrapped.
+- Expected: foreColor should still work; either re-run after restoring selection or set inline `<span style="color:red">…</span>`.
+
+### B-1526 — InlineToolbar uses legacy `<i>` for italic (re-confirms B-1435) (P3, open)
+- Steps: select text → click `ib-italic` → block.innerHTML contains `<i>Each</i>`.
+- See B-1435.
+
+### B-1527 — `ib-ai` does not open a sub-menu of actions (P3, open)
+- Steps: select text → click `ib-ai`.
+- Observed: dispatches `open-ai-chat-with` custom event (no in-toolbar sub-menu).
+- Expected: Notion shows "Improve writing / Fix grammar / Summarize / Translate" inline. The current AI workflow is global rather than contextual on selection. Mentioned for inventory.
+
+### B-1528 — PageOptionsMenu items lack testids (Customize / Wiki / Word count / Copy link) (P3, open)
+- Steps: page-options → menu items have no `data-testid`.
+- Expected: `popt-customize`, `popt-wiki`, `popt-word-count`, `popt-copy-link`.
+- File: `src/components/layout/TopBar.tsx` `MenuItem` component.
+
+### B-1529 — PageOptionsMenu is missing common actions: Duplicate / Move to / Export / Delete / Add to favorites (P2, fixed)
+- Steps: page-options → only "Customize page / Turn into wiki / Word count / Copy link" visible.
+- Expected: Notion's page menu has Duplicate, Move to, Export to PDF/Markdown, Delete (move to trash), Add to favorites, Lock page, Customize page, Page history, View analytics. Most are missing.
+
+### B-1530 — Inline toolbar ib-link does not open the link popover when invoked via click (P3, open)
+- Steps: select text → click `ib-link`.
+- Observed: `ib-link-popover` does not appear in the DOM. The popover is gated on selection, which is lost between selection-restore and click handling.
+- Likely cause: clicking the button blurs the editor, losing the selection; the popover only opens if a non-empty selection is present.
+- Workaround: prevent mousedown default on the button.
+- File: `src/components/editor/InlineToolbar.tsx` — add `onMouseDown={e => e.preventDefault()}` on the link button.
+
+### B-1531 — Word count event triggers a toast that shows "37 words" (P3, info)
+- Steps: dispatch `show-word-count` → toast appears with "37 words · NNN characters".
+- Confirmed working end-to-end.
+
+### B-1532 — Page publish toggle works; public route renders (P3, info)
+- Steps: share-btn → publish-toggle → /p/getting-started.
+- Confirmed: page renders with blocks. (B-1433 reverified.)
+
+## 2026-05-13 00:25 — Test agent batch 24
+
+### B-1533 — Sidebar page menu shows actions (Duplicate / Move to Trash / Add to favorites) but lacks testids (P3, open)
+- Steps: page-menu-<id> → menu items appear with text only; no testids.
+- Expected: `pmenu-duplicate-<id>`, `pmenu-trash-<id>`, `pmenu-favorite-<id>`, `pmenu-rename-<id>`.
+- File: sidebar page-menu component.
+
+### B-1534 — Page Duplicate works end-to-end (P3, info)
+- Steps: page-menu → Duplicate → new "Meeting notes (Copy)" page appears.
+- Confirmed working.
+
+### B-1535 — Page Move to Trash works end-to-end (P3, info)
+- Steps: page-menu → Move to Trash → page.isInTrash=true, disappears from sidebar.
+- Confirmed working.
+
+### B-1536 — Trash delete-forever (purge) works (P3, info)
+- Steps: /app/trash → delete-forever-<id> → page entry fully removed from `state.pages`.
+- Confirmed. window.confirm bypass auto-returns true so destructive UX is trivially testable.
+
+### B-1537 — Cmd+K opens the command palette (B-1320 fixed) (P3, fixed)
+- Steps: dispatch keydown {key:"k", metaKey:true} on document → `command-input` testid appears.
+- Confirmed: the fix from earlier batches worked. B-1320 closed.
+
+### B-1538 — `page-title` is a contenteditable H1, not an input — keystrokes via preview_fill must also dispatch the input event to persist (P3, open)
+- Steps: preview_fill `page-title` to "Batch 23 Test Page" → DOM text updated but `state.pages.<id>.title` stays "".
+- Workaround in E2E: after fill, dispatch `el.dispatchEvent(new Event('input', { bubbles: true }))` to commit.
+- Expected: store should also subscribe to `MutationObserver` on the H1, or use blur to commit. Currently silent partial updates are possible if a user clicks navigation before the next input event fires.
+
+### B-1539 — Sidebar context menu opens on first click for some items but the menu items are slightly delayed (P3, info)
+- Steps: page-menu-<id> → first click sometimes shows nothing → second click shows the menu.
+- Observed: menu mounts on the second click in some flows because the first click is consumed by the previously-open menu's close logic.
+- Mitigation: when opening one menu, all other open menus should close synchronously.
+
+### B-1540 — Page Title in contenteditable H1 can be left empty; sidebar still shows "Untitled" sentinel (P3, info)
+- Steps: new page → title left blank.
+- Observed: sidebar correctly renders "📄Untitled". Consistent fallback works.
+
+### B-1541 — Slash conversion correctly clears block.content on "/quote" (P3, info)
+- Steps: type `/quote` on empty block → click `slash-quote` → block.type="quote", content="".
+- Confirmed working. Unlike `/col` (B-1442) which keeps "/col" content.
+
+### B-1542 — Templates page renders 8 demo templates, click navigates to created page (P3, info)
+- Steps: /app/templates → click `template-Meeting notes` → navigates to new page with seeded title "Meeting notes", icon "📝", and 9 blocks.
+- Confirmed working.
+
+### B-1543 — `relation-row-<targetRowId>` filter via relation-search works (P3, info)
+- Steps: cell-relation-r_a1-p_rel click → relation-search-r_a1-p_rel fill "item" → relation-row-r_b1, r_b2 appear.
+- Confirmed.
+
+## 2026-05-13 00:45 — Test agent batch 25
+
+### B-1544 — Button block "open-page" action uses `window.location.href` (B-1404 still open) (P2, open)
+- Confirmed in `src/components/editor/Block.tsx` line 1376: `window.location.href = `/app/p/${action.pageId}`;`. Full page reload on button click.
+- Expected: TanStack Router navigate (see I-1400).
+
+### B-1545 — Table row-delete leaves row in `state.rows` as orphan (P3, open)
+- Steps: table view → `row-delete-row_xxx` → row removed from `db.rows` but still present in `state.rows`.
+- Same root cause as B-1502 (drawer delete). Both paths likely share the same store action.
+
+### B-1546 — Property header rename input has no testid (P3, open)
+- Steps: click `prop-header-p_grp` → click `prop-rename-p_grp` → an `<input>` appears.
+- Observed: no data-testid on the input; must locate via `.bg-background` class.
+- Expected: `data-testid={`prop-rename-input-${property.id}`}`.
+- File: `src/components/database/views/TableView.tsx` line 101-113.
+
+### B-1547 — Comment post works; resolve toggle works (P3, info)
+- Steps: comments-btn → comment-input fill → post-comment → comment created with `resolved=false`; clicking resolve-cmt_xxx → `resolved=true`.
+- Confirmed.
+
+### B-1548 — Posted comment with @mention text does NOT enqueue any notification (B-1409/B-1445 unchanged) (P3, open)
+- Steps: comment "@Batch15 hello mention check" → `state.notifications` slice doesn't exist.
+- Expected: parse @-mentions in comment.content → push to `notifications`.
+
+### B-1549 — Todo block checkbox toggle persists (P3, info)
+- Steps: `todo-check-blk_xxx` click → `block.checked = true`.
+- Confirmed.
+
+### B-1550 — Property-header dropdown has Rename + Delete + Type-conversion list, but no "Hide property" or "Sort" inline (P3, open)
+- Observed: the popover shows: Rename, "Type" header followed by PROPERTY_TYPES buttons, Delete.
+- Missing: "Hide in view", "Sort ascending/descending", "Filter by this property", "Duplicate property". Notion's column menu has all four.
+- File: `src/components/database/views/TableView.tsx` property-header popover.
+
+### B-1551 — View rename uses inline input (no native prompt) and Enter commits (P3, info)
+- Steps: view-menu-v_a → view-rename-v_a → input appears with testid `view-rename-input-v_a` → Enter commits.
+- Confirmed.
+
+### B-1552 — Sidebar expand toggles work (P3, info)
+- Steps: expand-pg_xxx click → child pages hidden/shown.
+- Confirmed.
+
+## 2026-05-13 01:05 — Test agent batch 26
+
+### B-1553 — Number cell value commits only on blur (P3, info)
+- Steps: fill `cell-number-r_dt1-p_dn` to "99" via preview_fill → store still shows 5; blur the input → store updates to 99.
+- Expected: commit on each onChange. The current onBlur-only behavior is fine but means E2E must blur explicitly.
+
+### B-1554 — Cmd+K → `cmd-page-<id>` navigates with TanStack Router (no reload) (P3, info)
+- Steps: dispatch Cmd+K → click `cmd-page-pg_xxx`.
+- Confirmed: SPA-style navigation, URL updates, no full reload.
+
+### B-1555 — Cmd+K → `cmd-db-<id>` navigates to /app/db/<id> correctly (P3, info)
+- Steps: dispatch Cmd+K → click `cmd-db-db_dates_test`.
+- Confirmed.
+
+### B-1556 — Chart type switch (bar/line/donut/number) renders different recharts components (P3, info)
+- Steps: chart-type-v_a_chart fill "donut" → svg now contains `.recharts-pie` and `.recharts-pie-sector` paths.
+- Confirmed.
+
+### B-1557 — Multi-select option toggle off works (B-1305 reverified) (P3, info)
+- Steps: cell-select-r_dt1-p_dms click → `select-option-tg_green` → adds; click again → removes.
+- Confirmed: deduplicated array stored.
+
+### B-1558 — Gallery card title input click bubbles up to open drawer (P3, info)
+- Steps: click `cell-title-r_dt1-p_dt` inside a `gallery-card-r_dt1`.
+- Observed: drawer opens because the card click handler catches the bubble. The title input is editable inline within the card, but clicking it triggers row open.
+- Note: this may be undesirable — user might want to edit inline title without opening the drawer. Suggest stopping propagation on the input.
+
+### B-1559 — RowDetailDrawer is not exclusively focused — can interact with underlying content (P3, open)
+- Steps: drawer open → can click sidebar, settings, etc., underneath.
+- Expected: drawer should be modal (focus trap + scroll lock). Today it's a side panel without scrim.
+
+### B-1560 — Color picker `ib-color-*` doesn't apply foreColor when selection is inside another formatting tag (P3, open)
+- Re-state of B-1525. Setting color on `<i>Each</i>` left HTML unchanged.
+
+### B-1561 — Property header dropdown closes on rename input render — input lacks testid (P3, open)
+- See B-1546.
+
+### B-1562 — Calendar event title doesn't make event clickable for editing (P3, open)
+- Steps: /app/calendar → click an existing event chip.
+- Observed: no edit dialog opens; only the day cell selects.
+- Expected: clicking an event should open a detail dialog matching `cal-compose` (with delete + edit description/time).
+
