@@ -942,11 +942,13 @@ export function addDatabaseRow(databaseId: string, values: Record<string, unknow
   if (titleProp && !(titleProp.id in v)) {
     v[titleProp.id] = options?.title ?? "";
   }
+  const seq = (db.nextUniqueId ?? db.rows.length + 1);
   const row: DatabaseRow = {
     id,
     databaseId,
     values: v,
     blocks: [],
+    uniqueIdSeq: seq,
     icon: null,
     cover: null,
     createdAt: now,
@@ -960,9 +962,17 @@ export function addDatabaseRow(databaseId: string, values: Record<string, unknow
     rows: { ...s.rows, [id]: row },
     databases: {
       ...s.databases,
-      [databaseId]: { ...s.databases[databaseId], rows: [...s.databases[databaseId].rows, id], updatedAt: now },
+      [databaseId]: {
+        ...s.databases[databaseId],
+        rows: [...s.databases[databaseId].rows, id],
+        nextUniqueId: seq + 1,
+        updatedAt: now,
+      },
     },
   }));
+
+  // If a relation property is dual, mirror on the paired side.
+  // (Initial creation rarely fills relations; updateRow handles links.)
   return id;
 }
 

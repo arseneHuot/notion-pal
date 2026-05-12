@@ -23,14 +23,21 @@ export async function signUp(email: string, password: string, name: string) {
       data: { name, avatar: "🧑" },
     },
   });
-  if (error) throw error;
+  if (error) {
+    const msg = error.message ?? "Sign-up failed";
+    if (/already registered/i.test(msg)) {
+      throw new Error("An account with this email already exists. Try signing in.");
+    }
+    throw new Error(msg);
+  }
   // If email confirmations are off and the session was issued, use it. Otherwise sign in.
   let user = data.user;
   if (!data.session) {
-    const signIn = await supabase.auth.signInWithPassword({ email, password });
-    if (signIn.error) throw signIn.error;
-    user = signIn.data.user;
+    const signInResult = await supabase.auth.signInWithPassword({ email, password });
+    if (signInResult.error) throw new Error(signInResult.error.message ?? "Sign-in after sign-up failed");
+    user = signInResult.data.user;
   }
+  if (!user) throw new Error("Sign-up returned no user.");
   const profile = toProfile(user);
   if (profile) initializeForUser(profile);
   return profile;
@@ -38,7 +45,20 @@ export async function signUp(email: string, password: string, name: string) {
 
 export async function signIn(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw error;
+  if (error) {
+    // Normalize common Supabase errors to friendlier strings.
+    const msg = error.message ?? "Sign-in failed";
+    if (/invalid login credentials/i.test(msg)) {
+      throw new Error("Invalid email or password.");
+    }
+    if (/email not confirmed/i.test(msg)) {
+      throw new Error("Email not confirmed. (Email confirmation is disabled on this app; check Supabase project settings.)");
+    }
+    throw new Error(msg);
+  }
+  if (!data.user) {
+    throw new Error("Sign-in returned no user — please try again.");
+  }
   const profile = toProfile(data.user);
   if (profile) initializeForUser(profile);
   return profile;

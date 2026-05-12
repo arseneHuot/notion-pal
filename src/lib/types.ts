@@ -518,6 +518,8 @@ export interface DatabaseRow {
   databaseId: string;
   values: Record<string, unknown>; // propertyId -> value
   blocks: string[]; // page blocks (each row is also a page)
+  /** Stable sequence number assigned at creation time. Survives row deletion. */
+  uniqueIdSeq?: number;
   icon?: string | null;
   cover?: string | null;
   createdAt: number;
@@ -553,6 +555,9 @@ export interface NotionDatabase {
   views: View[];
   rows: string[]; // ordered row ids
   templates: DatabaseTemplate[];
+  /** Strictly-monotonic counter used to assign a stable unique-id to each row.
+   *  Independent of array position so deletion doesn't shift IDs. */
+  nextUniqueId?: number;
   createdAt: number;
   updatedAt: number;
   createdBy: string;

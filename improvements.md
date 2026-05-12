@@ -149,7 +149,7 @@ Priority: high / medium / low.
 ### I-400 — Relation picker: support drag-from-row-handle to a relation cell (high, open)
 - Pair with B-403. Once a relation cell has a proper popover, also support dragging another row onto the cell as a quicker way to link.
 
-### I-401 — Rollup property editor needs to surface the function picker in the UI (high, open)
+### I-401 — Rollup property editor needs to surface the function picker in the UI (high, done)
 - PropertyEditor.tsx renders the rollup result but there's no inline UI to choose function/target property from the column header. Right now a rollup can only be configured by editing localStorage.
 - Add a sub-menu under the column header for rollup: function dropdown (count, sum, …), target-property dropdown.
 
@@ -198,7 +198,7 @@ Priority: high / medium / low.
 ### I-416 — Public page route should generate proper OpenGraph metadata (medium, open)
 - Today `<title>` is the generic site title. Set `<title>`, `<meta property="og:title">`, og:description, og:image (page.cover or first image block) per published page.
 
-### I-417 — Database table: type picker shown on column creation (high, open)
+### I-417 — Database table: type picker shown on column creation (high, done)
 - B-210 already notes this; framing it as an improvement: the right "Add property" UX is to immediately show the type list inline (no native prompt), and remember the last-used type as the default.
 
 ### I-418 — Add "Delete forever" / "Restore all" bulk actions in the Trash route (medium, open)
@@ -230,5 +230,92 @@ Priority: high / medium / low.
 
 ### I-427 — `useStore` selectors that return arrays/objects from `Object.values` should use a `useShallow` helper (medium, open)
 - Several callers (Sidebar useMemo + selector, etc.) take a snapshot of the whole `pages` map then filter. Provide a `useShallow(selector)` wrapper that returns a memoised shallow-equal slice to avoid recomputing big arrays on every state update.
+
+## 2026-05-12 16:10 — Test agent batch 5
+
+### I-500 — Build a unified `useConfirm` / `usePrompt` hook to replace every native dialog call (high, open)
+- See B-512..B-522 for the >15 remaining sites using `prompt()` / `confirm()` / `alert()`. Each test pass identifies more.
+- Proposal: a `useDialogs()` hook backed by a portal-rendered `<DialogStack>` exposing `confirm(opts) → Promise<boolean>` and `prompt(opts) → Promise<string | null>`. Migrate all native calls in a single PR.
+
+### I-501 — Add a "Group by" picker in DB view menu and use it for board/timeline (high, open)
+- Pair with B-502. Once filter/sort/groupBy are wired, board/timeline can re-key columns dynamically.
+
+### I-502 — Database relation picker UX (high, done)
+- New UI for clicking a relation cell: a popover with searchable list of target rows + a "+ Create new" inline button. See B-500.
+
+### I-503 — Rollup configuration UI (high, done)
+- New dialog/popover that selects: source relation property, target property, aggregation function. Render preview value as you change selectors. See B-501.
+
+### I-504 — Real LaTeX rendering for equation blocks (medium, open)
+- Integrate KaTeX (8KB gzipped). Render synchronously in EquationEl. Add inline-equation support via markdown shortcut `$...$` and block-equation via `$$...$$`. See B-505.
+
+### I-505 — Synced block runtime: read/write child blocks across pages (medium, open)
+- Implement `SyncedBlock` as a container that owns its children; `SyncedBlockRef` looks up by `sourceId` and renders the same children. Edits propagate via the existing `updateBlock`/`addBlock`/`reorderBlocks` since the children share parent ids. See B-503.
+
+### I-506 — Columns block: drop-target columns with child blocks (medium, open)
+- Render `c.columns` ColumnBlock children; each column accepts drag-drop of blocks (use the existing `text/x-block-id` transfer). See B-504.
+
+### I-507 — Toggle block child rendering (medium, open)
+- Toggle should support child blocks via `parentId`. See B-506.
+
+### I-508 — Folder tabs in /app/mail (Inbox / Sent / Drafts / Trash / Starred) (medium, open)
+- See B-524. Required as soon as Compose Send actually persists.
+
+### I-509 — Mail Compose: disable Send when empty and add Draft auto-save (medium, open)
+- See B-526, B-527. Persist draft to `state.mails` with `folder: "draft"` on every keystroke; "Send" only flips `folder: "sent"`.
+
+### I-510 — Sign-in / Sign-up form: show errors (medium, open)
+- See B-507, B-508. Capture `error` from supabase `auth.signInWithPassword` / `signUp` and render below the form.
+
+### I-511 — Auto-focus title on freshly created page (low, open)
+- See B-533. Use a `useEffect` that runs on mount, checking `page.title === "" && Date.now() - page.createdAt < 2_000`.
+
+### I-512 — Show last-snapshot indicator near history button (low, open)
+- See B-528, B-529. "Last snapshot 3 min ago" + toast on save.
+
+### I-513 — Verification expiry picker (low, open)
+- See B-530, B-531. UI element on the Verify button: "Verify for 30d / 90d / 1y / custom".
+
+### I-514 — Mount `<Toaster />` at the root, not inside /app (low, open)
+- See B-537. Move from src/routes/app.tsx to the top-level root component so /auth and /p/<slug> can also show toasts.
+
+### I-515 — Cascade-trash should also include child databases and rows (medium, open)
+- See B-539. Update `moveToTrash` to find all `databases` with `parentPageId === pageId` and trash them + their rows.
+
+### I-516 — Cascade-restore should restore the same group atomically (medium, open)
+- See B-540. Use the shared `trashedAt` timestamp or a new `trashCascadeFrom` field to restore subtrees in one click.
+
+### I-517 — Settings export: option "Skip media (data URLs)" (medium, open)
+- See B-510. A simple checkbox that strips data URLs before export.
+
+### I-518 — Settings export: redact `createdBy` / `lastEditedBy` user ids (medium, open)
+- See B-433, B-532. Optional "Anonymize users" toggle on export.
+
+### I-519 — Show drag handle on keyboard focus (low, open)
+- See B-542. Use focus-within to make the handle visible for keyboard navigation.
+
+### I-520 — Empty rollup / "show-original" should preserve target cell rendering (low, open)
+- See B-534, B-535. Rollup output should rely on the same renderer as the target property.
+
+### I-521 — In-page command palette quick-action to create a new sibling page (low, open)
+- Today the only way to create a page is sidebar + or "New subpage". Surface "+ New page in <teamspace>" inside the command palette.
+
+### I-522 — Database "Add property" should default to last-used type, not always text (low, open)
+- See B-501 and I-417. Remember the last `type` chosen from the column-header picker and use it as the default.
+
+### I-523 — Snapshot diff view (low, open)
+- When restoring, show a side-by-side or unified diff of the snapshot vs current state, so users can preview what they're about to overwrite.
+
+### I-524 — Block hover handle hit-area too small on Mac trackpads (low, open)
+- The "+" and drag handles are 16x16; expanding the hit area by adding `before:absolute before:inset-[-6px]` would make trackpad clicks more forgiving.
+
+### I-525 — Inline DB calendar: prompt to pick a date property when adding a Calendar view if none exists (low, open)
+- See B-525. Either disable the Calendar option in the picker when no date prop exists or surface a "Pick a date property" inline message.
+
+### I-526 — Mail compose: render a recipient autocomplete fed by past senders + workspace members (low, open)
+- The To field is plain text today.
+
+### I-527 — Persist AI chat thread under user state (low, open)
+- See B-431. Save messages to `state.aiThreads[currentUserId]` and rehydrate on open.
 
 

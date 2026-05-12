@@ -3,6 +3,7 @@ import type { NotionDatabase, Property, DatabaseRow, SelectOption } from "@/lib/
 import { useStore, updateRow, updateDatabaseProperty } from "@/lib/store";
 import { uid } from "@/lib/id";
 import { evaluateFormula } from "@/lib/formula";
+import { toast } from "@/components/ui/Toast";
 
 const COLORS: SelectOption["color"][] = [
   "default", "gray", "brown", "orange", "yellow", "green", "blue", "purple", "pink", "red",
@@ -385,8 +386,10 @@ function PersonCell({ row, value, property }: { row: DatabaseRow; value: string[
 
 function UniqueIdCell({ row, property, database }: { row: DatabaseRow; property: Property; database: NotionDatabase }) {
   const prefix = (property as { prefix?: string }).prefix ?? "";
-  const index = database.rows.indexOf(row.id) + 1;
-  return <span className="text-xs font-mono text-muted-foreground">{prefix}{prefix ? "-" : ""}{index}</span>;
+  // Prefer the stable per-row uniqueIdSeq; fallback to a positional index for
+  // rows created before the schema migration so old rows stay readable.
+  const seq = row.uniqueIdSeq ?? (database.rows.indexOf(row.id) + 1);
+  return <span className="text-xs font-mono text-muted-foreground">{prefix}{prefix ? "-" : ""}{seq}</span>;
 }
 
 function FormulaCell({ row, property, database }: { row: DatabaseRow; property: Property; database: NotionDatabase }) {
@@ -419,18 +422,113 @@ function RelationCell({ row, value, property }: { row: DatabaseRow; value: strin
   const databases = useStore((s) => s.databases);
   const rp = property as Extract<Property, { type: "relation" }>;
   const targetDb = databases[rp.targetDatabaseId];
-  if (!targetDb) return <span className="text-xs text-muted-foreground">No target</span>;
   const allRows = useStore((s) => s.rows);
-  const linked = value.map((id) => allRows[id]).filter(Boolean);
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) {
+      document.addEventListener("click", onClick);
+      return () => document.removeEventListener("click", onClick);
+    }
+  }, [open]);
+
+  if (!targetDb) {
+    return (
+      <span className="text-xs text-muted-foreground italic">
+        Choose a target database in the property menu
+      </span>
+    );
+  }
+
   const titleProp = targetDb.properties.find((p) => p.type === "title");
+  const linkedIds = value ?? [];
+  const linked = linkedIds.map((id) => allRows[id]).filter(Boolean);
+
+  function toggle(targetRowId: string) {
+    const next = linkedIds.includes(targetRowId)
+      ? linkedIds.filter((id) => id !== targetRowId)
+      : [...linkedIds, targetRowId];
+    updateRow(row.id, { values: { [property.id]: next } });
+    // Mirror on paired side for dual relations.
+    if (rp.isDual && rp.pairedPropertyId) {
+      const other = allRows[targetRowId];
+      if (other) {
+        const otherLinks = (other.values[rp.pairedPropertyId] as string[]) ?? [];
+        const wasLinked = otherLinks.includes(row.id);
+        const isNowLinked = next.includes(targetRowId);
+        let nextOther: string[] | null = null;
+        if (wasLinked && !isNowLinked) nextOther = otherLinks.filter((id) => id !== row.id);
+        else if (!wasLinked && isNowLinked) nextOther = [...otherLinks, row.id];
+        if (nextOther) updateRow(targetRowId, { values: { [rp.pairedPropertyId]: nextOther } });
+      }
+    }
+  }
+
+  function rowLabel(r: DatabaseRow): string {
+    if (titleProp) return ((r.values[titleProp.id] as string) || "").trim() || "Untitled";
+    return "Item";
+  }
+
+  const filteredRows = targetDb.rows
+    .map((id) => allRows[id])
+    .filter((r): r is DatabaseRow => !!r && !r.isInTrash)
+    .filter((r) => !search || rowLabel(r).toLowerCase().includes(search.toLowerCase()));
+
   return (
-    <div className="flex gap-1 flex-wrap">
-      {linked.length === 0 && <span className="text-xs text-muted-foreground">Empty</span>}
-      {linked.map((r) => (
-        <span key={r.id} className="text-xs px-1.5 py-0.5 bg-muted rounded">
-          {titleProp ? (r.values[titleProp.id] as string) || "Untitled" : "Item"}
-        </span>
-      ))}
+    <div className="relative w-full" ref={ref}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-left w-full flex flex-wrap gap-1 min-h-[24px]"
+        data-testid={`cell-relation-${row.id}-${property.id}`}
+      >
+        {linked.length === 0 && <span className="text-xs text-muted-foreground">Empty</span>}
+        {linked.map((r) => (
+          <span key={r.id} className="text-xs px-1.5 py-0.5 bg-muted rounded">
+            {rowLabel(r)}
+          </span>
+        ))}
+      </button>
+      {open && (
+        <div className="absolute z-30 bg-popover border border-border rounded shadow-lg w-56 p-2 mt-1 max-h-72 overflow-y-auto">
+          <div className="text-[10px] uppercase text-muted-foreground mb-1 px-1">
+            Link to → {targetDb.name}
+          </div>
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search rows…"
+            className="w-full bg-background border border-input rounded px-2 py-1 text-xs"
+            data-testid={`relation-search-${row.id}-${property.id}`}
+          />
+          <div className="mt-2 space-y-0.5">
+            {filteredRows.length === 0 && (
+              <div className="text-xs text-muted-foreground px-2 py-1">No rows in target database</div>
+            )}
+            {filteredRows.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => toggle(r.id)}
+                className={`w-full text-left flex items-center gap-2 px-2 py-1 text-xs hover:bg-accent rounded ${linkedIds.includes(r.id) ? "bg-accent" : ""}`}
+                data-testid={`relation-row-${r.id}`}
+              >
+                <input
+                  type="checkbox"
+                  checked={linkedIds.includes(r.id)}
+                  readOnly
+                  className="pointer-events-none"
+                />
+                <span className="truncate flex-1">{rowLabel(r)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -455,11 +553,18 @@ function ButtonCell({ row, property, database }: { row: DatabaseRow; property: P
           if (action.kind === "edit-property") {
             updateRow(row.id, { values: { [action.propertyId]: action.value } });
           } else if (action.kind === "show-confirmation") {
-            alert(action.message);
+            toast(action.message, "info");
+          } else if (action.kind === "send-webhook") {
+            fetch(action.url, { method: "POST", body: action.payload ?? "{}" }).catch(() => undefined);
+            toast(`Sent webhook to ${action.url}`, "info");
           }
+        }
+        if (!bp.actions || bp.actions.length === 0) {
+          toast(`Ran "${bp.label || "Button"}" — configure actions in property settings.`, "info");
         }
       }}
       className="text-xs bg-primary text-primary-foreground rounded px-2 py-1"
+      data-testid={`cell-button-${row.id}-${property.id}`}
     >
       {bp.label || "Run"}
     </button>

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { useStore, restorePage, permanentlyDeletePage } from "@/lib/store";
+import { useStore, restorePage, restorePageCascade, permanentlyDeletePage } from "@/lib/store";
 import { Trash2, RotateCcw } from "lucide-react";
 
 export const Route = createFileRoute("/app/trash")({
@@ -33,7 +33,7 @@ function TrashPage() {
             </div>
             <button
               onClick={() => {
-                restorePage(p.id);
+                restorePageCascade(p.id);
                 navigate({ to: "/app/p/$pageId", params: { pageId: p.id } });
               }}
               className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground flex items-center gap-1"
@@ -42,9 +42,7 @@ function TrashPage() {
               <RotateCcw className="size-3" /> Restore
             </button>
             <button
-              onClick={() => {
-                if (confirm("Permanently delete this page?")) permanentlyDeletePage(p.id);
-              }}
+              onClick={() => permanentlyDeletePage(p.id)}
               className="text-xs px-2 py-1 rounded bg-destructive text-white flex items-center gap-1"
               data-testid={`delete-forever-${p.id}`}
             >

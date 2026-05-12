@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty } from "@/lib/store";
+import { useEffect, useRef, useState } from "react";
+import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty } from "@/lib/store";
 import { PropertyCell } from "../PropertyEditor";
 import { applyFilters, applySorts } from "../filter";
 import { ChevronDown, MoreHorizontal, Plus, Trash } from "lucide-react";
@@ -47,10 +47,9 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
               ))}
               <td className="border border-border px-1 text-center">
                 <button
-                  onClick={() => {
-                    if (confirm("Delete row?")) deleteRow(row.id);
-                  }}
+                  onClick={() => deleteRow(row.id)}
                   className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
+                  aria-label="Delete row"
                   data-testid={`row-delete-${row.id}`}
                 >
                   <Trash className="size-3" />
@@ -148,6 +147,15 @@ function PropertyHeader({ property, databaseId }: { property: Property; database
           {property.type === "formula" && (
             <FormulaEditor databaseId={databaseId} property={property} close={() => setOpen(false)} />
           )}
+          {property.type === "relation" && (
+            <RelationConfigEditor databaseId={databaseId} property={property} close={() => setOpen(false)} />
+          )}
+          {property.type === "rollup" && (
+            <RollupConfigEditor databaseId={databaseId} property={property} close={() => setOpen(false)} />
+          )}
+          {property.type === "unique-id" && (
+            <UniqueIdPrefixEditor databaseId={databaseId} property={property} close={() => setOpen(false)} />
+          )}
           {property.type !== "title" && (
             <button
               onClick={() => {
@@ -184,23 +192,178 @@ function FormulaEditor({ databaseId, property, close }: { databaseId: string; pr
   );
 }
 
-function PropertyHeaderAdd({ databaseId }: { databaseId: string }) {
+function RelationConfigEditor({ databaseId, property, close }: { databaseId: string; property: Property; close: () => void }) {
+  const databases = useStore((s) => s.databases);
+  const others = Object.values(databases).filter((d) => !d.isInTrash);
+  const target = (property as { targetDatabaseId?: string }).targetDatabaseId;
+  const isDual = (property as { isDual?: boolean }).isDual ?? false;
   return (
-    <button
-      onClick={() => {
-        const name = prompt("Property name?");
-        if (!name) return;
-        const id = `${name}_${Math.random().toString(36).slice(2, 6)}`;
-        useStore.toString;
-        import("@/lib/store").then(({ addDatabaseProperty }) => {
-          addDatabaseProperty(databaseId, { id, name, type: "text" });
-        });
-      }}
-      className="text-muted-foreground hover:text-foreground p-1"
-      data-testid={`table-addprop-${databaseId}`}
-    >
-      <Plus className="size-3.5" />
-    </button>
+    <div className="border-t border-border px-3 py-2 space-y-1">
+      <label className="text-[10px] uppercase text-muted-foreground">Relation target</label>
+      <select
+        value={target ?? ""}
+        onChange={(e) => updateDatabaseProperty(databaseId, property.id, { targetDatabaseId: e.target.value } as Partial<Property>)}
+        className="w-full bg-background border border-input rounded text-xs p-1"
+        data-testid={`rel-target-${property.id}`}
+      >
+        <option value="">— pick a database —</option>
+        {others.map((d) => (
+          <option key={d.id} value={d.id}>{d.icon ?? "🗄️"} {d.name}</option>
+        ))}
+      </select>
+      <label className="flex items-center gap-1 text-xs">
+        <input
+          type="checkbox"
+          checked={isDual}
+          onChange={(e) => updateDatabaseProperty(databaseId, property.id, { isDual: e.target.checked } as Partial<Property>)}
+          data-testid={`rel-dual-${property.id}`}
+        />
+        Two-way relation (mirror on paired side)
+      </label>
+    </div>
+  );
+}
+
+function RollupConfigEditor({ databaseId, property, close }: { databaseId: string; property: Property; close: () => void }) {
+  const db = useStore((s) => s.databases[databaseId]);
+  const databases = useStore((s) => s.databases);
+  if (!db) return null;
+  const relationProps = db.properties.filter((p) => p.type === "relation");
+  const rp = property as Extract<Property, { type: "rollup" }>;
+  const relProp = db.properties.find((p) => p.id === rp.relationPropertyId);
+  const targetDb = relProp && relProp.type === "relation" ? databases[relProp.targetDatabaseId] : undefined;
+  return (
+    <div className="border-t border-border px-3 py-2 space-y-1">
+      <label className="text-[10px] uppercase text-muted-foreground">Rollup — relation</label>
+      <select
+        value={rp.relationPropertyId ?? ""}
+        onChange={(e) => updateDatabaseProperty(databaseId, property.id, { relationPropertyId: e.target.value } as Partial<Property>)}
+        className="w-full bg-background border border-input rounded text-xs p-1"
+        data-testid={`roll-rel-${property.id}`}
+      >
+        <option value="">— pick relation —</option>
+        {relationProps.map((p) => (
+          <option key={p.id} value={p.id}>{p.name}</option>
+        ))}
+      </select>
+      <label className="text-[10px] uppercase text-muted-foreground">Target property</label>
+      <select
+        value={rp.targetPropertyId ?? ""}
+        onChange={(e) => updateDatabaseProperty(databaseId, property.id, { targetPropertyId: e.target.value } as Partial<Property>)}
+        className="w-full bg-background border border-input rounded text-xs p-1"
+        data-testid={`roll-target-${property.id}`}
+        disabled={!targetDb}
+      >
+        <option value="">— pick property —</option>
+        {(targetDb?.properties ?? []).map((p) => (
+          <option key={p.id} value={p.id}>{p.name} ({p.type})</option>
+        ))}
+      </select>
+      <label className="text-[10px] uppercase text-muted-foreground">Function</label>
+      <select
+        value={rp.function ?? "count"}
+        onChange={(e) => updateDatabaseProperty(databaseId, property.id, { function: e.target.value } as Partial<Property>)}
+        className="w-full bg-background border border-input rounded text-xs p-1"
+        data-testid={`roll-func-${property.id}`}
+      >
+        {(["count", "count-values", "sum", "average", "min", "max", "earliest", "latest", "show-original"] as const).map((f) => (
+          <option key={f} value={f}>{f}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function UniqueIdPrefixEditor({ databaseId, property, close }: { databaseId: string; property: Property; close: () => void }) {
+  const [v, setV] = useState((property as { prefix?: string }).prefix ?? "");
+  return (
+    <div className="border-t border-border px-3 py-2 space-y-1">
+      <label className="text-[10px] uppercase text-muted-foreground">Unique-id prefix</label>
+      <input
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onBlur={() => updateDatabaseProperty(databaseId, property.id, { prefix: v } as Partial<Property>)}
+        className="w-full bg-background border border-input rounded text-xs p-1"
+        placeholder="e.g. BUG"
+        data-testid={`uid-prefix-${property.id}`}
+      />
+    </div>
+  );
+}
+
+function PropertyHeaderAdd({ databaseId }: { databaseId: string }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [type, setType] = useState<PropertyType>("text");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) {
+      document.addEventListener("click", onClick);
+      return () => document.removeEventListener("click", onClick);
+    }
+  }, [open]);
+
+  function create() {
+    const n = name.trim() || "New property";
+    const id = `prop_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const patch: Record<string, unknown> = { id, name: n, type };
+    if (type === "select" || type === "multi-select" || type === "status") patch.options = [];
+    if (type === "status") patch.groups = [];
+    if (type === "formula") patch.expression = '""';
+    addDatabaseProperty(databaseId, patch as Property);
+    setName("");
+    setType("text");
+    setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="relative inline-block">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-muted-foreground hover:text-foreground p-1"
+        aria-label="Add property"
+        data-testid={`table-addprop-${databaseId}`}
+      >
+        <Plus className="size-3.5" />
+      </button>
+      {open && (
+        <div className="absolute z-30 bg-popover border border-border rounded shadow-lg p-2 right-0 mt-1 w-60">
+          <input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") create();
+              if (e.key === "Escape") setOpen(false);
+            }}
+            placeholder="Property name"
+            className="w-full bg-background border border-input rounded px-2 py-1 text-xs mb-1"
+            data-testid={`addprop-name-${databaseId}`}
+          />
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as PropertyType)}
+            className="w-full bg-background border border-input rounded px-2 py-1 text-xs mb-2"
+            data-testid={`addprop-type-${databaseId}`}
+          >
+            {PROPERTY_TYPES.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+          <button
+            onClick={create}
+            className="w-full bg-primary text-primary-foreground text-xs rounded py-1"
+            data-testid={`addprop-create-${databaseId}`}
+          >
+            Create
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 

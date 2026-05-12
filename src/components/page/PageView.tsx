@@ -11,8 +11,20 @@ import { toast } from "@/components/ui/Toast";
 export function PageView({ pageId }: { pageId: string }) {
   const page = useStore((s) => s.pages[pageId]);
   const blocks = useStore((s) => s.blocks);
+  const allPages = useStore((s) => s.pages);
   const { user } = useAuth();
   const [commentsOpen, setCommentsOpen] = useState(false);
+
+  // Detect whether any ancestor is in trash (B-402).
+  const ancestorInTrash = useMemo(() => {
+    if (!page) return false;
+    let cur = page.parentId ? allPages[page.parentId] : null;
+    while (cur) {
+      if (cur.isInTrash) return true;
+      cur = cur.parentId ? allPages[cur.parentId] : null;
+    }
+    return false;
+  }, [page, allPages]);
 
   useEffect(() => {
     function open() {
@@ -50,7 +62,7 @@ export function PageView({ pageId }: { pageId: string }) {
     );
   }
 
-  if (page.isInTrash) {
+  if (page.isInTrash || ancestorInTrash) {
     return (
       <div className="max-w-3xl mx-auto px-8 py-12">
         <div className="bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-200 dark:border-yellow-800 rounded-md p-3 mb-6 text-sm flex items-center justify-between">
