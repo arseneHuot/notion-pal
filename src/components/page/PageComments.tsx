@@ -36,8 +36,12 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
         {pageComments.map((c) => (
           <div key={c.id} className={`rounded border border-border p-2 ${c.resolved ? "opacity-50" : ""}`}>
             <div className="flex items-center gap-2 mb-1">
-              <div className="size-6 rounded-full bg-primary/10 grid place-items-center text-xs">{user?.avatar ?? "🧑"}</div>
-              <span className="text-xs font-medium">{user?.name ?? "Anonymous"}</span>
+              <div className="size-6 rounded-full bg-primary/10 grid place-items-center text-xs">
+                {c.authorAvatar ?? (c.authorId === user?.id ? user?.avatar : "👤")}
+              </div>
+              <span className="text-xs font-medium">
+                {c.authorName ?? (c.authorId === user?.id ? user?.name : "Someone")}
+              </span>
               <span className="text-xs text-muted-foreground ml-auto">
                 {new Date(c.createdAt).toLocaleString()}
               </span>

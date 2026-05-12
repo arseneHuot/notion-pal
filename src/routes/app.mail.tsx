@@ -145,7 +145,26 @@ function ComposeMail({ compose, onClose }: { compose: { to: string; subject: str
       <div className="mt-3 flex gap-2">
         <button
           onClick={() => {
-            toast("Email queued (demo — no real SMTP).", "success");
+            // Persist the message to the local "Sent" folder so users can
+            // see the email they just sent (B-523). No real SMTP yet.
+            const now = Date.now();
+            const id = uid("mail");
+            upsertMail({
+              id,
+              from: "me@notionclone.app",
+              to: state.to ? state.to.split(",").map((s) => s.trim()).filter(Boolean) : [],
+              subject: state.subject || "(no subject)",
+              body: state.body,
+              receivedAt: now,
+              read: true,
+              starred: false,
+              archived: false,
+              trash: false,
+              labels: ["sent"],
+              threadId: id,
+              snippet: state.body.slice(0, 80),
+            });
+            toast("Email saved to Sent (demo — no real SMTP).", "success");
             onClose();
           }}
           className="bg-primary text-primary-foreground text-sm rounded px-3 py-1.5"

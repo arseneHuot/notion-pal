@@ -1171,11 +1171,107 @@ function BreadcrumbEl({ block, pageId }: { block: Block; pageId: string }) {
 }
 
 function SyncedEl({ block, pageId }: { block: Block; pageId: string }) {
+  const allBlocks = useStore((s) => s.blocks);
+
+  if (block.type === "synced-block") {
+    // Original / source — host its child blocks.
+    const children = Object.values(allBlocks)
+      .filter((b) => b.parentId === block.id)
+      .sort((a, b) => a.order - b.order);
+
+    function addChild() {
+      const id = "blk_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const txt: Block = {
+        id,
+        type: "text",
+        parentId: block.id,
+        order: children.length,
+        content: "",
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+      insertBlock(txt);
+      setTimeout(() => {
+        const el = document.querySelector(`[data-block-id="${id}"] [contenteditable]`) as HTMLElement;
+        el?.focus();
+      }, 50);
+    }
+
+    function copyId() {
+      navigator.clipboard?.writeText(block.id);
+    }
+
+    return (
+      <BlockShell block={block} pageId={pageId}>
+        <div className="border-l-4 border-pink-400 pl-3 py-2" data-testid={`synced-source-${block.id}`}>
+          <div className="text-xs uppercase text-pink-600 mb-1 flex items-center gap-2">
+            <span>Synced block (source)</span>
+            <button onClick={copyId} className="text-[10px] underline text-muted-foreground hover:text-foreground">copy id</button>
+          </div>
+          {children.length === 0 && (
+            <div className="text-xs text-muted-foreground italic">No content yet — add a block below or paste this id into a synced-block-ref to mirror.</div>
+          )}
+          {children.map((c) => (
+            <BlockComponent key={c.id} block={c} pageId={pageId} />
+          ))}
+          <button
+            onClick={addChild}
+            className="text-xs text-muted-foreground hover:text-foreground mt-1"
+            data-testid={`synced-add-${block.id}`}
+          >
+            + Add block
+          </button>
+        </div>
+      </BlockShell>
+    );
+  }
+
+  // synced-block-ref: mirror the source's children read-only.
+  const ref = block as Extract<Block, { type: "synced-block-ref" }>;
+  const [sourceIdInput, setSourceIdInput] = useState(ref.sourceId ?? "");
+  const source = ref.sourceId ? allBlocks[ref.sourceId] : undefined;
+  const children = source
+    ? Object.values(allBlocks)
+        .filter((b) => b.parentId === source.id)
+        .sort((a, b) => a.order - b.order)
+    : [];
+
+  if (!source || source.type !== "synced-block") {
+    return (
+      <BlockShell block={block} pageId={pageId}>
+        <div className="border-l-4 border-pink-400 pl-3 py-2 text-sm">
+          <div className="text-xs uppercase text-pink-600 mb-1">Synced reference — no source</div>
+          <div className="flex gap-2">
+            <input
+              value={sourceIdInput}
+              onChange={(e) => setSourceIdInput(e.target.value)}
+              placeholder="Paste source synced-block id"
+              className="flex-1 bg-background border border-input rounded px-2 py-1 text-xs"
+              data-testid={`synced-source-input-${block.id}`}
+            />
+            <button
+              onClick={() => updateBlock(block.id, { sourceId: sourceIdInput.trim() } as Partial<Block>)}
+              className="bg-primary text-primary-foreground text-xs px-2 rounded"
+              data-testid={`synced-source-link-${block.id}`}
+            >
+              Link
+            </button>
+          </div>
+        </div>
+      </BlockShell>
+    );
+  }
+
   return (
     <BlockShell block={block} pageId={pageId}>
-      <div className="border-l-4 border-pink-400 pl-3 py-2 text-sm">
-        <div className="text-xs uppercase text-pink-600 mb-1">Synced block</div>
-        <div className="text-muted-foreground">Content will be mirrored across pages.</div>
+      <div className="border-l-4 border-pink-400 pl-3 py-2" data-testid={`synced-ref-${block.id}`}>
+        <div className="text-xs uppercase text-pink-600 mb-1">Synced reference</div>
+        {children.length === 0 && (
+          <div className="text-xs text-muted-foreground italic">Source is empty.</div>
+        )}
+        {children.map((c) => (
+          <BlockComponent key={c.id} block={c} pageId={pageId} />
+        ))}
       </div>
     </BlockShell>
   );

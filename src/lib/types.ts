@@ -609,6 +609,10 @@ export interface Comment {
   blockId?: string | null; // null = page comment
   parentId?: string | null; // for threading
   authorId: string;
+  /** Snapshot of the author display name at the time the comment was posted
+   *  so the comment doesn't follow the currently-signed-in user. */
+  authorName?: string;
+  authorAvatar?: string;
   content: string;
   resolved: boolean;
   createdAt: number;

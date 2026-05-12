@@ -27,7 +27,7 @@ Priority: high / medium / low.
 ### I-006 — Form view public submission URL works without auth (medium, open)
 - `/form/:dbId/:viewId` route should be readable publicly (no auth required) and store submissions to localStorage of the owner. Tricky without a real backend.
 
-### I-007 — Synced block content mirroring (medium, open)
+### I-007 — Synced block content mirroring (medium, done)
 - The schema has synced-block and synced-block-ref but the runtime mirror is not implemented yet.
 
 ### I-008 — Keyboard shortcut reference panel (low, open)

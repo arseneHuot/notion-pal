@@ -135,12 +135,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Expected: use a toast or inline confirmation. Native alert/confirm are also incompatible with automated testing.
 - Suggestion: convert to a non-blocking toast (or a status row inside the composer panel).
 
-### B-207 — Calendar Week/Day view selections render the same grid as Month (P1, open)
+### B-207 — Calendar Week/Day view selections render the same grid as Month (P1, fixed)
 - Steps: load `/app/calendar`, change the view `<select>` from `month` to `week`, then `day`.
 - Observed: the underlying grid stays identical (full month). The select state changes but the layout/rows don't update.
 - Expected: week view should show 1 row × 7 days; day view should show single column with hours.
 
-### B-206 — Calendar "+" day-add button has no visible effect (P1, open)
+### B-206 — Calendar "+" day-add button has no visible effect (P1, fixed)
 - Steps: load `/app/calendar`. Hover any day cell, click the `+` (data-testid="day-add-YYYY-MM-DD").
 - Observed: nothing happens — no event added, no dialog, no error in console.
 - Expected: prompt for event title or insert a new event entry for that day. Standalone calendar should support creation, per area #18.
@@ -209,7 +209,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: still outputs `🤖 (Demo) Here is a response for "".\n\n1. Key insight…`. There is no validation that the prompt is non-empty.
 - Expected: disable Generate when prompt is empty, or show a hint "Enter a prompt first".
 
-### B-307 — Synced block is a static "Content will be mirrored…" placeholder regardless of any source (P1, open)
+### B-307 — Synced block is a static "Content will be mirrored…" placeholder regardless of any source (P1, fixed)
 - File: src/components/editor/Block.tsx lines 1168-1177 (SyncedEl).
 - Steps: /synced block → the block renders only a pink-bordered placeholder; no UI to pick a source, no rendering of any mirrored content.
 - Expected: matches I-007 ("synced block content mirroring") but the slash menu entry should not promise a working block when the feature is not implemented — either hide the slash item or add a clear "Coming soon" badge inside the block.
@@ -384,7 +384,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: the UI shows the button label flipping between "Resolve"/"Resolved" but the action is one-way. There is no `unresolveComment`.
 - Expected: `resolveComment` should toggle, or expose a separate `unresolveComment`. Closely related to I-204.
 
-### B-421 — Comments: author name and avatar always show the CURRENT user, not the comment author (P1, open)
+### B-421 — Comments: author name and avatar always show the CURRENT user, not the comment author (P1, fixed)
 - File: src/components/page/PageComments.tsx lines 38-42.
 - Steps: post a comment as user A, sign out, sign in as user B (or simulate by editing localStorage). View the comment.
 - Observed: the comment renders user B's avatar and name. The stored `comment.authorId` is never read.
@@ -479,7 +479,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: only Rename, Delete, hide-property checkboxes, + Add property. No "Filter", no "Sort", no "Group by". `View` schema already has `filters: Filter[]` and `sorts: Sort[]` arrays, and `applyFilters` / `applySorts` are imported in TableView. There is no UI exposing them.
 - Expected: filter and sort sections in the view menu (or a dedicated "Filter | Sort" pill row above the table), matching Notion. Without them, filters and sorts are dead schema.
 
-### B-503 — SyncedEl is a static placeholder — no actual sync between original and ref (P1, open)
+### B-503 — SyncedEl is a static placeholder — no actual sync between original and ref (P1, fixed)
 - File: src/components/editor/Block.tsx lines 1170-1179 (`SyncedEl`).
 - Steps: `/synced-block` to insert a synced block on page A → `/synced-block-ref` on page B (note: synced-block-ref is not even in the slash menu).
 - Observed: both block types render the same fixed-content pink box reading "Synced block — Content will be mirrored across pages." No children, no source-id wiring, no contenteditable, no actual mirror. The schema (`SyncedBlock`, `SyncedBlockRef.sourceId`) is wired but the renderer ignores it.
@@ -587,7 +587,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - File: src/components/page/PageHistoryDialog.tsx line 37.
 - In automation mode the confirm returned true bypasses the prompt, but a real user with browser-blocked prompts sees nothing happen.
 
-### B-523 — Mail Compose Send button calls toast() but does not persist the sent message (P1, open)
+### B-523 — Mail Compose Send button calls toast() but does not persist the sent message (P1, fixed)
 - File: src/routes/app.mail.tsx lines 145-155.
 - Steps: open /app/mail → Compose → fill To/Subject/Body → Send.
 - Observed: a toast briefly says "Email queued (demo — no real SMTP).", the dialog closes, BUT no record is added to `state.mails`, no Sent folder is updated, and there is no Sent / Outbox view to confirm it ever existed.
@@ -1284,3 +1284,33 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: page with sub-page → permanent Delete the parent.
 - Observed: child sub-page records remain in `pages`/`blocks` and may appear orphaned. Same issue applies to columns (B-908) and toggle children.
 - Expected: traversal-based cleanup.
+
+
+## 2026-05-12 22:00 — Test agent batch 12
+
+### B-1000 — Verification of batch-11 view-menu Sort & Filter (P3, info)
+- B-818/B-903 view-menu Sort & Filter: VERIFIED FIXED.
+- `view-menu-<viewId>` button now opens a popover with `Sort` section (Add sort) and `Filter` section (Add filter). Setting `propertyId=p_num, direction=asc` reorders rows from default insertion order (Charlie, Alice, Bob, Dave, Eve) to (Dave=1, Alice=3, Charlie=5, Eve=7, Bob=9). Toggling direction to `desc` reverses to (9,7,5,3,1).
+- Adding a `contains "Al"` filter on Name reduces the table to just `Alice` and the `+ New row` row. Store correctly reflects view.filters/view.sorts.
+- All 12 operators (`contains`, `does-not-contain`, `is`, `is-not`, `is-empty`, `is-not-empty`, `greater-than`, `less-than`, `greater-than-equal`, `less-than-equal`, `checked`, `unchecked`) executed without throwing and returned the expected subsets.
+
+### B-1001 — Verification of multi-property (secondary) sort (P3, info)
+- Configured `view.sorts = [{p_check, desc}, {p_num, asc}]`. Rows reordered to: Dave(Done=true,1), Charlie(true,5), Alice(false,3), Eve(false,7), Bob(false,9). Primary sort respected, ties broken by secondary sort. No errors.
+
+### B-1002 — Verification of B-914 toggle children in editor (P3, info)
+- Created `toggle` block with `parentId=null` and a child text block with `parentId=<toggle.id>`. Closed chevron renders only "Top-level toggle"; clicking `data-testid="toggle-<id>"` opens it and child `Child inside toggle` appears in `data-testid="toggle-children-<id>"` along with `+ Add block` button.
+- Clicked `+ Add block` (data-testid `toggle-add-<id>`) — a new empty text block was added with `parentId=<toggle.id>`. Typed "Typed inside toggle" via `execCommand('insertText')` — content persisted in store. Reloaded the page — toggle re-opens (because `open: true`), and both child blocks ("Child inside toggle" and "Typed inside toggle") are still rendered.
+
+### B-1003 — Verification of B-908/B-916 permanent delete cascade (P3, info)
+- Built a page (pg_cascade_parent) containing: `columns/column` (2 cols, 3 text children), a `toggle` with child, and a `sub-page` block pointing at pg_cascade_sub. Moved parent to trash, navigated to /app/trash, clicked Delete (permanent).
+- All 8 child blocks (blk_cascade_cols, _colL, _colR, _tL1, _tL2, _tR1, _tog, _togchild) were removed from `blocks`. The linked sub-page (pg_cascade_sub) was also deleted from `pages`. No orphans remain.
+
+### B-1004 — Verification of slug uniqueness on publish (P3, info)
+- Published pg_test_b12_sortfilter and renamed slug to `sharedslug` via the ShareDialog input. Then navigated to pg_test_b12_toggle, published it, and changed its slug to `sharedslug`. Result: page B's slug auto-became `sharedslug-2`, and the dialog showed a "taken" warning. Both pages keep distinct slugs in the store. Old B-717/B-909 collision is FIXED.
+
+### B-1005 — Verification of non-native Rename view + Add property (P3, info)
+- Overrode `window.prompt` to flag invocation. Opened the view-menu and clicked `Rename view`: focus jumped to an inline `<input value="All">`, prompt was NOT called.
+- Clicked `+ Add property`: focus moved to an inline `<input placeholder="Property name">` next to an `Add` button; prompt was NOT called.
+- End-to-end: typed "NewProp" + Enter on the property input, the database properties list grew from 6 to 7 with a new `{type:"text", name:"NewProp"}` property appended. UI is fully non-blocking.
+
+

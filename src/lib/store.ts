@@ -1299,6 +1299,8 @@ export function addComment(input: { pageId: string; blockId?: string; content: s
     blockId: input.blockId ?? null,
     parentId: input.parentId ?? null,
     authorId: user.id,
+    authorName: user.name,
+    authorAvatar: user.avatar,
     content: input.content,
     resolved: false,
     createdAt: now,
