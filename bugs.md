@@ -1073,3 +1073,121 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Verification log: after recreation, prop = `{id: prop_mp2x1bfzedtw, name: "BugID2", type: "unique-id"}` — no prefix. row_mp2v3c9ydsk3dcpj.uniqueIdSeq=1; row_mp2v3d77ydg7zv2s.uniqueIdSeq=3; new row uniqueIdSeq=4.
 - Expected: either (a) preserve the deleted prop's prefix somewhere DB-level and re-apply when recreated, or (b) prompt user to set the prefix on creation, or (c) reset `db.nextUniqueId` to `max(seqs)+1` when the property is deleted so re-creation doesn't have weird gaps.
 
+
+## 2026-05-12 19:45 — Test agent batch 10
+
+### B-800 — Malformed table block `rows` field crashes the WHOLE page (no boundary recovery) (P1, fixed)
+- File: src/components/editor/Block.tsx SimpleTableEl line 1033, 1057. Reads `t.rows.map` directly with no validation.
+- Steps: any persisted table block where `rows` is not an array — e.g. an old block created before the type changed, or a corrupted JSON import — opens the page.
+- Observed: ErrorBoundary catches but root-level error page renders ("This page didn't load — t.rows.map is not a function"). The entire page becomes inaccessible; no edit affordance to delete the bad block.
+- Expected: guard `Array.isArray(t.rows) ? t.rows : [["",""],["",""]]` and/or surface a per-block error placeholder ("Table data is corrupt — click to reset") rather than killing the whole route.
+
+### B-801 — Public /p/<slug> toggle never renders nested children (P2, fixed)
+- File: src/routes/p.$slug.tsx lines 161-167. The `<details>` summary has the toggle content but the body is empty — no recursive rendering of child blocks.
+- Steps: in workspace, add a toggle with two text blocks inside; publish; open /p/<slug>; expand the toggle.
+- Observed: details opens but body is blank.
+- Expected: render the toggle's child blocks below the summary, recursively via ReadonlyBlock.
+
+### B-802 — Public /p/<slug> sub-page shows generic "📄 (Sub-page link)" — no title, no link (P2, fixed)
+- File: src/routes/p.$slug.tsx line 213-215. Returns a static label.
+- Steps: publish a page that contains a sub-page block.
+- Observed: viewers see `📄 (Sub-page link)` with no indication of which page.
+- Expected: at minimum show the sub-page title; if the sub-page is also published, link to its public slug; otherwise show "(unpublished sub-page)".
+
+### B-803 — AI block silently disappears on /p/<slug> when result is empty (P3, fixed)
+- File: src/routes/p.$slug.tsx line 206 — `if (!a.result) return null;`
+- Steps: include an AI block (still generating, or never invoked) in a published page.
+- Observed: the block vanishes entirely, leaving an unexplained gap between siblings.
+- Expected: show a small "AI block (no output yet)" placeholder so the published structure is preserved.
+
+### B-804 — After changing relation prop to "text", stale relation fields linger on the source prop (P3, fixed)
+- File: src/lib/store.ts updateDatabaseProperty — when switching from relation→text, the new prop object retains `isDual`, `pairedPropertyId`, `targetDatabaseId` (only the type and orphan-cleanup of the partner happens).
+- Steps: dual relation A↔B. From DB A's "Linked" header, change Type to "text".
+- Observed: DB B loses its paired prop (good — verification fix works), but DB A's "Linked" prop is now `{ type: "text", isDual: true, pairedPropertyId: "...", targetDatabaseId: "..." }`.
+- Expected: when type changes off "relation", strip `isDual`, `pairedPropertyId`, `targetDatabaseId`. Otherwise re-toggling type back to "relation" produces a "ghost" pairing pointing at a deleted prop, which can re-create or confuse downstream code.
+
+### B-805 — VERIFICATION FAILED: rollup property does not auto-default to "count of linked" even when a relation exists (P1, fixed)
+- File: src/lib/store.ts addDatabaseProperty (rollup branch).
+- Steps: db with at least one existing relation prop. Click + property, type=rollup, name=anything, Create.
+- Observed: new prop is `{id, name, type:"rollup"}` — no `relationPropertyId`, no `function`. Every cell renders the italic "configure rollup" placeholder, requiring manual setup per the existing UI.
+- Expected per implementer task: "Rollup default behaviour: create a rollup property after creating a relation; cell should show 0 (count of linked) without manual configuration." Need to default `relationPropertyId` to the first relation in the database and `function` to `count` (or `count-all`), so cells render the link count immediately.
+
+### B-806 — Public /p/<slug> never applies dark mode (P2, open)
+- File: src/routes/p.$slug.tsx — no dark-mode reading at all.
+- Steps: visit /p/<slug> with system or app set to dark.
+- Observed: page renders in light mode (white background) regardless. ReadonlyBlock uses `dark:` classes (e.g. dark:border-violet-700) so the markup is prepared, but neither the host route nor any layout applies a `dark` class on html/body. dark variants therefore never activate.
+- Expected: read `prefers-color-scheme` or app-stored darkMode and add `dark` class to <html>; or simply remove the `dark:` variants if dark is intentionally not supported on public pages.
+
+### B-807 — Block reorder: `insertIndex = sourceIndex < targetIndex ? targetIndex : targetIndex` is a no-op ternary (P3, open)
+- File: src/components/editor/Block.tsx line 128.
+- Steps: dragging from index 5 to index 1 (later→earlier) inserts at targetIndex (the same place as moving the other direction).
+- Observed: dropping "file" on "aud" places file BEFORE aud. Functionally OK as "insert above", but the ternary is dead code and probably masks a bug — the original intent was likely to subtract 1 when moving downward. Drop precision below or above the target hover line is also impossible (only "above" insert exists).
+- Expected: either remove the ternary (just write `targetIndex`) or implement proper above/below by checking pointer Y relative to target.bounding rect.
+
+### B-808 — Sign-in failure shows no error message (P1, fixed)
+- File: src/routes/auth.tsx (or similar)
+- Steps: sign in with wrong credentials (e.g. nonexistent@test.com / wrong password). Click Sign in.
+- Observed: button click has no visible effect. No toast, no inline error. User is just sitting on /auth wondering whether anything happened.
+- Expected: surface the supabase auth error message (e.g. "Invalid login credentials") near the form. Also disable+spin the button while the request is in flight.
+
+### B-809 — created-by / last-edited-by cells render truncated UUID instead of user name (P2, open)
+- File: src/components/database/PropertyEditor.tsx (or wherever person/people rendering lives) — for created-by/last-edited-by the value is the auth UUID and the cell shows the last 6 chars.
+- Steps: in a database, add created-by + last-edited-by properties, add a row.
+- Observed: cells render "9b7d81" — last 6 chars of the user id.
+- Expected: show the user's `currentUser.name` (or avatar + first name). The store already keeps `currentUser` so a lookup `state.workspaces[wid].members[uid].name` (or a `users` map) should be straightforward.
+
+### B-810 — formula cell renders empty with no affordance to configure expression (P3, open)
+- File: PropertyEditor.tsx formula cell.
+- Steps: add formula property, do nothing else.
+- Observed: cell is fully blank; no italic "set formula", no clickable area to enter an expression.
+- Expected: italic "Set formula" placeholder on hover, opening an expression editor on click.
+
+### B-811 — Typing latency scales linearly with block count: ~8 ms/keystroke at 2000 blocks (P2, open)
+- File: src/lib/store.ts updateBlock + src/components/page/PageView.tsx — likely the zustand subscription causes a full PageView re-render on any block content change.
+- Steps: create a page with 2000 text blocks; type 50 chars into block #10.
+- Observed: 418 ms total (~8.4 ms/char). At 500 blocks the same test was 82 ms (~1.6 ms/char). Linear with N.
+- Expected: typing latency should be O(1) — only the focused block should re-render. Selector `useStore(s => s.blocks[id])` per BlockComponent should already isolate, but PageView re-reads the whole `pageBlocks` array on every updateBlock (it likely re-creates the array reference via `useStore(s => s.pages[id].blocks.map(bid => s.blocks[bid]))` or similar). Memoize the block list and use shallow comparison.
+
+### B-812 — Page-title commit needs blur to persist; programmatic title set via execCommand does not save reliably (P3, open)
+- File: src/components/page/PageView.tsx onInput updates local `title` state; onBlur calls `commitTitle`.
+- Steps: programmatic title edits (or rapid type-then-navigate before blur) lose the title — sidebar/command-palette show empty.
+- Observed: new pages created and titled via test scripts have `title: ""` in the store.
+- Expected: persist on each input (debounced) so leaving the page via sidebar click commits the title. Currently fast nav loses the title.
+
+### B-813 — Sidebar shows empty/Untitled pages with no title — easy to lose track (P3, open)
+- File: src/components/layout/Sidebar.tsx page listing.
+- Steps: create a page, don't title it, navigate away.
+- Observed: sidebar shows blank label.
+- Expected: render "Untitled" placeholder (italic muted) so users can find the page.
+
+### B-814 — Sidebar page-menu toggle is racy with outside-click handler — first click sometimes does nothing (P3, open)
+- File: src/components/layout/Sidebar.tsx — page menu uses useState toggle plus likely a useEffect document mousedown handler. Same pattern as sign-out (B-???) where the first click also failed.
+- Steps: rapidly click `[data-testid="page-menu-<id>"]`.
+- Observed: ~50% of the time, menu doesn't open. Need to click twice.
+- Expected: button toggle should always reflect a single click. Either guard the outside-click handler against the same target, or use `onPointerDown` with `e.stopPropagation()`.
+
+### B-815 — Comment "Post" button doesn't post on initial keystroke if textarea was just filled (race) (P3, open)
+- File: src/components/page/PageComments.tsx (or wherever post handler reads value).
+- Steps: rapidly fill comment textarea and click Post.
+- Observed: empty comment, no error. Re-typing or pressing Post a second time submits.
+- Likely cause: textarea content is only committed to state via onChange — if user clicks Post before the synthetic event flushes (e.g. fast script-driven flow), the post handler reads stale empty state.
+- Expected: Post handler should also read `textareaRef.current.value` as fallback, and disable+spin while submitting.
+
+### B-816 — Button block has no UI to configure actions; created empty so click is a no-op (P2, open)
+- File: src/components/editor/Block.tsx ButtonBlockEl (line 1222). The block stores `actions: []` after creation and only the label is editable via the inline input. There is no "+ Add action" affordance.
+- Steps: slash → /button.
+- Observed: created button with label "Click me"; clicking does nothing (no toast, no popover).
+- Expected: an "Actions" gear icon next to the label that opens a small picker (show-confirmation / send-webhook / insert-block) — analogous to the existing button-property `actions` editor used by db `prop_mp2vbo9tr3si`.
+
+### B-817 — Slash commands /chart, /form, /list, /timeline create a database but ignore the requested view type (P2, open)
+- File: src/lib/slash-commands.ts lines 410-440 declare `extra: { view: "chart" }` etc, but the database-inline insertion handler doesn't read it. Every new DB ships with the default 4 views (All/By status/Calendar/Gallery), with no view of the requested type.
+- Steps: /chart → press Enter.
+- Observed: db with only table/board/calendar/gallery views.
+- Expected: db should also include the requested view (or that should be the *initial* view), and the view selector should default to it.
+
+### B-818 — View options menu lacks Sort / Filter / Group / Hide property entries (P1, open)
+- File: src/components/database/* — view-menu only exposes Rename / Delete / Add property.
+- Steps: open any inline DB view options.
+- Observed: Only Rename view / Delete view / Add property are in the menu. No way to define `sort`, `filter`, `group`, `hidden properties` via the UI even though the underlying store + view types support them (filters/sorts/hiddenProperties already exist on the view object).
+- Expected: classic Notion view options panel: Sort, Filter, Group, Hide properties, Wrap cells (which IS stored as `wrapCells: false`).
+

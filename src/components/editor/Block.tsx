@@ -1028,7 +1028,14 @@ function DatabaseBlockEl({ block, pageId }: { block: Block; pageId: string }) {
 }
 
 function SimpleTableEl({ block, pageId }: { block: Block; pageId: string }) {
-  const t = block as Extract<Block, { type: "table" }>;
+  const raw = block as Extract<Block, { type: "table" }>;
+  // Guard against corrupt rows (B-800): never crash the whole page on a bad block.
+  const t: Extract<Block, { type: "table" }> = {
+    ...raw,
+    rows: Array.isArray(raw.rows) && raw.rows.every(Array.isArray)
+      ? raw.rows
+      : [["", "", ""], ["", "", ""]],
+  };
   function updateCell(r: number, c: number, v: string) {
     const next = t.rows.map((row) => row.slice());
     next[r][c] = v;

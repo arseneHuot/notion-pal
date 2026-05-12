@@ -463,3 +463,57 @@ Priority: high / medium / low.
 - See B-721. Add to Block.tsx onKeyDown: `else if ((e.metaKey || e.ctrlKey) && e.key === "d") { e.preventDefault(); createBlock(pageId, {...block, parentId: pageId, order: block.order}, block.id); }`. Also bind ⌘⌫ to delete-block per the menu.
 
 
+
+## 2026-05-12 19:45 — Test agent batch 10
+
+### I-800 — Per-block error boundary so one corrupted block doesn't kill the page (high, open)
+- See B-800. Wrap each <Block /> in an ErrorBoundary that renders a small "this block failed to render — click to delete" card. The current top-level CatchBoundaryImpl is far too coarse.
+
+### I-801 — Public toggle should render its body recursively (high, open)
+- See B-801. Same pattern as in the editor: nest child blocks under a `<details>` body.
+
+### I-802 — Public sub-page link should show title and link to public slug if available (medium, open)
+- See B-802.
+
+### I-803 — Public AI block placeholder when result is empty (low, open)
+- See B-803.
+
+### I-804 — Sanitize property fields on type change (low, open)
+- See B-804.
+
+### I-805 — Auto-pick a sensible rollup default on creation (high, open)
+- See B-805. On addDatabaseProperty with type=rollup, default relationPropertyId to the first existing relation prop (if any), function to "count", and targetPropertyId to the linked db's title (or first non-empty). This matches Notion's behaviour.
+
+### I-806 — Public page dark mode (medium, open)
+- See B-806. Honour `prefers-color-scheme` (since the public viewer is anonymous and has no app state) and add a small toggle in the corner.
+
+### I-808 — Show inline error and loading state for auth submit (high, open)
+- See B-808.
+
+### I-807 — Add JSON import (medium, open)
+- Export-only flow means users can back up but never restore. Add an "Import JSON" button that validates schemaVersion, replaces (or merges) state, and recovers from corrupt state (paired with B-800 per-block error boundary).
+
+### I-809 — Resolve created-by/last-edited-by to display name (medium, open)
+- See B-809.
+
+### I-810 — Formula cell placeholder + expression editor (medium, open)
+- See B-810. Even a simple monaco/<textarea> with a list of column tokens would unlock the property.
+
+### I-811 — Memoize block subscription to keep typing latency O(1) (high, open)
+- See B-811. Use `useStore(s => s.pages[pid].blocks, shallow)` for the IDs and let each Block component read its own data. Also consider virtualizing the block list above 200 blocks.
+
+### I-812 — Persist page title on every input (medium, open)
+- See B-812.
+
+### I-813 — Show "Untitled" placeholder for empty page titles in sidebar/palette (low, open)
+- See B-813.
+
+### I-816 — Action editor for the button block (medium, open)
+- See B-816. Reuse the existing button-property action editor (which is what makes `Toast me` work in the DB sample).
+
+### I-817 — Honour `extra.view` on database slash commands (medium, open)
+- See B-817.
+
+### I-818 — Wire up Sort/Filter/Group UI for db views (high, open)
+- See B-818. State already supports them, so it's just exposing UI controls.
+

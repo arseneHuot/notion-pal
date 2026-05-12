@@ -10,7 +10,7 @@ export const Route = createFileRoute("/p/$slug")({
 
 function PublicPage() {
   const { slug } = Route.useParams();
-  const [data, setData] = useState<{ page: Page; blocks: Record<string, Block> } | null>(null);
+  const [data, setData] = useState<{ page: Page; blocks: Record<string, Block>; pages: Record<string, Page> } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -19,7 +19,7 @@ function PublicPage() {
       setLoading(false);
       return;
     }
-    let found: { page: Page; blocks: Record<string, Block> } | null = null;
+    let found: { page: Page; blocks: Record<string, Block>; pages: Record<string, Page> } | null = null;
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key || !key.startsWith("notion-clone:user:")) continue;
@@ -28,7 +28,7 @@ function PublicPage() {
         const pages: Record<string, Page> = state.pages ?? {};
         for (const p of Object.values(pages)) {
           if (p.isPublished && p.publishSlug === slug && !p.isInTrash) {
-            found = { page: p, blocks: state.blocks ?? {} };
+            found = { page: p, blocks: state.blocks ?? {}, pages };
             break;
           }
         }
@@ -54,7 +54,7 @@ function PublicPage() {
     );
   }
 
-  const { page, blocks } = data;
+  const { page, blocks, pages } = data;
   const pageBlocks = page.blocks.map((id) => blocks[id]).filter(Boolean) as Block[];
 
   return (
@@ -69,7 +69,9 @@ function PublicPage() {
         {page.icon && <div className="text-6xl mb-4">{page.icon}</div>}
         <h1 className="text-4xl font-bold mb-6">{page.title || "Untitled"}</h1>
         <div data-page-blocks>
-          {pageBlocks.map((b) => <ReadonlyBlock key={b.id} block={b} />)}
+          {pageBlocks.map((b) => (
+            <ReadonlyBlock key={b.id} block={b} blocks={blocks} pages={pages} />
+          ))}
         </div>
       </article>
     </div>
@@ -80,7 +82,15 @@ function safeHtml(s: string | undefined): { __html: string } {
   return { __html: sanitizeHtml(s ?? "") };
 }
 
-function ReadonlyBlock({ block }: { block: Block }) {
+function ReadonlyBlock({
+  block,
+  blocks = {},
+  pages = {},
+}: {
+  block: Block;
+  blocks?: Record<string, Block>;
+  pages?: Record<string, Page>;
+}) {
   if (block.type === "heading-1") return <h1 className="text-3xl font-bold mt-4 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
   if (block.type === "heading-2") return <h2 className="text-2xl font-semibold mt-3 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
   if (block.type === "heading-3") return <h3 className="text-xl font-semibold mt-2 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
@@ -158,11 +168,18 @@ function ReadonlyBlock({ block }: { block: Block }) {
       block.type === "toggle-heading-2" ? "text-2xl font-semibold" :
       block.type === "toggle-heading-3" ? "text-xl font-semibold" :
       "text-base";
+    // Render any child blocks (B-801). We discover them by parentId === t.id.
+    const children = Object.values(blocks).filter((b) => b.parentId === t.id).sort((a, b) => a.order - b.order);
     return (
       <details className="my-1" open={t.open}>
         <summary className={`cursor-pointer ${headingClass}`}>
           <span dangerouslySetInnerHTML={safeHtml(t.content)} />
         </summary>
+        <div className="pl-5 mt-1">
+          {children.map((c) => (
+            <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} />
+          ))}
+        </div>
       </details>
     );
   }
@@ -203,15 +220,31 @@ function ReadonlyBlock({ block }: { block: Block }) {
   }
   if (block.type === "ai-block") {
     const a = block as Extract<Block, { type: "ai-block" }>;
-    if (!a.result) return null;
     return (
       <div className="rounded-md border border-violet-300 dark:border-violet-700 bg-violet-50/40 dark:bg-violet-950/30 p-3 my-2 text-sm whitespace-pre-wrap">
-        {a.result}
+        {a.result || <span className="text-muted-foreground italic">AI block (no output yet)</span>}
       </div>
     );
   }
   if (block.type === "sub-page" || block.type === "page-link") {
-    return <div className="text-xs italic my-2">📄 (Sub-page link)</div>;
+    const l = block as Extract<Block, { type: "sub-page" | "page-link" }>;
+    const target = l.pageId ? pages[l.pageId] : undefined;
+    const title = target?.title?.trim() || "Untitled";
+    const icon = target?.icon ?? "📄";
+    if (target?.isPublished && target?.publishSlug) {
+      return (
+        <a href={`/p/${target.publishSlug}`} className="inline-flex items-center gap-2 underline my-2 text-foreground">
+          <span>{icon}</span>
+          <span>{title}</span>
+        </a>
+      );
+    }
+    return (
+      <div className="inline-flex items-center gap-2 my-2 text-muted-foreground">
+        <span>{icon}</span>
+        <span>{title} <span className="text-xs">(unpublished)</span></span>
+      </div>
+    );
   }
   if (block.type === "synced-block" || block.type === "synced-block-ref") {
     return <div className="text-xs text-muted-foreground italic my-2">(Synced content)</div>;

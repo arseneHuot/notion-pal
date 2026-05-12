@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/hooks/use-auth";
+import { Toaster, toast } from "@/components/ui/Toast";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({ meta: [{ title: "Sign in — NotionClone" }] }),
@@ -35,6 +36,8 @@ function AuthPage() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Authentication failed";
       setError(message);
+      toast(message, "error");
+      console.error("Auth error:", err);
     } finally {
       setBusy(false);
     }
@@ -111,7 +114,12 @@ function AuthPage() {
             </div>
 
             {error && (
-              <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/40 rounded-md p-2 border border-red-200 dark:border-red-900">
+              <div
+                className="text-sm text-red-600 bg-red-50 dark:bg-red-950/40 rounded-md p-2 border border-red-200 dark:border-red-900"
+                role="alert"
+                aria-live="polite"
+                data-testid="auth-error"
+              >
                 {error}
               </div>
             )}
@@ -138,6 +146,7 @@ function AuthPage() {
           </p>
         </div>
       </div>
+      <Toaster />
     </div>
   );
 }

@@ -1077,7 +1077,17 @@ export function updateDatabaseProperty(databaseId: string, propertyId: string, p
       ...nextDbs,
       [databaseId]: {
         ...db,
-        properties: db.properties.map((p) => (p.id === propertyId ? ({ ...p, ...patch } as Property) : p)),
+        properties: db.properties.map((p) => {
+          if (p.id !== propertyId) return p;
+          const merged = { ...p, ...patch } as Property & Record<string, unknown>;
+          // Strip relation-specific fields when type changes off "relation" (B-804).
+          if (p.type === "relation" && patch.type && patch.type !== "relation") {
+            delete (merged as Record<string, unknown>).isDual;
+            delete (merged as Record<string, unknown>).pairedPropertyId;
+            delete (merged as Record<string, unknown>).targetDatabaseId;
+          }
+          return merged as Property;
+        }),
         updatedAt: Date.now(),
       },
     };

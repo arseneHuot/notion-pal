@@ -327,6 +327,30 @@ function PropertyHeaderAdd({ databaseId }: { databaseId: string }) {
     if (type === "select" || type === "multi-select" || type === "status") patch.options = [];
     if (type === "status") patch.groups = [];
     if (type === "formula") patch.expression = '""';
+    if (type === "rollup") {
+      // Default to count of linked rows from the first relation so cells render
+      // immediately (B-704 / B-805). User can re-pick later.
+      const db = getStoreState().databases[databaseId];
+      const firstRelation = db?.properties.find((p) => p.type === "relation");
+      patch.function = "count";
+      patch.relationPropertyId = firstRelation?.id ?? "";
+      patch.targetPropertyId = "";
+    }
+    if (type === "relation") {
+      // Auto-pick the first other database as the target so the relation
+      // works out of the box.
+      const db = getStoreState().databases[databaseId];
+      const others = Object.values(getStoreState().databases).filter(
+        (d) => d.id !== databaseId && !d.isInTrash,
+      );
+      patch.targetDatabaseId = others[0]?.id ?? "";
+      patch.isDual = false;
+    }
+    if (type === "unique-id") patch.prefix = "";
+    if (type === "button") {
+      patch.label = "Click";
+      patch.actions = [];
+    }
     addDatabaseProperty(databaseId, patch as Property);
     setName("");
     setType("text");
