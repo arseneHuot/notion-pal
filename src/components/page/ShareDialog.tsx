@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { updatePage } from "@/lib/store";
+import { useMemo, useState } from "react";
+import { updatePage, useStore } from "@/lib/store";
 import type { Page } from "@/lib/types";
 import { X, Copy, Globe, Lock } from "lucide-react";
 
@@ -7,9 +7,28 @@ function slugify(s: string) {
   return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+function uniqueSlug(desired: string, ownPageId: string, pages: Record<string, Page>): string {
+  const taken = new Set(
+    Object.values(pages)
+      .filter((p) => p.id !== ownPageId && p.isPublished && p.publishSlug)
+      .map((p) => p.publishSlug as string),
+  );
+  if (!taken.has(desired)) return desired;
+  let n = 2;
+  while (taken.has(`${desired}-${n}`)) n++;
+  return `${desired}-${n}`;
+}
+
 export function ShareDialog({ page, open, onClose }: { page: Page; open: boolean; onClose: () => void }) {
+  const pages = useStore((s) => s.pages);
   const [slug, setSlug] = useState(page.publishSlug ?? slugify(page.title || page.id));
   const [copied, setCopied] = useState(false);
+  // Detect collisions (B-909) against any other published page in the workspace.
+  const collision = useMemo(() => {
+    return Object.values(pages).some(
+      (p) => p.id !== page.id && p.isPublished && p.publishSlug === slug && slug,
+    );
+  }, [pages, page.id, slug]);
   if (!open) return null;
   const publishedUrl = typeof window !== "undefined" ? `${window.location.origin}/p/${slug}` : `/p/${slug}`;
 
@@ -34,7 +53,13 @@ export function ShareDialog({ page, open, onClose }: { page: Page; open: boolean
             <button
               onClick={() => {
                 const newPublishState = !page.isPublished;
-                updatePage(page.id, { isPublished: newPublishState, publishSlug: newPublishState ? slug : null });
+                if (newPublishState) {
+                  const safeSlug = uniqueSlug(slug || slugify(page.title || page.id), page.id, pages);
+                  setSlug(safeSlug);
+                  updatePage(page.id, { isPublished: true, publishSlug: safeSlug });
+                } else {
+                  updatePage(page.id, { isPublished: false, publishSlug: null });
+                }
               }}
               className={`text-xs px-3 py-1 rounded ${page.isPublished ? "bg-destructive text-white" : "bg-primary text-primary-foreground"}`}
               data-testid="publish-toggle"
@@ -52,9 +77,12 @@ export function ShareDialog({ page, open, onClose }: { page: Page; open: boolean
                   onChange={(e) => {
                     const s = slugify(e.target.value);
                     setSlug(s);
-                    updatePage(page.id, { publishSlug: s });
+                    // Only commit a unique slug to the page so we don't
+                    // accidentally steal someone else's URL.
+                    const safe = uniqueSlug(s, page.id, pages);
+                    updatePage(page.id, { publishSlug: safe });
                   }}
-                  className="flex-1 border border-input rounded px-2 py-1 text-sm bg-background"
+                  className={`flex-1 border rounded px-2 py-1 text-sm bg-background ${collision ? "border-amber-400" : "border-input"}`}
                   data-testid="public-slug"
                 />
                 <button
@@ -70,6 +98,11 @@ export function ShareDialog({ page, open, onClose }: { page: Page; open: boolean
                 </button>
               </div>
               <div className="text-xs text-muted-foreground mt-1 truncate">{publishedUrl}</div>
+              {collision && (
+                <div className="text-xs text-amber-600 mt-1" data-testid="slug-collision-warning">
+                  This slug is already taken; we auto-suffixed it to keep your link unique.
+                </div>
+              )}
             </div>
           )}
 

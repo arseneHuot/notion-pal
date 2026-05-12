@@ -473,7 +473,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: the only way to create a relation or rollup is via the property header type picker. Even there, the relation property has no `targetDatabaseId` configured; rollup has no `relationPropertyId` / `targetPropertyId` / `function`. There is no in-app configuration UI for these — RelationCell renders "No target" and RollupCell returns "—" for any user-created prop.
 - Expected: when adding a relation, prompt for the target database; when adding a rollup, prompt for the source relation property, the target property, and the aggregation function (count/sum/average/min/max/show-original).
 
-### B-502 — Inline DB view menu has no Filter or Sort controls (P1, open)
+### B-502 — Inline DB view menu has no Filter or Sort controls (P1, fixed)
 - File: src/components/database/InlineDatabase.tsx lines 188-264 (`ViewMenu`).
 - Steps: open a DB → click the "⋮" view menu → inspect items.
 - Observed: only Rename, Delete, hide-property checkboxes, + Add property. No "Filter", no "Sort", no "Group by". `View` schema already has `filters: Filter[]` and `sorts: Sort[]` arrays, and `applyFilters` / `applySorts` are imported in TableView. There is no UI exposing them.
@@ -1185,9 +1185,102 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: db with only table/board/calendar/gallery views.
 - Expected: db should also include the requested view (or that should be the *initial* view), and the view selector should default to it.
 
-### B-818 — View options menu lacks Sort / Filter / Group / Hide property entries (P1, open)
+### B-818 — View options menu lacks Sort / Filter / Group / Hide property entries (P1, fixed)
 - File: src/components/database/* — view-menu only exposes Rename / Delete / Add property.
 - Steps: open any inline DB view options.
 - Observed: Only Rename view / Delete view / Add property are in the menu. No way to define `sort`, `filter`, `group`, `hidden properties` via the UI even though the underlying store + view types support them (filters/sorts/hiddenProperties already exist on the view object).
 - Expected: classic Notion view options panel: Sort, Filter, Group, Hide properties, Wrap cells (which IS stored as `wrapCells: false`).
 
+
+
+## 2026-05-12 20:10 — Test agent batch 11
+
+### B-900 — Verification pass for batch 10 fixes (P3, info)
+- B-800 (corrupt table): VERIFIED — injected `{type:"table", rows:"not-an-array..."}` via localStorage, reloaded, page renders fine with the table block degraded to an empty grid; no console errors; rest of page renders.
+- B-805 (rollup auto-default): VERIFIED — adding a new rollup via + form now creates `{type:"rollup", function:"count", relationPropertyId:<first relation>, targetPropertyId:""}` and the cell renders the live count of linked rows immediately (showed "1" once a relation was wired). Old pre-existing rollup props still show "configure rollup" placeholder which is correct.
+- Relation auto-target: VERIFIED — adding a new relation via + form creates `{type:"relation", isDual:false, targetDatabaseId:<some other db>}` — `targetDatabaseId` is now set instead of undefined.
+
+### B-901 — Verification of B-801/B-802/B-803 (P3, info)
+- B-801 toggle expand on /p/<slug>: VERIFIED — `<details>` element renders the toggle header and nested child (`<p>Hidden child inside toggle</p>`) becomes visible when expanded.
+- B-802 sub-page link: VERIFIED — `sub-page` block with published target renders as `<a href="/p/<slug>"><span>{icon}</span><span>{title}</span></a>`; unpublished target renders as `<span>{icon}</span><span>{title} <span class="text-xs">(unpublished)</span></span>`.
+- B-803 AI block placeholder: VERIFIED — empty `ai-block` renders the italic muted "AI block (no output yet)" placeholder inside the violet card.
+
+### B-902 — Verification of B-804 stale relation field strip (P3, info)
+- VERIFIED — after switching a dual relation to type=text, the resulting prop is `{id, name:"Linked", type:"text"}` with `isDual`, `pairedPropertyId`, `targetDatabaseId` all stripped. The paired property on the other DB is also cleaned up.
+
+### B-903 — B-818 confirmed: view options menu still missing Sort/Filter/Group/Hide (P1, fixed)
+- Steps: page → inline DB → view-menu button.
+- Observed: menu has only "Rename view / Delete view / PROPERTIES (Name/Linked, + Add property)".
+- Expected: classic Notion options panel (sort/filter/group/hide).
+
+### B-904 — DnD reorder INSIDE a column does nothing (still B-713/I-711) (P2, open)
+- Steps: page with `columns/column` block; column has 3 text children; drag handle of child #0 onto child #2.
+- Observed: `column.blockIds` is unchanged ([t1, t2, t3]) after the drag/drop events. No reordering at all.
+- Expected: t1 should move to a new position.
+
+### B-905 — DnD into another column does nothing (P2, open)
+- Steps: drag left column child onto right column child.
+- Observed: both columns' blockIds unchanged. No re-parenting.
+- Expected: dragged block should be moved into the target column.
+
+### B-906 — B-811 typing latency at 2000 blocks (P2, open)
+- Steps: page with 2000 text blocks; programmatically type 50 chars into block #10.
+- Observed: 416 ms total = 8.3 ms/keystroke. At 1000 blocks the same test was 111 ms = 3.7 ms/char. Still scales linearly with N.
+- Expected: O(1) — see I-811.
+
+### B-907 — Synced block is still a placeholder card with no runtime (P3, open)
+- Steps: insert `synced-block` via slash or directly in state.
+- Observed: renders the pink-border "SYNCED BLOCK — Content will be mirrored across pages." stub. No way to actually mirror content. See B-709.
+- Expected: either implement mirroring (master + referrer block IDs, propagate updates) or remove it from the slash menu.
+
+### B-908 — Permanently deleting a page leaves orphan column/child blocks in state (P2, fixed)
+- File: src/lib/store.ts deletePagePermanently — only removes blocks listed in `page.blocks`, not children of columns/toggles.
+- Steps: page → /columns 2 → fill both columns with text blocks → trash → permanent Delete.
+- Observed: `blocks[blk_col_left]`, `blocks[blk_col_right]`, and their `blockIds` text children (`blk_col_left_t1..t3`, `blk_col_right_t1`) remain in localStorage. Sidebar-deleted page leaves 7 orphan blocks per typical 2-column layout.
+- Expected: recursively walk children (column.blockIds, toggle children whose parentId === toggleBlockId, etc.) and remove all of them.
+
+### B-909 — Slug collision still possible (still B-717) (P2, fixed)
+- File: src/components/page/ShareDialog.tsx — slug input on publish has no collision check.
+- Steps: publish page A with slug X. Publish page B with slug X.
+- Observed: both succeed, both have publishSlug=X. /p/X navigates to whichever page appears first in the pages object. Other page becomes unreachable via slug.
+- Expected: validate slug uniqueness on publish; either reject with inline error or auto-suffix.
+
+### B-910 — JSON export omits currentUser record; re-import would lose author identity (P3, open)
+- File: src/routes/app.settings.tsx or wherever export is built.
+- Steps: Settings → Export workspace as JSON.
+- Observed: top-level keys are workspace/teamspaces/pages/blocks/databases/rows/comments/templates/automations/calendarEvents/mails/exportedAt/schemaVersion. No `users`/`currentUser` block. `pageOwners`/`createdBy`/`lastEditedBy` reference UUIDs that won't resolve in a fresh import.
+- Expected: include a `users` map (or at least pseudonymized {id, name, email, avatar}) so re-import can rebind authorship; or strip those fields if anonymization is intended.
+
+### B-911 — Mobile sidebar overlays content and never auto-closes (P2, open)
+- File: src/components/layout/Sidebar.tsx — `max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:shadow-xl` with no scrim.
+- Steps: open in 375px viewport. Tap a page in sidebar.
+- Observed: sidebar covers ~70% of screen, no overlay scrim, and persists after navigation; page content is barely usable.
+- Expected: tap-outside should close it; navigation should auto-close on mobile.
+
+### B-912 — Command palette block-content search is title-only (P3, open)
+- Steps: ⌘K → type "Hidden child" (text content inside an existing toggle block).
+- Observed: "No results"; only `page.title` is matched. Blocks aren't searched.
+- Expected: search within block content too (Notion does this).
+
+### B-913 — Calendar Week/Day views are not implemented (P2, open)
+- File: src/routes/app.calendar.tsx — `view` state created, `<select>` for month/week/day, but no conditional render uses it; only the month grid renders.
+- Steps: Calendar → select Week (or Day) in the view dropdown.
+- Observed: still shows the full month grid. Selecting Day/Week is a no-op.
+- Expected: render a 7-day strip for Week and a single-column hour grid for Day.
+
+### B-914 — Toggle block in the editor never renders its children (P2, fixed)
+- File: src/components/editor/Block.tsx — ToggleBlockEl line ~738 renders the literal placeholder `"(Toggle children — coming soon)"` instead of mapping `parentId === toggleId` blocks (and toggle-heading variants share the same code path).
+- Steps: create a toggle block. Add (or seed in state) a child block with parentId = toggle id. Open the toggle in the editor.
+- Observed: child does not appear; only the placeholder message shows.
+- Expected: render the toggle's child blocks (parent-id pointer pattern). Note: the public viewer at /p/<slug> already does this correctly (see B-801 verification), so the discrepancy is editor-only.
+- Side effects: any toggle child block is effectively orphaned in the UI — only accessible via direct localStorage edit or publishing.
+
+### B-915 — Unknown block types are silently dropped on /p/<slug> (P3, open) — overlap with B-716
+- Steps: page with a `completely-unknown-type` block; publish.
+- Observed: editor shows the existing "Unsupported block: completely-unknown-type" fallback; the public viewer drops it entirely with no placeholder.
+- Expected: same fallback message on public viewer for parity / so missing blocks are visible.
+
+### B-916 — Permanently deleted page does not also remove children of toggle/columns/sub-pages (P2, open) — broader form of B-908
+- Steps: page with sub-page → permanent Delete the parent.
+- Observed: child sub-page records remain in `pages`/`blocks` and may appear orphaned. Same issue applies to columns (B-908) and toggle children.
+- Expected: traversal-based cleanup.

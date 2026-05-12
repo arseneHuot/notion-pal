@@ -590,8 +590,63 @@ export function permanentlyDeletePage(id: string) {
     const newBlocks = { ...s.blocks };
     const page = newPages[id];
     if (!page) return s;
-    for (const blockId of page.blocks) delete newBlocks[blockId];
-    delete newPages[id];
+
+    // Cascade delete all child pages first.
+    const pagesToDelete = new Set<string>([id]);
+    let queue = [id];
+    while (queue.length > 0) {
+      const next: string[] = [];
+      for (const pid of queue) {
+        for (const p of Object.values(newPages)) {
+          if (p.parentId === pid && !pagesToDelete.has(p.id)) {
+            pagesToDelete.add(p.id);
+            next.push(p.id);
+          }
+        }
+      }
+      queue = next;
+    }
+
+    // For each page, recursively collect every descendant block (columns →
+    // their column children → those children's nested blocks, toggle
+    // children via parentId, etc.) — B-908.
+    function collectDescendantBlocks(startIds: string[]): string[] {
+      const out = new Set<string>();
+      const work: string[] = [...startIds];
+      while (work.length > 0) {
+        const next = work.pop()!;
+        if (out.has(next)) continue;
+        const b = newBlocks[next];
+        if (!b) continue;
+        out.add(next);
+        // children via column.blockIds
+        if (b.type === "column") {
+          const colIds = (b as Extract<Block, { type: "column" }>).blockIds ?? [];
+          work.push(...colIds);
+        }
+        // children via columns.columnIds
+        if (b.type === "columns") {
+          const colIds = (b as Extract<Block, { type: "columns" }>).columnIds ?? [];
+          work.push(...colIds);
+        }
+        // children via parentId (toggles, etc.)
+        for (const candidate of Object.values(newBlocks)) {
+          if (candidate.parentId === next && !out.has(candidate.id)) {
+            work.push(candidate.id);
+          }
+        }
+      }
+      return Array.from(out);
+    }
+
+    for (const pid of pagesToDelete) {
+      const p = newPages[pid];
+      if (!p) continue;
+      const allBlockIds = collectDescendantBlocks(p.blocks);
+      for (const bid of allBlockIds) delete newBlocks[bid];
+      delete newPages[pid];
+    }
+
     return { ...s, pages: newPages, blocks: newBlocks };
   });
 }

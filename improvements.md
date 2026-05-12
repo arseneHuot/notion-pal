@@ -18,7 +18,7 @@ Priority: high / medium / low.
 ### I-003 — Drag-and-drop reorder with proper visual indicator (medium, open)
 - Currently we set a ring on the hovered block but the actual placement uses array index swap. Should support drop-above and drop-below visual feedback.
 
-### I-004 — Nested toggle/bullet/numbered children (high, open)
+### I-004 — Nested toggle/bullet/numbered children (high, done)
 - Toggles currently show "(Toggle children — coming soon)". We need real child-blocks via a tree structure.
 
 ### I-005 — Database column resize (medium, open)
@@ -71,7 +71,7 @@ Priority: high / medium / low.
 - File: src/routes/app.calendar.tsx lines 111-127. Each chevron button has just an icon.
 - Add `aria-label="Previous month"` / `aria-label="Next month"`.
 
-### I-207 — Database view menu lacks Filter and Sort (high, open)
+### I-207 — Database view menu lacks Filter and Sort (high, done)
 - Steps: open an inline DB → click the view menu (3-dots near a tab).
 - Current items: Rename view, Delete view, Properties list, Add property.
 - Expected: Filter, Sort, Group by — these are the core view-level controls in Notion.

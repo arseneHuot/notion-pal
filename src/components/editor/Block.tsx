@@ -735,11 +735,7 @@ function ToggleBlockEl({ block, pageId }: { block: Block; pageId: string }) {
           data-testid={`block-content-${block.id}`}
         />
       </div>
-      {tog.open && (
-        <div className="ml-6 mt-1 text-sm text-muted-foreground italic">
-          (Toggle children — coming soon)
-        </div>
-      )}
+      {tog.open && <ToggleChildren toggleId={block.id} pageId={pageId} />}
       {editable.slashOpen && (
         <SlashMenu
           query={editable.slashQuery}
@@ -1329,6 +1325,46 @@ function ColumnsEl({ block, pageId }: { block: Block; pageId: string }) {
         })}
       </div>
     </BlockShell>
+  );
+}
+
+function ToggleChildren({ toggleId, pageId }: { toggleId: string; pageId: string }) {
+  const allBlocks = useStore((s) => s.blocks);
+  const children = Object.values(allBlocks)
+    .filter((b) => b.parentId === toggleId)
+    .sort((a, b) => a.order - b.order);
+
+  function addChild() {
+    const id = "blk_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const txt: Block = {
+      id,
+      type: "text",
+      parentId: toggleId,
+      order: children.length,
+      content: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    insertBlock(txt);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-block-id="${id}"] [contenteditable]`) as HTMLElement;
+      el?.focus();
+    }, 50);
+  }
+
+  return (
+    <div className="ml-6 mt-1" data-testid={`toggle-children-${toggleId}`}>
+      {children.map((c) => (
+        <BlockComponent key={c.id} block={c} pageId={pageId} />
+      ))}
+      <button
+        onClick={addChild}
+        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mt-1"
+        data-testid={`toggle-add-${toggleId}`}
+      >
+        + Add block
+      </button>
+    </div>
   );
 }
 

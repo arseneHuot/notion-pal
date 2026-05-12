@@ -201,21 +201,11 @@ function ViewMenu({ databaseId, viewId }: { databaseId: string; viewId: string }
       </button>
       {open && (
         <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-md shadow-lg z-30 w-56">
-          <button
-            onClick={() => {
-              const name = prompt("View name", view.name);
-              if (name) updateView(databaseId, viewId, { name });
-              setOpen(false);
-            }}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent"
-            data-testid={`view-rename-${viewId}`}
-          >
-            Rename view
-          </button>
+          <RenameViewItem databaseId={databaseId} viewId={viewId} viewName={view.name} close={() => setOpen(false)} />
           <button
             onClick={() => {
               if (db.views.length <= 1) {
-                alert("Cannot delete the only view");
+                window.dispatchEvent(new CustomEvent("toast", { detail: "Cannot delete the only view" }));
                 return;
               }
               removeView(databaseId, viewId);
@@ -226,6 +216,12 @@ function ViewMenu({ databaseId, viewId }: { databaseId: string; viewId: string }
           >
             Delete view
           </button>
+          <div className="border-t border-border my-1" />
+          <div className="px-3 py-1 text-[10px] uppercase text-muted-foreground">Sort</div>
+          <SortControls databaseId={databaseId} viewId={viewId} />
+          <div className="border-t border-border my-1" />
+          <div className="px-3 py-1 text-[10px] uppercase text-muted-foreground">Filter</div>
+          <FilterControls databaseId={databaseId} viewId={viewId} />
           <div className="border-t border-border my-1" />
           <div className="px-3 py-1 text-[10px] uppercase text-muted-foreground">Properties</div>
           {db.properties.map((p) => (
@@ -244,21 +240,247 @@ function ViewMenu({ databaseId, viewId }: { databaseId: string; viewId: string }
             </label>
           ))}
           <div className="border-t border-border my-1" />
-          <button
-            onClick={() => {
-              const name = prompt("Property name?", "New property");
-              if (!name) return;
-              const newProp: Property = { id: uid("prop"), name, type: "text" };
-              addDatabaseProperty(databaseId, newProp);
-              setOpen(false);
-            }}
-            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent"
-            data-testid={`view-addprop-${viewId}`}
-          >
-            + Add property
-          </button>
+          <AddPropertyMenuItem databaseId={databaseId} viewId={viewId} close={() => setOpen(false)} />
         </div>
       )}
+    </div>
+  );
+}
+
+function AddPropertyMenuItem({ databaseId, viewId, close }: { databaseId: string; viewId: string; close: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent"
+        data-testid={`view-addprop-${viewId}`}
+      >
+        + Add property
+      </button>
+    );
+  }
+  return (
+    <div className="px-3 py-1.5 flex gap-1">
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && name.trim()) {
+            const newProp: Property = { id: uid("prop"), name: name.trim(), type: "text" };
+            addDatabaseProperty(databaseId, newProp);
+            setName("");
+            setOpen(false);
+            close();
+          }
+          if (e.key === "Escape") setOpen(false);
+        }}
+        placeholder="Property name"
+        className="flex-1 bg-background border border-input rounded text-xs px-1"
+      />
+      <button
+        onClick={() => {
+          if (name.trim()) {
+            const newProp: Property = { id: uid("prop"), name: name.trim(), type: "text" };
+            addDatabaseProperty(databaseId, newProp);
+            setName("");
+            setOpen(false);
+            close();
+          }
+        }}
+        className="text-xs bg-primary text-primary-foreground rounded px-2"
+      >
+        Add
+      </button>
+    </div>
+  );
+}
+
+function RenameViewItem({ databaseId, viewId, viewName, close }: { databaseId: string; viewId: string; viewName: string; close: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [v, setV] = useState(viewName);
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent"
+        data-testid={`view-rename-${viewId}`}
+      >
+        Rename view
+      </button>
+    );
+  }
+  return (
+    <div className="px-3 py-1.5">
+      <input
+        autoFocus
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            updateView(databaseId, viewId, { name: v });
+            setEditing(false);
+            close();
+          }
+          if (e.key === "Escape") setEditing(false);
+        }}
+        onBlur={() => {
+          updateView(databaseId, viewId, { name: v });
+          setEditing(false);
+        }}
+        className="w-full bg-background border border-input rounded px-1.5 py-0.5 text-xs"
+        data-testid={`view-rename-input-${viewId}`}
+      />
+    </div>
+  );
+}
+
+function SortControls({ databaseId, viewId }: { databaseId: string; viewId: string }) {
+  const db = useStore((s) => s.databases[databaseId]);
+  const view = db?.views.find((v) => v.id === viewId);
+  if (!db || !view) return null;
+  const sorts = view.sorts ?? [];
+
+  function addSort() {
+    const firstProp = db.properties.find((p) => p.type !== "files" && p.type !== "person" && p.type !== "relation");
+    if (!firstProp) return;
+    updateView(databaseId, viewId, {
+      sorts: [...sorts, { id: uid("sort"), propertyId: firstProp.id, direction: "asc" }],
+    } as Partial<View>);
+  }
+
+  function updateSort(i: number, patch: Partial<typeof sorts[number]>) {
+    const next = sorts.map((s, idx) => (idx === i ? { ...s, ...patch } : s));
+    updateView(databaseId, viewId, { sorts: next } as Partial<View>);
+  }
+
+  function removeSort(i: number) {
+    updateView(databaseId, viewId, { sorts: sorts.filter((_, idx) => idx !== i) } as Partial<View>);
+  }
+
+  return (
+    <div className="px-3 py-1">
+      {sorts.length === 0 && (
+        <div className="text-[10px] text-muted-foreground italic mb-1">No sorts yet.</div>
+      )}
+      {sorts.map((s, i) => (
+        <div key={s.id} className="flex items-center gap-1 mb-1" data-testid={`sort-row-${i}`}>
+          <select
+            value={s.propertyId}
+            onChange={(e) => updateSort(i, { propertyId: e.target.value })}
+            className="bg-background border border-input rounded text-[11px] flex-1 max-w-[100px]"
+          >
+            {db.properties.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          <select
+            value={s.direction}
+            onChange={(e) => updateSort(i, { direction: e.target.value as "asc" | "desc" })}
+            className="bg-background border border-input rounded text-[11px]"
+          >
+            <option value="asc">↑ Asc</option>
+            <option value="desc">↓ Desc</option>
+          </select>
+          <button
+            onClick={() => removeSort(i)}
+            className="text-muted-foreground hover:text-destructive text-xs"
+            aria-label="Remove sort"
+          >
+            ×
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={addSort}
+        className="text-[11px] text-muted-foreground hover:text-foreground"
+        data-testid={`add-sort-${viewId}`}
+      >
+        + Add sort
+      </button>
+    </div>
+  );
+}
+
+function FilterControls({ databaseId, viewId }: { databaseId: string; viewId: string }) {
+  const db = useStore((s) => s.databases[databaseId]);
+  const view = db?.views.find((v) => v.id === viewId);
+  if (!db || !view) return null;
+  const filters = view.filters ?? [];
+
+  function addFilter() {
+    const firstProp = db.properties[0];
+    if (!firstProp) return;
+    updateView(databaseId, viewId, {
+      filters: [...filters, { id: uid("flt"), propertyId: firstProp.id, operator: "contains", value: "" }],
+    } as Partial<View>);
+  }
+
+  function updateFilter(i: number, patch: Partial<typeof filters[number]>) {
+    const next = filters.map((f, idx) => (idx === i ? { ...f, ...patch } : f));
+    updateView(databaseId, viewId, { filters: next } as Partial<View>);
+  }
+
+  function removeFilter(i: number) {
+    updateView(databaseId, viewId, { filters: filters.filter((_, idx) => idx !== i) } as Partial<View>);
+  }
+
+  const OPERATORS = ["contains", "does-not-contain", "is", "is-not", "is-empty", "is-not-empty", "greater-than", "less-than", "greater-than-equal", "less-than-equal", "checked", "unchecked"];
+
+  return (
+    <div className="px-3 py-1">
+      {filters.length === 0 && (
+        <div className="text-[10px] text-muted-foreground italic mb-1">No filters yet.</div>
+      )}
+      {filters.map((f, i) => {
+        const valuelessOp = ["is-empty", "is-not-empty", "checked", "unchecked"].includes(f.operator);
+        return (
+          <div key={f.id} className="flex items-center gap-1 mb-1 flex-wrap" data-testid={`filter-row-${i}`}>
+            <select
+              value={f.propertyId}
+              onChange={(e) => updateFilter(i, { propertyId: e.target.value })}
+              className="bg-background border border-input rounded text-[11px] flex-1 max-w-[100px]"
+            >
+              {db.properties.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            <select
+              value={f.operator}
+              onChange={(e) => updateFilter(i, { operator: e.target.value })}
+              className="bg-background border border-input rounded text-[11px]"
+            >
+              {OPERATORS.map((op) => (
+                <option key={op} value={op}>{op}</option>
+              ))}
+            </select>
+            {!valuelessOp && (
+              <input
+                value={String(f.value ?? "")}
+                onChange={(e) => updateFilter(i, { value: e.target.value })}
+                className="bg-background border border-input rounded text-[11px] flex-1 px-1"
+                placeholder="value"
+              />
+            )}
+            <button
+              onClick={() => removeFilter(i)}
+              className="text-muted-foreground hover:text-destructive text-xs"
+              aria-label="Remove filter"
+            >
+              ×
+            </button>
+          </div>
+        );
+      })}
+      <button
+        onClick={addFilter}
+        className="text-[11px] text-muted-foreground hover:text-foreground"
+        data-testid={`add-filter-${viewId}`}
+      >
+        + Add filter
+      </button>
     </div>
   );
 }
