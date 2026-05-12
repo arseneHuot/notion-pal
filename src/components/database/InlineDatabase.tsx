@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { useStore, updateDatabase, addDatabaseRow, updateRow, addDatabaseProperty, removeDatabaseProperty, updateDatabaseProperty, addView, removeView, updateView, deleteRow } from "@/lib/store";
+import { useStore, updateDatabase, addDatabaseRow, updateRow, addDatabaseProperty, removeDatabaseProperty, updateDatabaseProperty, addView, removeView, updateView, deleteRow, deleteDatabase } from "@/lib/store";
+import { toast } from "@/components/ui/Toast";
 import type { NotionDatabase, Property, View, DatabaseRow, BlockColor, SelectOption } from "@/lib/types";
 import { TableView } from "./views/TableView";
 import { BoardView } from "./views/BoardView";
@@ -58,6 +59,7 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
           >
             <Plus className="size-3" /> New
           </button>
+          <DatabaseMenu databaseId={databaseId} />
           <ViewMenu databaseId={databaseId} viewId={activeView.id} />
         </div>
       </div>
@@ -179,6 +181,69 @@ function NewViewButton({ databaseId, onCreate }: { databaseId: string; onCreate:
               <span>{viewIcon(t)}</span> {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DatabaseMenu({ databaseId }: { databaseId: string }) {
+  const [open, setOpen] = useState(false);
+  const db = useStore((s) => s.databases[databaseId]);
+  if (!db) return null;
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-xs px-2 py-1 rounded hover:bg-accent text-muted-foreground"
+        title="Database actions"
+        aria-label="Database actions"
+        data-testid={`db-actions-${databaseId}`}
+      >
+        ⋯
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-md shadow-lg z-30 w-56" data-testid={`db-menu-${databaseId}`}>
+          <button
+            onClick={() => {
+              const next = prompt;
+              const newName = db.name ?? "";
+              setOpen(false);
+              window.dispatchEvent(new CustomEvent("focus-db-name", { detail: { databaseId } }));
+              // Fallback: select the input via testid programmatically.
+              setTimeout(() => {
+                const input = document.querySelector(`[data-testid="db-name-${databaseId}"]`) as HTMLInputElement | null;
+                input?.focus();
+                input?.select();
+              }, 30);
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent"
+            data-testid={`db-rename-${databaseId}`}
+          >
+            Rename database
+          </button>
+          <button
+            onClick={() => {
+              updateDatabase(databaseId, { isInTrash: true });
+              setOpen(false);
+              toast("Database moved to Trash", "info");
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent text-destructive"
+            data-testid={`db-trash-${databaseId}`}
+          >
+            Move to Trash
+          </button>
+          <button
+            onClick={() => {
+              deleteDatabase(databaseId);
+              setOpen(false);
+              toast("Database deleted permanently", "success");
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent text-destructive"
+            data-testid={`db-delete-${databaseId}`}
+          >
+            Delete permanently
+          </button>
         </div>
       )}
     </div>

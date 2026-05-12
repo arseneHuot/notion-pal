@@ -254,7 +254,7 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
               setMenuOpen(false);
             }}
             className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent flex items-center gap-2"
-            data-testid={`fav-${page.id}`}
+            data-testid={`pmenu-favorite-${page.id}`}
           >
             <Star className="size-3.5" /> {page.isFavorite ? "Remove from favorites" : "Add to favorites"}
           </button>
@@ -265,8 +265,30 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
               if (newId) navigate({ to: "/app/p/$pageId", params: { pageId: newId } });
             }}
             className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent flex items-center gap-2"
+            data-testid={`pmenu-duplicate-${page.id}`}
           >
             <FileText className="size-3.5" /> Duplicate
+          </button>
+          <button
+            onClick={() => {
+              const id = createPage({ parentId: page.id, teamspaceId: page.teamspaceId });
+              setMenuOpen(false);
+              navigate({ to: "/app/p/$pageId", params: { pageId: id } });
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent flex items-center gap-2"
+            data-testid={`pmenu-newsub-${page.id}`}
+          >
+            <Plus className="size-3.5" /> New sub-page
+          </button>
+          <button
+            onClick={() => {
+              navigator.clipboard?.writeText(`${window.location.origin}/app/p/${page.id}`).catch(() => undefined);
+              setMenuOpen(false);
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent flex items-center gap-2"
+            data-testid={`pmenu-copylink-${page.id}`}
+          >
+            <FileText className="size-3.5" /> Copy link
           </button>
           <button
             onClick={() => {
@@ -275,7 +297,7 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
               setMenuOpen(false);
             }}
             className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent flex items-center gap-2 text-destructive"
-            data-testid={`delete-${page.id}`}
+            data-testid={`pmenu-trash-${page.id}`}
           >
             <Trash className="size-3.5" /> Move to Trash
           </button>

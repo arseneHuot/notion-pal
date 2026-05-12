@@ -991,11 +991,74 @@ export function updateDatabase(id: string, patch: Partial<NotionDatabase>) {
   });
 }
 
+/** Permanently delete a database AND clean up everything that referenced it
+ *  (B-1619): the database's rows are dropped, any relation property pointing
+ *  at this DB in any other database is stripped (and its rollup descendants
+ *  are reset), and dangling row.values entries are cleared. */
 export function deleteDatabase(id: string) {
   setState((s) => {
-    const newDbs = { ...s.databases };
-    delete newDbs[id];
-    return { ...s, databases: newDbs };
+    const target = s.databases[id];
+    if (!target) return s;
+
+    // 1. Drop all rows belonging to this database.
+    const newRows: typeof s.rows = {};
+    for (const r of Object.values(s.rows)) {
+      if (r.databaseId !== id) newRows[r.id] = r;
+    }
+    const deletedRowIds = new Set(
+      Object.values(s.rows).filter((r) => r.databaseId === id).map((r) => r.id),
+    );
+
+    // 2. For every OTHER database, strip relation properties that target this
+    //    one, drop rollups that referenced those relations, and clear
+    //    matching row values.
+    const newDbs: typeof s.databases = {};
+    for (const db of Object.values(s.databases)) {
+      if (db.id === id) continue;
+      const droppedRelationIds = new Set<string>();
+      for (const p of db.properties) {
+        if (p.type === "relation" && (p as Extract<typeof p, { type: "relation" }>).targetDatabaseId === id) {
+          droppedRelationIds.add(p.id);
+        }
+      }
+      const droppedRollupIds = new Set<string>();
+      for (const p of db.properties) {
+        if (p.type === "rollup" && droppedRelationIds.has((p as Extract<typeof p, { type: "rollup" }>).relationPropertyId)) {
+          droppedRollupIds.add(p.id);
+        }
+      }
+      const toRemove = new Set([...droppedRelationIds, ...droppedRollupIds]);
+      const props = db.properties.filter((p) => !toRemove.has(p.id));
+      const views = db.views.map((v) => ({
+        ...v,
+        propertyOrder: v.propertyOrder.filter((pid) => !toRemove.has(pid)),
+        hiddenProperties: v.hiddenProperties.filter((pid) => !toRemove.has(pid)),
+      }));
+      newDbs[db.id] = { ...db, properties: props, views };
+
+      // Clear row.values for removed properties + dropped row links.
+      for (const r of Object.values(newRows)) {
+        if (r.databaseId !== db.id) continue;
+        let touched = false;
+        const nextValues = { ...r.values };
+        for (const pid of toRemove) {
+          if (pid in nextValues) {
+            delete nextValues[pid];
+            touched = true;
+          }
+        }
+        // Also clean leftover relation rowIds that point at deleted rows.
+        for (const [pid, v] of Object.entries(nextValues)) {
+          if (Array.isArray(v) && v.some((rid) => deletedRowIds.has(rid as string))) {
+            nextValues[pid] = (v as string[]).filter((rid) => !deletedRowIds.has(rid));
+            touched = true;
+          }
+        }
+        if (touched) newRows[r.id] = { ...r, values: nextValues, updatedAt: Date.now() };
+      }
+    }
+
+    return { ...s, databases: newDbs, rows: newRows };
   });
 }
 

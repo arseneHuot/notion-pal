@@ -1,9 +1,35 @@
 import type { Block, Page } from "./types";
-import { stripHtml } from "./text";
 
-/** Convert a page (with its blocks) into a Markdown string. The conversion
- *  covers the block types the editor produces; unknown types fall back to a
- *  block-quote-style line so we never silently drop content. */
+/** Convert basic inline HTML (<b>, <i>, <u>, <s>, <code>, <a>) into Markdown.
+ *  Falls back to stripping unknown tags. */
+function htmlToInlineMarkdown(html: string): string {
+  if (!html) return "";
+  if (typeof document === "undefined") {
+    return html.replace(/<[^>]+>/g, "");
+  }
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = html;
+  function walk(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    const el = node as Element;
+    const tag = el.tagName.toUpperCase();
+    const inner = Array.from(el.childNodes).map(walk).join("");
+    if (tag === "BR") return "\n";
+    if (tag === "B" || tag === "STRONG") return `**${inner}**`;
+    if (tag === "I" || tag === "EM") return `*${inner}*`;
+    if (tag === "U") return `<u>${inner}</u>`;
+    if (tag === "S" || tag === "STRIKE" || tag === "DEL") return `~~${inner}~~`;
+    if (tag === "CODE") return `\`${inner}\``;
+    if (tag === "A") {
+      const href = (el as HTMLAnchorElement).getAttribute("href") ?? "";
+      return `[${inner}](${href})`;
+    }
+    return inner;
+  }
+  return Array.from(wrapper.childNodes).map(walk).join("");
+}
+
 export function pageToMarkdown(page: Page, blocks: Record<string, Block>): string {
   const lines: string[] = [];
   const title = page.title?.trim() || "Untitled";
@@ -15,135 +41,144 @@ export function pageToMarkdown(page: Page, blocks: Record<string, Block>): strin
     const b = blocks[blockId];
     if (!b) continue;
     if (b.type !== "numbered-list") numberedRun = 0;
-    switch (b.type) {
-      case "heading-1":
-        lines.push(`## ${stripHtml((b as { content?: string }).content ?? "")}`);
-        lines.push("");
-        break;
-      case "heading-2":
-        lines.push(`### ${stripHtml((b as { content?: string }).content ?? "")}`);
-        lines.push("");
-        break;
-      case "heading-3":
-        lines.push(`#### ${stripHtml((b as { content?: string }).content ?? "")}`);
-        lines.push("");
-        break;
-      case "text":
-        lines.push(stripHtml((b as { content?: string }).content ?? ""));
-        lines.push("");
-        break;
-      case "bullet-list":
-        lines.push(`- ${stripHtml((b as { content?: string }).content ?? "")}`);
-        break;
-      case "numbered-list":
-        numberedRun += 1;
-        lines.push(`${numberedRun}. ${stripHtml((b as { content?: string }).content ?? "")}`);
-        break;
-      case "todo": {
-        const t = b as Extract<Block, { type: "todo" }>;
-        lines.push(`- [${t.checked ? "x" : " "}] ${stripHtml(t.content)}`);
-        break;
-      }
-      case "toggle":
-      case "toggle-heading-1":
-      case "toggle-heading-2":
-      case "toggle-heading-3":
-        lines.push(`<details>`);
-        lines.push(`<summary>${stripHtml((b as { content?: string }).content ?? "")}</summary>`);
-        // children (parentId = block.id)
-        for (const child of Object.values(blocks).filter((cb) => cb.parentId === b.id)) {
-          lines.push(stripHtml((child as { content?: string }).content ?? ""));
-        }
-        lines.push(`</details>`);
-        lines.push("");
-        break;
-      case "callout": {
-        const c = b as Extract<Block, { type: "callout" }>;
-        lines.push(`> ${c.emoji ?? "💡"} ${stripHtml(c.content)}`);
-        lines.push("");
-        break;
-      }
-      case "quote":
-        lines.push(`> ${stripHtml((b as { content?: string }).content ?? "")}`);
-        lines.push("");
-        break;
-      case "divider":
-        lines.push("---");
-        lines.push("");
-        break;
-      case "code": {
-        const c = b as Extract<Block, { type: "code" }>;
-        lines.push("```" + (c.language ?? ""));
-        lines.push(c.content ?? "");
-        lines.push("```");
-        lines.push("");
-        break;
-      }
-      case "image":
-      case "video":
-      case "audio":
-      case "file": {
-        const m = b as Extract<Block, { type: "image" | "video" | "audio" | "file" }>;
-        if (m.url) lines.push(b.type === "image" ? `![](${m.url})` : `[${b.type}](${m.url})`);
-        lines.push("");
-        break;
-      }
-      case "bookmark":
-      case "embed": {
-        const e = b as Extract<Block, { type: "embed" | "bookmark" }>;
-        if (e.url) lines.push(`[${e.url}](${e.url})`);
-        lines.push("");
-        break;
-      }
-      case "equation":
-        lines.push("$$");
-        lines.push((b as { content?: string }).content ?? "");
-        lines.push("$$");
-        lines.push("");
-        break;
-      case "table": {
-        const t = b as Extract<Block, { type: "table" }>;
-        if (Array.isArray(t.rows) && t.rows.length > 0) {
-          const cols = t.rows[0]?.length ?? 0;
-          for (let i = 0; i < t.rows.length; i++) {
-            lines.push("| " + t.rows[i].map((c) => stripHtml(String(c ?? ""))).join(" | ") + " |");
-            if (i === 0 && t.hasHeaderRow) {
-              lines.push("| " + Array.from({ length: cols }, () => "---").join(" | ") + " |");
-            }
-          }
-          lines.push("");
-        }
-        break;
-      }
-      case "ai-block": {
-        const a = b as Extract<Block, { type: "ai-block" }>;
-        if (a.result) {
-          lines.push("> 🤖 " + a.result.replace(/\n/g, "\n> "));
-          lines.push("");
-        }
-        break;
-      }
-      case "page-link":
-      case "sub-page":
-        lines.push(`📄 Sub-page`);
-        lines.push("");
-        break;
-      case "columns":
-      case "column":
-      case "database-inline":
-      case "database-linked":
-      case "synced-block":
-      case "synced-block-ref":
-      case "table-of-contents":
-      case "breadcrumb":
-      case "button":
-        lines.push(`<!-- ${b.type} -->`);
-        lines.push("");
-        break;
-      default:
-        lines.push(`<!-- ${(b as { type: string }).type} -->`);
+    const md = blockToMarkdown(b, blocks, 0);
+    if (b.type === "numbered-list") {
+      numberedRun += 1;
+      lines.push(`${numberedRun}. ${md}`);
+    } else {
+      lines.push(md);
+      if (b.type !== "bullet-list" && b.type !== "todo") lines.push("");
     }
   }
 
   return lines.join("\n").replace(/\n{3,}/g, "\n\n");
+}
+
+function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number): string {
+  const indent = "  ".repeat(depth);
+  switch (b.type) {
+    case "heading-1":
+      return `# ${htmlToInlineMarkdown((b as { content?: string }).content ?? "")}`;
+    case "heading-2":
+      return `## ${htmlToInlineMarkdown((b as { content?: string }).content ?? "")}`;
+    case "heading-3":
+      return `### ${htmlToInlineMarkdown((b as { content?: string }).content ?? "")}`;
+    case "text":
+      return htmlToInlineMarkdown((b as { content?: string }).content ?? "");
+    case "bullet-list":
+      return `${indent}- ${htmlToInlineMarkdown((b as { content?: string }).content ?? "")}`;
+    case "numbered-list":
+      return htmlToInlineMarkdown((b as { content?: string }).content ?? "");
+    case "todo": {
+      const t = b as Extract<Block, { type: "todo" }>;
+      return `${indent}- [${t.checked ? "x" : " "}] ${htmlToInlineMarkdown(t.content)}`;
+    }
+    case "toggle":
+    case "toggle-heading-1":
+    case "toggle-heading-2":
+    case "toggle-heading-3": {
+      const head = htmlToInlineMarkdown((b as { content?: string }).content ?? "");
+      const children = Object.values(blocks)
+        .filter((cb) => cb.parentId === b.id)
+        .sort((a, c) => a.order - c.order);
+      const childMd = children.map((c) => blockToMarkdown(c, blocks, depth + 1)).join("\n");
+      return `<details>\n<summary>${head}</summary>\n\n${childMd}\n</details>`;
+    }
+    case "callout": {
+      const c = b as Extract<Block, { type: "callout" }>;
+      return `> ${c.emoji ?? "💡"} ${htmlToInlineMarkdown(c.content)}`;
+    }
+    case "quote":
+      return `> ${htmlToInlineMarkdown((b as { content?: string }).content ?? "")}`;
+    case "divider":
+      return "---";
+    case "code": {
+      const c = b as Extract<Block, { type: "code" }>;
+      const fence = "```";
+      const lang = c.language ?? "";
+      return `${fence}${lang}\n${c.content ?? ""}\n${fence}`;
+    }
+    case "image": {
+      const m = b as Extract<Block, { type: "image" }>;
+      return m.url ? `![${m.caption ?? ""}](${m.url})` : "";
+    }
+    case "video":
+    case "audio":
+    case "file": {
+      const m = b as Extract<Block, { type: "video" | "audio" | "file" }>;
+      return m.url ? `[${b.type}: ${m.fileName ?? m.url}](${m.url})` : "";
+    }
+    case "bookmark":
+    case "embed": {
+      const e = b as Extract<Block, { type: "embed" | "bookmark" }>;
+      return e.url ? `[${e.url}](${e.url})` : "";
+    }
+    case "equation":
+      return `$$\n${(b as { content?: string }).content ?? ""}\n$$`;
+    case "table": {
+      const t = b as Extract<Block, { type: "table" }>;
+      if (!Array.isArray(t.rows) || t.rows.length === 0) return "";
+      const cols = t.rows[0]?.length ?? 0;
+      const out: string[] = [];
+      for (let i = 0; i < t.rows.length; i++) {
+        out.push("| " + t.rows[i].map((c) => htmlToInlineMarkdown(String(c ?? ""))).join(" | ") + " |");
+        if (i === 0 && (t.hasHeaderRow ?? true)) {
+          out.push("| " + Array.from({ length: cols }, () => "---").join(" | ") + " |");
+        }
+      }
+      return out.join("\n");
+    }
+    case "ai-block": {
+      const a = b as Extract<Block, { type: "ai-block" }>;
+      if (!a.result) return "";
+      return "> 🤖 " + a.result.replace(/\n/g, "\n> ");
+    }
+    case "page-link":
+    case "sub-page":
+      return `📄 Sub-page`;
+    case "columns": {
+      const c = b as Extract<Block, { type: "columns" }>;
+      const colIds = c.columnIds ?? [];
+      const out: string[] = ["<!-- multi-column layout: -->"];
+      for (const colId of colIds) {
+        const col = blocks[colId];
+        if (!col || col.type !== "column") continue;
+        const blockIds = (col as Extract<Block, { type: "column" }>).blockIds ?? [];
+        out.push(`<!-- column -->`);
+        for (const cid of blockIds) {
+          const cb = blocks[cid];
+          if (cb) out.push(blockToMarkdown(cb, blocks, depth));
+        }
+      }
+      return out.join("\n");
+    }
+    case "synced-block": {
+      const children = Object.values(blocks)
+        .filter((cb) => cb.parentId === b.id)
+        .sort((a, c) => a.order - c.order);
+      return children.map((c) => blockToMarkdown(c, blocks, depth)).join("\n");
+    }
+    case "synced-block-ref": {
+      const ref = b as Extract<Block, { type: "synced-block-ref" }>;
+      const source = ref.sourceId ? blocks[ref.sourceId] : undefined;
+      if (!source) return "<!-- synced reference: no source -->";
+      const children = Object.values(blocks)
+        .filter((cb) => cb.parentId === source.id)
+        .sort((a, c) => a.order - c.order);
+      return children.map((c) => blockToMarkdown(c, blocks, depth)).join("\n");
+    }
+    case "button": {
+      const bb = b as Extract<Block, { type: "button" }>;
+      return `**[${bb.emoji ?? "▶"} ${bb.label || "Button"}]**`;
+    }
+    case "table-of-contents":
+      return "<!-- (table of contents) -->";
+    case "breadcrumb":
+      return "<!-- (breadcrumb) -->";
+    case "database-inline":
+    case "database-linked":
+      return "<!-- (embedded database) -->";
+    default:
+      return `<!-- ${(b as { type: string }).type} -->`;
+  }
 }

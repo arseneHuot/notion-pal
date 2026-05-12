@@ -811,3 +811,50 @@ Priority: high / medium / low.
 
 ### I-1520 — Close any other open sidebar page-menu when opening a new one (low, open)
 - See B-1539.
+
+## 2026-05-13 01:35 — Test agent batch 27
+
+### I-1600 — RowDetailDrawer backdrop click (RESOLVED, info)
+- See B-1601 (corrected). Implementation is in place via outer onClick + inner stopPropagation. No further action needed.
+
+### I-1601 — Markdown export should render button/toggle/columns/inline-database blocks meaningfully (medium, open)
+- See B-1607. Today these become `<!-- placeholder -->` comments or empty `<details>`. Toggle should render summary + nested children; columns concatenate column children; button shows label as bold text or link; inline-database shows table.
+
+### I-1602 — Calendar view shows event chips only for in-range rows; consider stub list "X events not visible" (low, open)
+- During verification of B-1604, navigating to other months hides chips entirely. UX: a subtle banner "3 rows not shown in current month" would be useful.
+
+## 2026-05-13 02:00 — Test agent batch 28
+
+### I-1603 — Fix markdown export heading levels (heading-1 → `# `, not `## `) (medium, open)
+- See B-1610. Today the exporter shifts all heads down by one which collides with the doc-title H1. Add a flag or always use proper levels — the title is its own H1 and headings stay at their semantic level.
+
+### I-1604 — Markdown export should convert inline `<b>/<i>/<a>/<u>/<code>/<s>` to MD syntax instead of `stripHtml` (high, open)
+- See B-1611. Critical — today exporter loses URLs and all inline formatting. Use a simple HTML→MD pass: `<b>X</b>→**X**`, `<i>X</i>→*X*`, `<a href=Y>X</a>→[X](Y)`, `<code>X</code>→`X``, `<s>X</s>→~~X~~`.
+
+### I-1605 — Render button/columns/database-inline/synced-block/breadcrumb meaningfully in markdown export (medium, open)
+- See B-1612. Button: `[Label](#)`; columns: concatenate children separated by newlines; database-inline: render the linked DB as a table; toggle: recurse children inside `<details>`.
+
+### I-1606 — Add testids to sidebar More menu items (`pmenu-favorite-<id>` etc.) (low, open)
+- See B-1615 / I-1512.
+
+### I-1607 — Support right-click context menu on sidebar page rows (medium, open)
+- See B-1616. Intercept `contextmenu`, reuse the same content as the kebab popover.
+
+### I-1608 — Add block-level comment affordance to the editor (high, open)
+- See B-1617. UI is missing despite store schema being ready. Add a comment icon to block hover toolbar; thread anchored to `blockId`.
+
+### I-1609 — Persist AI chat thread in store across reloads (medium, open)
+- See B-1618. Add `state.aiThread = { messages: AIMessage[] }`. Save user + assistant turns. Optionally namespace by page.
+
+### I-1610 — Cascade DB delete: rows, relations, rollups, row.values entries (high, open)
+- See B-1619. Single function `deleteDatabase(id)` must walk: rows where databaseId===id (delete or trash), relation properties where targetDatabaseId===id (null or strip), rollup props referencing those relations, row.values that hold ids belonging to the deleted DB.
+
+### I-1611 — Add a DB-options kebab on the database header (Delete / Duplicate / Rename) (medium, open)
+- See B-1620.
+
+### I-1612 — Render broken relation cells as "Target deleted" placeholder, not silently hidden (low, open)
+- See B-1621.
+
+### I-1613 — Render database-inline and columns on /p/<slug> instead of placeholder text (medium, open)
+- See B-1623.
+

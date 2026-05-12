@@ -2294,3 +2294,112 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: no edit dialog opens; only the day cell selects.
 - Expected: clicking an event should open a detail dialog matching `cal-compose` (with delete + edit description/time).
 
+## 2026-05-13 01:35 — Test agent batch 27 (verification)
+
+### B-1600 — RowDetailDrawer Escape close only listens on window — Esc on document doesn't dispatch (P3, info)
+- Steps: open `row-open-r_dt1` → `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))` → drawer stays open. `window.dispatchEvent(...)` closes.
+- Observed: Esc works at window scope, which is the normal React-side hook target. Functionally OK; just noting that focus must be inside window event loop (won't fire if user clicks an iframe).
+
+### B-1601 — RowDetailDrawer backdrop click closes drawer (P3, info)
+- VERIFIED PASS (corrected after deeper inspection). The outer `[data-testid="row-detail-drawer"]` has React `onClick={() => setRowId(null)}`. The inner panel has `onClick={(e) => e.stopPropagation()}`. So genuine user clicks on the backdrop close, clicks inside don't. Synthesized JS `dispatchEvent` calls didn't trigger React's synthetic-event dispatch which led to a false-negative in my first sweep.
+
+### B-1602 — Table `row-open-<id>` button opens drawer (P3, info)
+- Verified: every table row has `row-open-r_dt1`, `row-open-r_dt2`, etc. Click opens drawer with `row-detail-drawer`. PASS.
+
+### B-1603 — Timeline `tl-bar-<id>` opens drawer (P3, info)
+- Verified: `tl-bar-r_dt1` click → drawer opens. PASS.
+
+### B-1604 — Calendar `cal-event-<id>` opens drawer (P3, info)
+- Verified: navigate to Jan 2026 view of `db_dates_test` → `cal-event-r_dt1` chip is a clickable element. Click → drawer opens. PASS.
+
+### B-1605 — PageOptionsMenu shows 8 items, all with `page-opt-*` testids (P3, info)
+- Verified: page-opt-favorite, page-opt-duplicate, page-opt-wiki, page-opt-wordcount, page-opt-copylink, page-opt-export-md, page-opt-print, page-opt-trash. PASS.
+
+### B-1606 — Markdown export downloads `<slug>.md` with text/markdown blob (P3, info)
+- Verified: click `page-opt-export-md` → anchor.download="getting-started.md", blob.type="text/markdown", contains H1 + body. PASS (with caveats — see B-1607).
+
+### B-1607 — Markdown export emits placeholder comments for inline-database/button/columns/toggle blocks (P2, fixed)
+- Steps: export "Getting Started" page → output contains `<!-- database-inline -->`, `<!-- button -->`, `<!-- columns -->`, `<details><summary></summary></details>` (empty toggle).
+- Observed: complex block types render as HTML-comment placeholders instead of actual content. The empty `<details>` with no summary is invalid markdown.
+- Expected: button blocks render their label; toggle renders summary + nested content; inline-database renders a stub table; columns render concatenated content separated by newlines.
+- File: `src/lib/markdown-export.ts` (or equivalent).
+
+### B-1608 — Markdown export emits empty fenced code block with language but no code (P3, open)
+- Same export: contains "```javascript\n\n```" — the code block is empty because the seeded page's code block has empty text. That's data, not a bug per se, but exporter should still emit something.
+
+### B-1609 — Move to Trash navigates to /app and sets isInTrash=true (P3, info)
+- Verified: page-opt-trash → page.isInTrash=true, route changes to /app. PASS.
+
+## 2026-05-13 02:00 — Test agent batch 28
+
+### B-1610 — Markdown exporter renders `heading-1` as `## ` (one level too deep) (P2, fixed)
+- Steps: page with `heading-1` content "Foo" → export → "## Foo".
+- Expected: `heading-1` → "# Foo"; the doc title would be H1 too but Notion-style export typically uses "# Title" at top + "# Heading 1" for content. Today everything shifts down by one.
+- File: `src/lib/export-markdown.ts` lines 19-30. Cases `heading-1/2/3` produce `## / ### / ####`.
+
+### B-1611 — Markdown exporter strips inline HTML (`<b>`, `<i>`, `<a>`) instead of converting to MD syntax (P2, fixed)
+- Steps: text block content `A <b>bold</b> word and <i>italic</i>.` and `A <a href="https://example.com">link</a>.` → export.
+- Observed: "A bold word and italic." (formatting lost) and "A link." (URL lost!).
+- Expected: `**bold**`, `*italic*`, `[link](https://example.com)`.
+- File: `src/lib/export-markdown.ts` — `stripHtml` is too aggressive; build a proper HTML→MD inline converter.
+
+### B-1612 — Markdown exporter emits placeholder comments for button/columns/database-inline/synced-block/breadcrumb/table-of-contents (P2, fixed)
+- Steps: page with `button`, `columns`, `database-inline` → export.
+- Observed: `<!-- button -->`, `<!-- columns -->`, `<!-- database-inline -->`.
+- Expected: button label, column children concatenated, inline-db rendered as a small heading + stub.
+- File: `src/lib/export-markdown.ts` lines 131-142.
+
+### B-1613 — Markdown exporter code block omits language fence when `language` is on `props.language` (P3, open)
+- Block schema (and seeded inline code in `Getting Started`) stores language at `block.language` (top-level). Programmatically-created blocks frequently use `block.props.language`. Exporter only reads top-level so `props.language` is dropped.
+- Suggest: read both top-level and props fallback.
+
+### B-1614 — Markdown exporter inserts no blank line between consecutive bullet/numbered list items even when followed by a different block (P3, info)
+- Output today: `- Bullet item\n1. Numbered item\n---\n...`. Mixing two list types into one block scope is technically fine, but the formatter doesn't separate them.
+
+### B-1615 — Sidebar page More menu shows only 3 items, no `pmenu-*` testids (P2, fixed)
+- Steps: click `page-menu-pg_xxx` in sidebar → popup with "Add to favorites" / "Duplicate" / "Move to Trash".
+- Observed: items have NO testids. Re-state of B-1533. Implementer fix tracked in I-1512 hasn't landed.
+- Expected: testids `pmenu-favorite-<id>`, `pmenu-duplicate-<id>`, `pmenu-trash-<id>` per I-1512.
+
+### B-1616 — Sidebar page row right-click does NOT open a context menu (P3, open)
+- Steps: dispatch `contextmenu` MouseEvent on a sidebar page row → no menu opens.
+- Notion supports right-click on every sidebar row to open the same More menu. Today the kebab-only path forces a mouse hover + extra click.
+- Expected: native context menu intercepted, same items as `page-menu-<id>` popover shown at cursor.
+
+### B-1617 — Block-level comments are NOT supported in the UI (P2, open)
+- Steps: hover any `block-content-*` element → no comment affordance. No "block-comment" testid exists. The `Comment` data model already supports `blockId` (e.g., `cmt.blockId !== null`), and `PageComments.tsx` filters with `!c.blockId` — so storage is ready, UI is not.
+- Expected: hovering a block reveals a comment icon that creates a comment scoped to that block. Should render an inline thread anchor.
+- File: `src/components/page/PageComments.tsx` (filters by `!c.blockId`); `src/components/editor/Block.tsx` (needs UI affordance).
+
+### B-1618 — AI chat thread is NOT persisted across page reloads (P2, open)
+- Steps: open Ask AI → send "Hello batch 27 test" → receive demo response. Close AI. Reload tab. Open Ask AI again.
+- Observed: empty initial state ("Ask anything about your workspace…"). User+assistant turns are gone.
+- Expected: thread persists in store (`s.aiThread` or similar) until explicit clear. Notion's AI chat panel retains last session.
+- File: `src/components/ai/AIChatPanel.tsx` (or similar) — currently keeps state only in React local state.
+
+### B-1619 — Deleting a database leaves dangling relation properties + orphan rows + orphan rollups (P1, fixed)
+- Steps: db_a has property `p_rel` with `targetDatabaseId='db_b'`. Row `r_a1.values.p_rel = ['r_b1','r_b2']`. Db_a also has rollup `p_rollup` (function="count", relationPropertyId="p_rel"). Delete db_b via `deleteDatabase('db_b')`.
+- Observed: db_b is removed from `state.databases`. BUT:
+  1. Rows `r_b1`, `r_b2` remain in `state.rows` as orphans (`databaseId='db_b'` but DB no longer exists).
+  2. db_a's relation property `p_rel` still has `targetDatabaseId='db_b'` — points to nothing.
+  3. db_a's rollup `p_rollup` still refers to `p_rel` — its calculation will read undefined target.
+  4. Row `r_a1` still holds `p_rel: ['r_b1','r_b2']` — values are dangling but never cleaned.
+- Expected: cascading cleanup — delete all rows, remove or null all relation properties pointing to the deleted DB, drop or recompute rollups, clear row.values entries.
+- File: `src/lib/store.ts` lines 994-1000. `deleteDatabase()` is a one-line removal.
+
+### B-1620 — There is no UI to delete a database from the DB view (P2, fixed)
+- Steps: /app/db/db_b → no "Delete database" button anywhere in the toolbar, no kebab next to title.
+- Expected: a `db-options` kebab in the header bar with "Delete database / Duplicate / Rename" matching the page-options menu.
+
+### B-1621 — When relation target DB is gone, `cell-relation-*` cell is not rendered at all (P3, open)
+- Steps: delete db_b → /app/db/db_a → row r_a1 (which has `p_rel`) shows no relation column.
+- Observed: no `cell-relation-r_a1-p_rel` testid; relation column is silently hidden.
+- Expected: render an empty/error cell with a "Target database deleted" tooltip and a way to fix the property.
+
+### B-1622 — Public `/p/<slug>` route reflects store edits immediately (P3, info)
+- Steps: visit /p/getting-started → reads "Getting Started". Edit title via store mutation + reload → /p/getting-started now reads "Getting Started EDITED-LIVE".
+- Confirmed.
+
+### B-1623 — Public `/p/<slug>` page renders database-inline + columns as placeholder text "(Embedded database — open the workspace to view)" / "(Multi-column layout — open the workspace to view)" (P3, open)
+- These are pleasant fallbacks but break Notion parity — Notion public pages do render embedded DBs and columns. Consider as I-XX (UX enhancement).
+
