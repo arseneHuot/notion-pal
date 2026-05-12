@@ -43,7 +43,11 @@ export function CalendarView({ databaseId, viewId }: { databaseId: string; viewI
   }, [cursor, first, last, startWeekday]);
 
   function keyForDate(d: Date) {
-    return d.toISOString().slice(0, 10);
+    // Use local time, not UTC, so "today" matches the user's day.
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
   }
   const rowsByDay = useMemo(() => {
     const m = new Map<string, typeof filtered>();

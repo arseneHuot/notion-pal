@@ -141,4 +141,27 @@
     background-color: var(--color-background);
     color: var(--color-foreground);
   }
+
+  /* Contenteditable placeholder — show data-placeholder when empty */
+  [contenteditable][data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: var(--color-muted-foreground);
+    pointer-events: none;
+  }
+
+  /* Custom scrollbars for the app */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklch, var(--color-muted-foreground) 30%, transparent);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--color-muted-foreground) 50%, transparent);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }

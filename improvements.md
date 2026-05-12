@@ -8,8 +8,9 @@ Priority: high / medium / low.
 
 ## 2026-05-12 — Initial backlog
 
-### I-001 — Real text-formatting toolbar on selection (high, open)
+### I-001 — Real text-formatting toolbar on selection (high, done)
 - A floating menu (Bold/Italic/Strike/Code/Link/Color) above the selection in a contenteditable block, like Notion.
+- Implemented: `src/components/editor/InlineToolbar.tsx` mounted globally in `app.tsx`.
 
 ### I-002 — Block colour and background (high, open)
 - Notion supports setting colour/background per block. Schema already has a `color` field; need UI to set it.
@@ -46,4 +47,17 @@ Priority: high / medium / low.
 
 ### I-013 — Notion AI: bundle simple summarise + rewrite + extend actions on selection (high, open)
 - A floating "Ask AI" affordance after selecting text.
+
+## 2026-05-12 — Iteration 1 backlog
+
+### I-014 — Page title placeholder is empty (medium, fixed)
+- The `<h1 contenteditable data-placeholder="Untitled">` doesn't show its placeholder; styling missing.
+- Fix: add CSS rule for `[contenteditable][data-placeholder]:empty::before`.
+
+### I-015 — Calendar key helper should be timezone-safe everywhere (medium, fixed)
+- Both CalendarView and the app.calendar route share a `keyForDate` that returns UTC date strings.
+- Fix: replace with `formatLocalDate` returning `${y}-${m}-${d}` in local time.
+
+### I-016 — Dark-mode "today" highlight is faint with `text-blue-600` on dark background (low, open)
+- Use `text-blue-400` in dark mode for better contrast.
 
