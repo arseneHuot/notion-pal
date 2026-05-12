@@ -6,6 +6,7 @@ import { TopBar } from "@/components/layout/TopBar";
 import { useStore } from "@/lib/store";
 import { CommandPalette } from "@/components/command/CommandPalette";
 import { AIChat } from "@/components/ai/AIChat";
+import { InlineToolbar } from "@/components/editor/InlineToolbar";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
@@ -50,6 +51,7 @@ function AppLayout() {
       </div>
       <CommandPalette />
       <AIChat />
+      <InlineToolbar />
     </div>
   );
 }

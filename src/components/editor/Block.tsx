@@ -300,14 +300,16 @@ function useEditable(
   const [slashPos, setSlashPos] = useState({ x: 0, y: 0 });
   const pageBlocks = useStore((s) => s.pages[pageId]?.blocks ?? []);
 
-  // Initialize content
+  // Initialize content. Only sync DOM if the content diverges AND the
+  // editor isn't currently focused (avoids cursor jumps on every keystroke).
   useEffect(() => {
     if (!ref.current) return;
     const content = (block as { content?: string }).content ?? "";
-    if (ref.current.innerHTML !== content) {
+    const isFocused = document.activeElement === ref.current;
+    if (ref.current.innerHTML !== content && !isFocused) {
       ref.current.innerHTML = content;
     }
-  }, [block.id]);
+  }, [block.id, (block as { content?: string }).content, block.type]);
 
   const focus = useCallback(() => {
     ref.current?.focus();
@@ -371,6 +373,8 @@ function useEditable(
 
   function handleSlashSelect(cmd: SlashCommand) {
     setSlashOpen(false);
+    // Clear the DOM so the leading "/query" text doesn't linger.
+    if (ref.current) ref.current.innerHTML = "";
     if (cmd.action === "convert" && cmd.blockType) {
       // Replace the block with a new type
       const patch: Partial<Block> = { type: cmd.blockType, content: "" } as Partial<Block>;
