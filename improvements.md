@@ -908,3 +908,36 @@ Priority: high / medium / low.
 
 ### I-1715 — Surface `show-resolved` testid on comments toggle (low, open)
 - See B-1715.
+
+## 2026-05-13 04:00 — Test agent batch 30
+
+### I-1800 — Make `synced-block-ref` actually mirror source content (high, open)
+- See B-1800. Ref renders "Source is empty" regardless of source state. Should subscribe to the source block (and its children) and render them inline. Mutating source should re-render every ref.
+
+### I-1801 — Add UI to create a synced-block-ref (high, open)
+- See B-1801. `slash-synced` only creates a fresh source. Need either `slash-synced-ref` ("Paste a synced reference by id") or a "Convert to reference" affordance on an existing source. Today, refs only exist if manually injected into localStorage.
+
+### I-1802 — Namespace AI chat per current user (medium, open)
+- See B-1802. Replace global `notion-clone:ai-chat` with `notion-clone:user:<id>:ai-chat`, OR clear the global key on sign-out. Privacy fix.
+
+### I-1803 — Validate cover URL protocol (medium, open)
+- See B-1803. Reject `javascript:`, `data:` (except `data:image/`), and any non http/https scheme. Show inline "Only http(s) image URLs are allowed".
+
+### I-1804 — AI input should submit on Enter (medium, open)
+- See B-1804. Either wrap `ai-input` in a `<form onSubmit>` or add `onKeyDown` that sends when Enter and no Shift. Shift+Enter → newline (also requires switching to `<textarea>`).
+
+### I-1805 — Add `data-testid="page-cover"` to PageCover wrapper (low, open)
+- See B-1805. Tiny addition; helps automation and screen-reader labelling.
+
+### I-1806 — `cover-url-apply` should be disabled or no-op when input is empty (low, open)
+- See B-1806. Today empty + Apply silently wipes the existing cover.
+
+### I-1807 — Add hover affordances on cover ("Change cover" / "Reposition") (medium, open)
+- See B-1807. Standard Notion UX. Reposition is harder (image only, drag to set background-position-y), but "Change cover" should reopen the picker without first removing.
+
+### I-1808 — Surface "Invalid formula" badge for unparseable expressions (low, open)
+- See B-1813. Today silently blank.
+
+### I-1809 — Consider react-window virtualization for board + table at >1000 rows (low, open)
+- See B-1811/B-1812. Today 500 rows is fine. At ~5000 rows DOM count crosses 50k and will be sluggish.
+

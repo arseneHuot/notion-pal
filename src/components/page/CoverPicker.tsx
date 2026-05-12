@@ -27,8 +27,27 @@ const GRADIENTS = [
   { name: "Berry", value: "linear-gradient(135deg, #cc2b5e 0%, #753a88 100%)" },
 ];
 
+function isSafeImageUrl(u: string): boolean {
+  // Allow http/https URLs and data:image/* URLs only. Reject javascript:, file:, etc.
+  if (/^data:image\//i.test(u)) return true;
+  try {
+    const parsed = new URL(u);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 export function CoverPicker({ current, onPick, onClose }: Props) {
   const [url, setUrl] = useState(current ?? "");
+
+  function apply() {
+    const trimmed = url.trim();
+    // B-1806: don't silently wipe when the field is empty.
+    if (!trimmed) return;
+    if (!isSafeImageUrl(trimmed)) return;
+    onPick(trimmed);
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center" onClick={onClose}>
@@ -52,20 +71,26 @@ export function CoverPicker({ current, onPick, onClose }: Props) {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && url.trim()) onPick(url.trim());
+                if (e.key === "Enter") apply();
               }}
               placeholder="https://..."
               className="flex-1 bg-background border border-input rounded text-sm px-2 py-1"
               data-testid="cover-url-input"
             />
             <button
-              onClick={() => onPick(url.trim() || null)}
-              className="text-xs bg-primary text-primary-foreground rounded px-3"
+              onClick={apply}
+              disabled={!url.trim() || !isSafeImageUrl(url.trim())}
+              className="text-xs bg-primary text-primary-foreground rounded px-3 disabled:opacity-50"
               data-testid="cover-url-apply"
             >
               Apply
             </button>
           </div>
+          {url.trim() && !isSafeImageUrl(url.trim()) && (
+            <div className="text-xs text-destructive mt-1" data-testid="cover-url-error">
+              Only http(s):// and data:image/ URLs are allowed.
+            </div>
+          )}
         </div>
 
         <div className="mb-4">

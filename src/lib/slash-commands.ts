@@ -292,6 +292,16 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     blockType: "synced-block",
   },
   {
+    id: "synced-ref",
+    label: "Synced reference",
+    description: "Mirror an existing synced block here. Paste its id after insertion.",
+    icon: "🔁",
+    aliases: ["synced reference", "sync ref", "mirror"],
+    category: "advanced",
+    action: "convert",
+    blockType: "synced-block-ref",
+  },
+  {
     id: "ai",
     label: "AI block",
     description: "Generate content with AI.",

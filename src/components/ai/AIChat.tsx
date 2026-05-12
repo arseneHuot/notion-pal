@@ -9,12 +9,16 @@ interface Message {
   sources?: { pageId: string; title: string }[];
 }
 
-const AI_CHAT_STORAGE_KEY = "notion-clone:ai-chat";
+function aiChatStorageKey(userId: string | null | undefined): string {
+  // Namespaced per-user so threads don't leak across accounts on the same
+  // browser (B-1802). Falls back to a "guest" bucket when no user is set.
+  return `notion-clone:ai-chat:${userId ?? "guest"}`;
+}
 
-function loadStoredMessages(): Message[] {
+function loadStoredMessages(userId: string | null | undefined): Message[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(AI_CHAT_STORAGE_KEY);
+    const raw = localStorage.getItem(aiChatStorageKey(userId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) return parsed.slice(-50);
@@ -26,7 +30,14 @@ function loadStoredMessages(): Message[] {
 
 export function AIChat() {
   const [open, setOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>(() => loadStoredMessages());
+  const currentUser = useStore((s) => s.currentUser);
+  const userId = currentUser?.id;
+  const [messages, setMessages] = useState<Message[]>(() => loadStoredMessages(userId));
+
+  // Reload thread when the signed-in user changes.
+  useEffect(() => {
+    setMessages(loadStoredMessages(userId));
+  }, [userId]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const workspace = useStore((s) => (s.currentWorkspaceId ? s.workspaces[s.currentWorkspaceId] : null));
@@ -42,15 +53,15 @@ export function AIChat() {
     return () => window.removeEventListener("open-ai-chat", show);
   }, []);
 
-  // Persist messages across reloads (B-1722 / B-1618).
+  // Persist messages across reloads (B-1722 / B-1618), per-user (B-1802).
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      localStorage.setItem(AI_CHAT_STORAGE_KEY, JSON.stringify(messages.slice(-50)));
+      localStorage.setItem(aiChatStorageKey(userId), JSON.stringify(messages.slice(-50)));
     } catch {
       // ignore quota errors
     }
-  }, [messages]);
+  }, [messages, userId]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -151,12 +162,20 @@ export function AIChat() {
         ))}
         {busy && <div className="text-xs text-muted-foreground">Thinking…</div>}
       </div>
-      <div className="p-3 border-t border-border">
+      <form
+        className="p-3 border-t border-border"
+        onSubmit={(e) => {
+          e.preventDefault();
+          send();
+        }}
+      >
         <div className="flex gap-2">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
+              // Belt-and-suspenders: also handle Enter directly in case the
+              // form submit path is intercepted by a parent.
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 send();
@@ -167,7 +186,7 @@ export function AIChat() {
             data-testid="ai-input"
           />
           <button
-            onClick={send}
+            type="submit"
             disabled={busy || !input.trim()}
             className="bg-primary text-primary-foreground rounded p-1.5 disabled:opacity-50"
             data-testid="ai-send"
@@ -175,9 +194,9 @@ export function AIChat() {
             <Send className="size-4" />
           </button>
         </div>
-        <div className="text-[10px] text-muted-foreground mt-1">
-          Models: GPT-5.2 · Claude Opus 4.7 · Gemini 3 · Auto (demo)
-        </div>
+      </form>
+      <div className="px-3 pb-3 text-[10px] text-muted-foreground">
+        Models: GPT-5.2 · Claude Opus 4.7 · Gemini 3 · Auto (demo)
       </div>
     </div>
   );

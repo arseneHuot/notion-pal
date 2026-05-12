@@ -2527,3 +2527,99 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-1722 — AI chat thread STILL not persisted across reloads (re-verify of B-1618) (P2, fixed)
 - Steps: open AI panel → send "Test message batch 29 persistence" → reload tab → re-open AI panel.
 - Observed: empty initial state. STILL OPEN.
+
+## 2026-05-13 04:00 — Test agent batch 30
+
+### Verifying latest fixes
+
+**FIX V1 — Cover picker** (PASS, was B-1714)
+- `cover-picker` opens (no native `prompt()` anymore).
+- Gradients: `cover-grad-Sunset|Aurora|Peach|Lavender|Forest|Ocean|Night|Berry` — clicking writes a `linear-gradient(...)` string to `page.cover`. Confirmed Sunset = `linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%)` and Aurora = `linear-gradient(135deg, #43cea2 0%, #185a9d 100%)`.
+- URL input: `cover-url-input` + `cover-url-apply` accept any URL; stored as raw string and rendered as `<img src>`.
+- Unsplash: `cover-img-0..5` six thumbs — click sets a `https://images.unsplash.com/...?w=1200&q=70` URL.
+- Removal: `cover-remove` button sets `page.cover = null` and closes picker.
+- Rendering: PageCover renders a 192px `h-48` div with `background-image: linear-gradient(...)` for gradients, or `<img>` for URLs. Persists across reload.
+
+**FIX V2 — AI chat persistence + `ai-new-thread`** (PASS, was B-1722/B-1618)
+- Posted "Test message batch 30 persistence" → reload tab → AI panel still shows both user message + assistant reply. Store key: `notion-clone:ai-chat` (global, not per-user).
+- `ai-new-thread` clears localStorage `notion-clone:ai-chat` to `[]` and UI shows empty state "Ask anything about your workspace…".
+- Truncation limit verified at 50 messages (newest 50 retained when 120 messages set in storage).
+
+**FIX V3 — Cmd+/ + Cmd+D shortcuts** (PASS, was B-1707)
+- Focus `block-content-<id>` → keydown `key='/' metaKey=true` opens `slash-menu` with all 38 slash-* items.
+- Focus same block → keydown `key='d' metaKey=true` duplicates the block immediately after itself. Verified: 12→13 block count and new id inserted right after focused id. Repeating Cmd+D twice produces +2 duplicates.
+- Both no-op when nothing focused (expected).
+
+### B-1800 — Synced-block-ref does not mirror source content (P2, open)
+- Steps: create synced-block via `slash-synced`, gives `synced-source-<id>` + `synced-add-<id>` UI. Inject 50 `synced-block-ref` blocks pointing at the same `sourceId` on another page. Reload.
+- Observed: each ref renders `data-testid="synced-ref-<id>"` with text "Synced reference / Source is empty." even when the source block has populated `content` AND a non-empty `text` child. The ref widget never resolves the source.
+- Expected: ref should render the source block (and its children) inline. Mutating the source should re-render all refs.
+- File: synced-block-ref renderer.
+
+### B-1801 — Synced-block source UI has no way to create the ref (P2, fixed)
+- Steps: open a synced source block. There's `copy id` button but the slash menu only offers `slash-synced` (creates a fresh source). No `slash-synced-ref` or `paste-as-ref` flow.
+- Observed: B-1800 only reproducible by manually inserting `synced-block-ref` records into localStorage. UI lacks any way to make a reference.
+- Expected: a slash item or "Use ID" affordance to convert a block to a reference.
+
+### B-1802 — AI chat thread is stored globally, not per-user (P2, fixed)
+- Steps: log in as user A → send AI message → log out → log in as user B.
+- Observed: AI panel shows the same thread (`notion-clone:ai-chat` is a single global key, not keyed by `currentUserId`).
+- Expected: AI conversations should be namespaced per user (or at least cleared on logout). Privacy/cross-account leak.
+- File: AI panel persistence layer.
+
+### B-1803 — Cover URL accepts `javascript:` scheme (P2, fixed)
+- Steps: add-cover → `cover-url-input` = `javascript:alert('xss')` → `cover-url-apply`.
+- Observed: stored as `page.cover` and rendered as `<img src="javascript:alert('xss')">`. Modern browsers block image execution but the value is persisted, exported, and could be exploited via other sinks (e.g., markdown export, public page, an `<a>` linkified version).
+- Expected: validate URL with `URL` constructor + restrict protocol to `https:` / `http:` / `data:image/`.
+- File: CoverPicker URL apply handler.
+
+### B-1804 — AI input does not submit on Enter (P2, fixed)
+- Steps: open AI panel → focus `ai-input` (an `<input>` element, not in a `<form>`) → type text → press Enter.
+- Observed: nothing happens. Must click `ai-send` button. Bad UX vs every other chat surface.
+- Expected: Enter sends, Shift+Enter inserts newline (textarea pattern) or wrap input in a `<form>` with submit handler.
+- File: AskAI component.
+
+### B-1805 — Page cover has no `data-testid` on the rendered cover (P3, open)
+- Steps: set cover via picker, then inspect.
+- Observed: visible 192px gradient/img element has no `data-testid="page-cover"` (or similar). Automation must search for div by `backgroundImage` matching `linear-gradient`.
+- Expected: add `data-testid="page-cover"` to the wrapper.
+- File: PageCover component.
+
+### B-1806 — Cover picker URL apply with empty string nulls the cover (P3, fixed)
+- Steps: existing cover set → add-cover → leave `cover-url-input` empty → click `cover-url-apply`.
+- Observed: cover wiped to `null` and picker auto-closes. Effectively a stealth "remove" without any confirmation.
+- Expected: when input is empty, `cover-url-apply` should be disabled, or it should no-op (do not destroy the existing cover).
+- File: CoverPicker apply handler.
+
+### B-1807 — No `page-cover-reposition` / `page-cover-change` affordances on hover (P3, open)
+- Steps: hover over an existing page cover.
+- Observed: no overlay buttons. The only way to change the cover is to remove it then re-pick (or use `add-cover` again which shows the picker — actually present, but no in-cover affordances).
+- Expected: Notion shows "Change cover" + "Reposition" buttons on the cover bottom-right.
+
+### B-1808 — Page title color over light gradient covers — low contrast risk (P3, open)
+- Steps: set Sunset cover, then look at the page title H1.
+- Observed: title uses `color: oklch(0.129 0.042 264.695)` (near-black) with no background, no text-shadow, no overlay. The cover is 192px tall and the title sits below it, so today the contrast issue is mostly aesthetic. But if a future variant overlaps title on cover, light gradients will fail WCAG.
+- Expected: add a subtle text-shadow or a low-opacity card behind title when over a cover, OR enforce dark/light title color based on cover luminance.
+
+### B-1809 — Timeline drag-to-change-date STILL not implemented (re-verify B-1706, P2, open)
+- Steps: /app/db/db_dates_test → switch to `db-view-v_dates_tl` → inspect bars.
+- Observed: bars `tl-bar-<id>` have `draggable=false`, no `tl-handle-*`, no mousedown listeners. Click opens row-detail drawer only. UNCHANGED.
+- File: TimelineView.
+
+### B-1810 — Comment "Reply" affordance STILL missing (re-verify B-1716, P2, open)
+- Steps: /app/p/pg_mp36jcskpab8tj6g → `comments-btn`.
+- Observed: only `resolve-<id>` + top-level `comment-input` + `post-comment`. No `reply-<id>` / `comment-input-<parentId>`. UNCHANGED.
+
+### B-1811 — 500-row board view performs OK but no virtualization (P3, info)
+- Steps: inject 500 rows + add ids to `db_a.rows` array → /app/db/db_a → board view `v_a_board`.
+- Observed: 503 `board-card-*` rendered, DOM=6979 nodes, full page renders in <1s, scroll/click latency low. No virtualization (every card mounted). Acceptable at 500. Likely will degrade at ~5000 rows; consider react-window for board columns.
+
+### B-1812 — 500-row table view renders every row (P3, info)
+- Steps: same setup, table view `v_a`.
+- Observed: 503 rows rendered, DOM=13035 nodes. Filter input focus takes ~3ms. No virtualization. Acceptable today.
+
+### B-1813 — db_a formula `1 + +` is invalid expression but no error UI (P3, open)
+- Steps: noticed during db_a inspection: `p_fx.expression = "1 + +"`.
+- Observed: rendered formula cells are blank — no visible "Invalid formula" badge or tooltip.
+- Expected: invalid formulas should show a red badge "Invalid expression" so users notice.
+
