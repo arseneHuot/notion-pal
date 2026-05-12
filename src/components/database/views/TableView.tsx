@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty } from "@/lib/store";
+import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty, getState as getStoreState } from "@/lib/store";
+
+function databasesNow() {
+  return Object.values(getStoreState().databases);
+}
 import { PropertyCell } from "../PropertyEditor";
 import { applyFilters, applySorts } from "../filter";
 import { ChevronDown, MoreHorizontal, Plus, Trash } from "lucide-react";
@@ -135,9 +139,14 @@ function PropertyHeader({ property, databaseId }: { property: Property; database
                   (patch as Record<string, unknown>).expression = '""';
                 }
                 if (t === "rollup") {
-                  // Sensible defaults so the cell doesn't render blank (B-601).
+                  // Sensible defaults so the cell doesn't render blank (B-601, B-704).
+                  // If a relation property already exists, point at it so the cell
+                  // shows a real value (count of linked rows) immediately.
+                  const firstRelation = (databasesNow().find((d) => d.id === databaseId)?.properties ?? []).find(
+                    (p) => p.type === "relation",
+                  );
                   (patch as Record<string, unknown>).function = "count";
-                  (patch as Record<string, unknown>).relationPropertyId = "";
+                  (patch as Record<string, unknown>).relationPropertyId = firstRelation?.id ?? "";
                   (patch as Record<string, unknown>).targetPropertyId = "";
                 }
                 updateDatabaseProperty(databaseId, property.id, patch);

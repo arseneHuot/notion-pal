@@ -342,7 +342,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: native confirm blocks the renderer (same family).
 - Expected: in-app modal.
 
-### B-414 — Public `/p/<slug>` page silently drops most block types (P1, open)
+### B-414 — Public `/p/<slug>` page silently drops most block types (P1, fixed)
 - File: src/routes/p.$slug.tsx `ReadonlyBlock`.
 - Steps: publish a page that contains inline databases, toggles, columns, equation, embeds, videos, files, audio, bookmark, link-to-page, table, AI block, breadcrumb, TOC, or synced blocks. Open the public URL.
 - Observed: only text/heading-1..3/bullet/numbered/todo/quote/callout/divider/code/image are rendered. Every other block type returns `null` and is silently dropped — the visitor sees a partial page with no indication content is missing.
@@ -931,4 +931,145 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: open Page history → Save snapshot now.
 - Observed: list updates but no toast or "Snapshot saved at HH:MM" indicator.
 - Expected: `toast("Snapshot saved", "success")` plus a relative timestamp under the button.
+
+## 2026-05-12 16:05 — Test agent batch 8
+
+### B-700 — Sidebar page click changes URL but does not re-render the page body (P1, fixed)
+- File: src/routes/app.p.$pageId.tsx and the sidebar nav button handler.
+- Steps: open page A (e.g. a columns block page); in sidebar, click another page B (e.g. "Welcome"). Wait several hundred ms. Force a hard reload to compare.
+- Observed: the URL updates to /app/p/<B-id> but the `<main>` content stays on page A's blocks (the editor never re-mounts for the new pageId). A full page reload then renders B correctly.
+- Expected: navigating between pages via the sidebar should update the editor view in-place (PageView keyed by pageId so React remounts on change, or a useEffect listening to route param).
+- Verification log: navigated from pg_mp2w9grlso0wlxh6 (Test Columns Block, has columns block) to pg_mp2uzjo1rj5h4k4p (Welcome). URL became /app/p/pg_mp2uzjo1rj5h4k4p but main text remained "Column 1 content / H1 inside col / Column 2 content". After reload, Welcome content rendered correctly. Reproducible.
+
+### B-701 — Slash-menu filter "columns-2" returns "No matching blocks" though id is "columns-2" (P3, open)
+- File: src/lib/slash-commands.ts (id="columns-2", aliases=["columns","2 columns","2col"]) and src/components/editor/SlashMenu.tsx filterSlash.
+- Steps: in an empty block type "/columns-2".
+- Observed: dropdown shows "No matching blocks". Filter does NOT match against `id`, only `label`+`aliases`. The instructions / docs mention "/columns-2" should produce a 2-column layout but it doesn't.
+- Expected: include the command `id` in the filter list (or add "columns-2"/"columns-3"/"columns-4" to aliases).
+
+### B-702 — Changing a dual-relation property's type to non-relation leaves an orphan paired property in the target DB (P1, fixed)
+- File: src/lib/store.ts updateDatabaseProperty (the dual-relation side-effect only runs when the patched prop IS a relation; it does NOT run when the prop was a relation but is being changed AWAY from relation).
+- Steps: (1) create DB A with relation prop X targeting DB B, toggle isDual on (paired prop Y is auto-created in B with pairedPropertyId=X.id). (2) Change property X's type from "relation" to "rollup" (or any non-relation type) via the property header menu.
+- Observed: property Y in DB B is left intact with `type: "relation"`, `isDual: true`, `pairedPropertyId: X.id`. But X is no longer a relation — it's a rollup. The mirror code in `PropertyEditor.tsx` RelationCell.toggle() will silently no-op on the dual mirror because it reads `rp.isDual && rp.pairedPropertyId` on the now-rollup property which has neither. Y still presents as a two-way relation in its picker dropdown.
+- Verification log: DB db_mp2whowd8u6j40z8 prop RelTest changed from relation→rollup; DB db_mp2v206mwyisp4jq still contains "Related to Untitled database" pointing to the orphan paired id.
+- Expected: when a relation property's type is changed away from `relation`, the store should scan target DB(s) for any paired-relation referencing it and either delete the paired prop or null out `pairedPropertyId` and set `isDual: false`. Same for when a relation property is deleted (related to B-632).
+
+### B-703 — Property header menu's type-change buttons don't show a confirmation when the change is destructive (relation→rollup loses targetDatabaseId, etc.) (P2, open)
+- File: src/components/database/views/TableView.tsx lines 124-148.
+- Steps: open the property header menu on a `relation` property with linked rows; click "rollup" (or any other type).
+- Observed: type instantly changes, the relation config (targetDatabaseId, isDual, pairedPropertyId) is silently dropped, all row values that were row-id arrays remain but are now interpreted as the new type. No confirmation.
+- Expected: when changing from a type that carries config (`relation`, `formula`, `rollup`, `status` with groups, `select` with options, `unique-id` with prefix/counter), show a confirmation: "This will lose <X> rows of data and the relation config — continue?".
+
+### B-704 — Rollup cell shows blank/"—" until BOTH relationPropertyId and targetPropertyId are set, even with default function="count" (P2, fixed)
+- File: src/components/database/PropertyEditor.tsx RollupCell (line 401-419).
+- Steps: change a property type to `rollup` from a property menu. The store sets `function: "count"`, `relationPropertyId: ""`, `targetPropertyId: ""`. Look at any row's cell.
+- Observed: cell renders "—" because `if (!relProp || relProp.type !== "relation") return ...`. For `function === "count"` the rollup doesn't actually need a `targetPropertyId` (it just counts linked rows), but the early-return still triggers because no `relationPropertyId` is configured.
+- Expected: at minimum render a clearer placeholder like "Configure relation" rather than "—" (which looks like an empty numeric result). Also, the implementer's stated change "rollup default count makes the cell populate immediately" is misleading — the cell only populates after the user picks a relation; without a relation, count remains "—".
+
+### B-705 — RollupConfigEditor's "pick relation" dropdown shows nothing if the relation property is configured but has no targetDatabaseId yet (P3, open)
+- File: src/components/database/views/TableView.tsx RollupConfigEditor (lines 233-280).
+- Steps: add a property of type relation but don't configure its target. Then add a rollup property and open its config.
+- Observed: the relation IS listed in "pick relation" (filtered only by `p.type === "relation"`), but if picked, "Target property" is disabled forever because `targetDb` resolves to undefined and there's no UI hint.
+- Expected: when a relation prop has no targetDatabaseId, either exclude it from the rollup picker OR show a tooltip "configure target database first".
+
+### B-706 — Two "Untitled database" entries in Relation Target picker confirmed reproduces, now 3+ databases all named identically (worsens B-622) (P3, open)
+- File: src/components/database/views/TableView.tsx RelationConfigEditor.
+- Steps: in current workspace, open any property menu for a relation prop → "Relation target".
+- Observed: three options all labelled "🗄️ Untitled database" — completely indistinguishable.
+- Expected: as B-622 — append the host page title or short DB id. This is a repeat verification with 3 DBs, not 2.
+
+### B-707 — Equation block does NOT render LaTeX — it shows raw source in a serif font (P2, open)
+- File: src/components/editor/Block.tsx equation case + slash-commands.ts label "LaTeX math block".
+- Steps: create an equation block via `/equation`. Type `E = mc^2` then `\frac{a}{b} + \sqrt{x}`.
+- Observed: the rendered area shows the raw source text wrapped in a `<div class="font-serif text-lg">` — no LaTeX-to-math rendering at all. The slash command description says "LaTeX math block" but the block doesn't even attempt to render math.
+- Expected: ship KaTeX or MathJax (I-611 already proposes KaTeX, ~8 KB gzipped) so `E = mc^2` becomes the formatted equation. Current state is misleading because the placeholder LOOKS like it should render (serif font).
+- Verification log: textarea value `\frac{a}{b} + \sqrt{x}` → rendered div text `\frac{a}{b} + \sqrt{x}` (unchanged).
+
+### B-708 — Block-level commenting is not exposed in the UI; schema supports it but no entry point (P2, open)
+- File: src/lib/types.ts Comment.blockId exists; src/lib/store.ts addComment accepts `blockId`. But src/components/editor/Block.tsx has no UI to start a block comment, and src/components/page/PageComments.tsx filters out block comments (`!c.blockId`).
+- Steps: try to right-click a block, look for "Comment" in any block menu, search the codebase.
+- Observed: NO surface allows the user to attach a comment to a specific block. Page-level comments work via the speech bubble in TopBar. The schema field is dead code.
+- Expected: hover a block → see a "💬" icon in the block handle area. Click → opens a popover where the user types a thread, on save calls `addComment({blockId})`. PageComments.tsx needs a "Show block comments" mode OR inline indicators next to commented blocks.
+
+### B-709 — Synced block is a schema-only stub: shows "SYNCED BLOCK / Content will be mirrored across pages." with no actual mirror (P2, open)
+- File: src/components/editor/Block.tsx synced-block render branch.
+- Steps: create a synced block (slash command "synced"); inspect render.
+- Observed: renders the static text "SYNCED BLOCK / Content will be mirrored across pages." There is no source-block picker, no UI to insert a synced copy elsewhere, no mirror runtime.
+- Expected: either implement (source ref + mirror ref schema and renderer) OR remove the slash menu entry to avoid misleading the user. Related to I-007 / B-209 / B-302 etc. — still unresolved.
+
+### B-710 — Multi-relation cycle: changing a relation property's type from "relation" silently breaks all dependent rollups (P2, open)
+- File: src/lib/store.ts updateDatabaseProperty + RollupCell.
+- Steps: configure relation X → rollup Y referencing X. Change X's type to text or rollup. Look at Y's cell.
+- Observed: Y now shows "—" (because RollupCell early-returns when `relProp.type !== "relation"`). No warning, no broken-state indicator, no migration prompt. If the user later restores X to relation but with no target, Y stays "—".
+- Expected: when changing a relation away from "relation", scan all rollups in same DB referencing it and either delete those rollups, null-out their `relationPropertyId`, or warn the user.
+
+### B-711 — Rollup property re-typed away from rollup → row.values entries become stale dangling array refs (P3, open)
+- File: src/lib/store.ts updateDatabaseProperty.
+- Steps: configure a rollup or relation column; populate some row values; change the column type to "text".
+- Observed: each row.values[propId] still holds the old array of row-ids (relation) or whatever calculated number (rollup). The new "text" cell renders the raw JS value via `String(...)`, e.g. "[object Object]" or the joined ids list. Type coercion should be cleaning these on type change.
+- Expected: when changing property type, sweep `s.rows` and clear `row.values[propId]` (or coerce to the new type's safe default).
+
+### B-712 — Cmd+/ block context-menu shortcut does not exist (P3, open)
+- File: src/components/editor/Block.tsx onKeyDown handler (line 522+ has metaKey+b/i/u/Shift+s/e but no metaKey+/).
+- Steps: focus a block, press Cmd+/.
+- Observed: no menu appears, no context menu opens. Editor doesn't acknowledge the shortcut. Notion-style apps use Cmd+/ to open the block-level option menu (transform, duplicate, move to, comment, …).
+- Expected: bind Cmd+/ (or Ctrl+/ on Windows/Linux) to open the same handle popover ("Block options") that the grip-vertical click opens.
+
+### B-713 — Drag-and-drop a block from inside a Column into another position in the SAME column has no effect (P1, open)
+- File: src/components/editor/Block.tsx BlockShell.onDrop (line 117-133) — uses `pageBlocks = s.pages[pageId].blocks` to find source/target index, but column-children live in `column.blockIds`, not `page.blocks`. So `targetIndex` and `sourceIndex` are both -1, and the function returns early.
+- Steps: in the Test Columns Block page, column 1 has ["Column 1 content" (text), "H1 inside col" (heading-1)]. Drag the H1 over the text block.
+- Observed: order unchanged after `dragstart` + `drop`. No reorder.
+- Expected: BlockShell.onDrop needs to detect when block.parentId is a `column` block, and call a new `reorderColumnChildren(colId, newOrder)` action instead of `reorderBlocks`.
+- Verification log: before/after `[blk_9ttuw6ui, blk_mp2wd148lonw]` — identical.
+
+### B-714 — Even the page-level drag-drop only re-orders top-level blocks, but does not target ANY drop position inside columns (P2, open)
+- File: src/components/editor/Block.tsx — there is no drop handler that resets a block's `parentId` to a column id.
+- Steps: drag a top-level block over a column.
+- Observed: dropping on the column body just triggers the column's parent BlockShell.onDrop (re-orders the columns block among top-level blocks). The block cannot be moved INTO a column via DnD.
+- Expected: a column should accept block drops and call `moveBlockToColumn(blockId, colId, index)`.
+
+### B-715 — Equation block: pressing Enter inside the textarea inserts a literal newline rather than committing & jumping to a new block (P3, open)
+- File: src/components/editor/Block.tsx equation render.
+- Steps: type inside an equation block then press Enter.
+- Observed: the textarea accepts the newline. No way to exit it without clicking out.
+- Expected: Enter should commit the equation and create a new text block after. Shift+Enter could be used for multi-line equation source.
+
+### B-716 — Published /p/<slug> page renders an EMPTY blocks container if the page only contains "non-readonly-supported" block types (P1, fixed)
+- File: src/routes/p.$slug.tsx ReadonlyBlock (lines 83-122). Returns null for: columns, column, equation, toggle, database-inline, synced-block, sub-page, button, mention, AI block, embed, video, audio, file, bookmark.
+- Steps: publish a page whose only blocks are e.g. a columns block + a database. Visit `/p/<slug>`.
+- Observed: `<div data-page-blocks="true"></div>` renders empty inside the article. No fallback "this content can't be displayed publicly". The viewer just sees a blank article.
+- Expected: at minimum render a "[unsupported block type X — view in app]" placeholder so the user is not left with a totally blank page. Better: implement readonly renderers for columns/equation/toggle/database.
+- Verification log: published pg_mp2v0u4vepv273uy as slug "test-columns-block". Public view shows only the `<h1>Test Columns Block</h1>` and empty blocks div, even though the page in-app shows tabs (All / By status / Calendar / Gallery), rows, and a database.
+
+### B-717 — Share dialog "Publish" auto-generates a slug from the page title without checking the slug already exists on another published page (P2, open)
+- File: src/components/page/ShareDialog.tsx slug generation logic.
+- Steps: create two pages with identical titles, e.g. "Untitled". Publish both.
+- Observed prediction: both end up with slug "untitled" — and there's no error / fallback (slug collision).
+- Expected: after slugifying, check `Object.values(pages).some(p => p.isPublished && p.publishSlug === candidate && p.id !== currentPageId)`; on collision append `-2`, `-3`, … or a short hash.
+
+### B-718 — `prefers-color-scheme` dark mode is not respected — app forces light mode unless toggled (P3, open)
+- File: src/lib/store.ts and theme handling (no detection of `window.matchMedia("(prefers-color-scheme: dark)")`).
+- Steps: set system to dark, open the app fresh.
+- Observed: app loads in light mode regardless of OS preference.
+- Expected: on first load, read `prefers-color-scheme` and set `darkMode` accordingly (still allow override).
+
+### B-719 — Dual-relation mirror does NOT backfill existing linked rows when toggling isDual on after rows are already linked (P2, open)
+- File: src/lib/store.ts updateDatabaseProperty (the auto-pair creation logic), and PropertyEditor.tsx RelationCell.toggle (only mirrors on subsequent toggles).
+- Steps: create relation prop X without dual; link a few rows. Then toggle isDual on.
+- Observed: paired prop Y is created on target DB (good), but ROW values on the target side are not synced from existing X values. Y appears empty even though A→B links exist.
+- Verification log: row_mp2v3c9ydsk3dcpj.values[prop_mp2v63eeyn4c] = [row_mp2v59la2y9ox67e]. row_mp2v59la2y9ox67e.values has NO entry for prop_mp2vzw2hvvafghtd (the paired side). Mirror is one-sided.
+- Expected: when isDual is enabled OR a paired prop is created, walk through all rows of the source DB and mirror their existing relation values onto the paired side.
+
+### B-721 — Block menu shows "⌘D" as the Duplicate shortcut but no keyboard handler exists (P2, open)
+- File: src/components/editor/Block.tsx — onKeyDown handles metaKey+b/i/u/Shift+s/e but not metaKey+d. BlockMenu MenuItem for Duplicate declares `shortcut="⌘D"`.
+- Steps: focus a block, press Cmd+D (Mac) / Ctrl+D (others).
+- Observed: browser adds a bookmark (default behaviour). The advertised "⌘D" shortcut does nothing in-app.
+- Expected: bind Cmd+D in Block.onKeyDown to `e.preventDefault()` + `duplicateBlock(block.id)` (using the same logic as the menu's Duplicate item).
+
+### B-720 — Recreating a unique-id property after deletion loses the prefix but counter survives — display becomes broken (P2, open)
+- File: src/lib/store.ts addDatabaseProperty (doesn't restore prefix), PropertyEditor.tsx UniqueIdCell.
+- Steps: existing DB has BugID prop with prefix "BUG"; 2 rows already have BUG-1, BUG-3. Delete BugID. Recreate it as type=unique-id (new name "BugID2"). Add a new row.
+- Observed: db.nextUniqueId is preserved at 4 (good - so new row gets seq=4). But the new property has no `prefix` set, so rows render as bare numbers "1", "3", "4" with no separator. The old prefix "BUG" is lost. The cell now displays "1" for the row that was previously "BUG-1" — confusing for users who relied on that ID.
+- Verification log: after recreation, prop = `{id: prop_mp2x1bfzedtw, name: "BugID2", type: "unique-id"}` — no prefix. row_mp2v3c9ydsk3dcpj.uniqueIdSeq=1; row_mp2v3d77ydg7zv2s.uniqueIdSeq=3; new row uniqueIdSeq=4.
+- Expected: either (a) preserve the deleted prop's prefix somewhere DB-level and re-apply when recreated, or (b) prompt user to set the prefix on creation, or (c) reset `db.nextUniqueId` to `max(seqs)+1` when the property is deleted so re-creation doesn't have weird gaps.
 

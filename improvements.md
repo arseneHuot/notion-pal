@@ -400,4 +400,66 @@ Priority: high / medium / low.
 ### I-625 — Chart view should adapt grid/tooltip colours for dark mode (low, open)
 - File: src/components/database/views/ChartView.tsx hardcoded `#ccc` and `#3b82f6`. Use CSS variables or `useTheme`. Tooltip currently uses recharts defaults (white background) which is unreadable on dark mode.
 
+## 2026-05-12 16:05 — Test agent batch 8
+
+### I-700 — Sidebar nav should remount PageView when pageId param changes (high, open)
+- See B-700. Add `<PageView key={pageId} />` so the editor remounts on route change, OR use a `useEffect([pageId])` that re-reads the page from store.
+
+### I-701 — Slash-menu filter should match command `id` (low, open)
+- See B-701. In `filterSlash`, include `cmd.id.toLowerCase().includes(q)` so `/columns-2` works.
+
+### I-702 — Clean up paired-relation references when type changes away from relation (high, open)
+- See B-702. In `updateDatabaseProperty`, when `prevProp.type === "relation" && updatedProp.type !== "relation"`, scan all DBs for `props.where(p.pairedPropertyId === propertyId)` and clear them.
+
+### I-703 — Show confirmation when changing a property type would lose configured config or row data (medium, open)
+- See B-703. Use the existing toast/dialog system; only confirm when there is non-empty config or non-empty values for that prop.
+
+### I-704 — Rollup cell placeholder should distinguish "no config" from "no values" (medium, open)
+- See B-704. Use distinct visual states: italic "Configure relation" vs "—".
+
+### I-705 — Disable or annotate rollup relation options that lack targetDatabaseId (low, open)
+- See B-705. Show "(no target)" beside the option label and disable it.
+
+### I-706 — Disambiguate identically-named databases in pickers (medium, open)
+- See B-622/B-706. Append the host page title and a short id to "Untitled database" entries.
+
+### I-707 — Render LaTeX via KaTeX in equation blocks (high, open)
+- See B-707, I-611. KaTeX is ~8 KB gzipped and renders synchronously; replacing the placeholder `<div class="font-serif text-lg">` with `<div ref={el => katex.render(value, el)}>` would unlock real math rendering.
+
+### I-708 — Expose block-level commenting (high, open)
+- See B-708. Add a "💬" hover affordance in BlockShell that opens a thread popover (PageComments has the rendering; just needs a Block-filter mode and a creator).
+
+### I-709 — Either implement Synced Block runtime or hide it from the slash menu (high, open)
+- See B-709. The synced-block branch in Block.tsx is a static dead-end. The least-cost fix is to remove it from `slash-commands.ts` and `Block.tsx` types until real mirroring exists.
+
+### I-710 — Cmd+/ should open the block options popover (medium, open)
+- See B-712. Add `metaKey/ctrlKey + "/"` to Block.tsx onKeyDown that triggers the same `setMenuOpen(true)` used by the grip-vertical handle.
+
+### I-711 — Drag-and-drop reorder INSIDE a column (high, open)
+- See B-713. Implement `reorderColumnChildren(colId, newOrder)` and detect when `block.parentId.type === "column"` in BlockShell.onDrop.
+
+### I-712 — Drag a block INTO a column (medium, open)
+- See B-714. The column container should accept block drops and re-parent the block.
+
+### I-713 — Type coercion when changing property type to scrub stale row.values (medium, open)
+- See B-711. Implementation: `setState(s => { ... rows: Object.fromEntries(Object.entries(s.rows).map(([id, r]) => [id, {...r, values: {...r.values, [propId]: defaultFor(newType)}}])) ... })`.
+
+### I-714 — Detect prefers-color-scheme on first load (low, open)
+- See B-718. Read `window.matchMedia('(prefers-color-scheme: dark)').matches` if `darkMode` is undefined.
+
+### I-715 — Slug collision handling in publish dialog (medium, open)
+- See B-717. Append a numeric suffix or random hash on conflict; surface "this slug is taken" inline.
+
+### I-716 — Fallback rendering for unsupported block types in /p/<slug> readonly view (high, open)
+- See B-716. ReadonlyBlock should return a placeholder card "[Block type 'columns' is not yet supported in the public view]" instead of null. Even better: implement readonly renderers for columns/equation/toggle/database-inline so the public viewer matches the editor.
+
+### I-717 — Backfill existing relation links on toggle isDual (medium, open)
+- See B-719. When toggling isDual on, walk through `s.rows[*].values[propertyId]` and mirror onto target rows.
+
+### I-718 — Preserve unique-id prefix on property deletion, or reset counter (medium, open)
+- See B-720. On delete: stash `{prefix, nextUniqueId}` on the DB under a `deletedUniqueIdMeta` key keyed by property name; on re-create with the same name, restore. Or simpler: when the unique-id prop is deleted, reset `db.nextUniqueId = 1` so a fresh prefix re-creation makes sense.
+
+### I-719 — Implement Cmd+D duplicate-block shortcut (medium, open)
+- See B-721. Add to Block.tsx onKeyDown: `else if ((e.metaKey || e.ctrlKey) && e.key === "d") { e.preventDefault(); createBlock(pageId, {...block, parentId: pageId, order: block.order}, block.id); }`. Also bind ⌘⌫ to delete-block per the menu.
+
 

@@ -401,20 +401,32 @@ function FormulaCell({ row, property, database }: { row: DatabaseRow; property: 
 function RollupCell({ row, property, database }: { row: DatabaseRow; property: Property; database: NotionDatabase }) {
   const rp = property as Extract<Property, { type: "rollup" }>;
   const allRows = useStore((s) => s.rows);
-  const databases = useStore((s) => s.databases);
   const relProp = database.properties.find((p) => p.id === rp.relationPropertyId);
-  if (!relProp || relProp.type !== "relation") return <span className="text-xs text-muted-foreground">—</span>;
+  if (!relProp || relProp.type !== "relation") {
+    return (
+      <span className="text-xs text-muted-foreground italic" title="Open the property menu to pick a Relation to roll up.">
+        configure rollup
+      </span>
+    );
+  }
+  const fn = rp.function ?? "count";
   const linkedIds = (row.values[rp.relationPropertyId] as string[]) ?? [];
-  const linked = linkedIds.map((id) => allRows[id]).filter(Boolean);
+  const linked = linkedIds.map((id) => allRows[id]).filter(Boolean) as DatabaseRow[];
+  if (fn === "count") return <span className="text-xs">{linked.length}</span>;
+  if (!rp.targetPropertyId) {
+    // Function chosen but no target prop yet — count linked rows as a sane fallback.
+    return <span className="text-xs">{linked.length}</span>;
+  }
   const values = linked.map((r) => r.values[rp.targetPropertyId]).filter((v) => v !== undefined && v !== null);
   let result: unknown = "";
-  if (rp.function === "count") result = linked.length;
-  else if (rp.function === "count-values") result = values.length;
-  else if (rp.function === "sum") result = values.reduce((a, b) => Number(a) + Number(b), 0);
-  else if (rp.function === "average") result = values.length ? values.reduce((a, b) => Number(a) + Number(b), 0) / values.length : 0;
-  else if (rp.function === "min") result = Math.min(...values.map(Number));
-  else if (rp.function === "max") result = Math.max(...values.map(Number));
-  else if (rp.function === "show-original") result = values.join(", ");
+  if (fn === "count-values") result = values.length;
+  else if (fn === "sum") result = values.reduce<number>((a, b) => a + Number(b), 0);
+  else if (fn === "average") result = values.length ? values.reduce<number>((a, b) => a + Number(b), 0) / values.length : 0;
+  else if (fn === "min") result = values.length ? Math.min(...values.map(Number)) : "";
+  else if (fn === "max") result = values.length ? Math.max(...values.map(Number)) : "";
+  else if (fn === "show-original") result = values.join(", ");
+  else if (fn === "earliest") result = values.length ? new Date(Math.min(...values.map((v) => Date.parse(String(v))))).toISOString().slice(0, 10) : "";
+  else if (fn === "latest") result = values.length ? new Date(Math.max(...values.map((v) => Date.parse(String(v))))).toISOString().slice(0, 10) : "";
   return <span className="text-xs">{String(result)}</span>;
 }
 

@@ -112,9 +112,118 @@ function ReadonlyBlock({ block }: { block: Block }) {
   }
   if (block.type === "image") {
     const url = (block as { url?: string }).url ?? "";
-    // Only allow http(s) and data: URLs for images.
     if (!/^(https?:|data:)/i.test(url)) return null;
     return <img src={url} className="max-w-full rounded" alt="" />;
+  }
+  if (block.type === "video") {
+    const url = (block as { url?: string }).url ?? "";
+    if (!/^https?:/i.test(url)) return null;
+    let src = url;
+    const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
+    if (yt) src = `https://www.youtube.com/embed/${yt[1]}`;
+    return (
+      <div className="aspect-video rounded-md overflow-hidden bg-muted my-2">
+        <iframe src={src} className="w-full h-full" allow="encrypted-media" />
+      </div>
+    );
+  }
+  if (block.type === "audio") {
+    const url = (block as { url?: string }).url ?? "";
+    if (!/^https?:/i.test(url)) return null;
+    return <audio controls src={url} className="w-full my-2" />;
+  }
+  if (block.type === "embed" || block.type === "bookmark") {
+    const url = (block as { url?: string }).url ?? "";
+    if (!/^https?:/i.test(url)) return null;
+    if (block.type === "embed") {
+      return (
+        <div className="aspect-video rounded-md overflow-hidden bg-muted my-2 border border-border">
+          <iframe src={url} className="w-full h-full" sandbox="allow-scripts allow-same-origin" />
+        </div>
+      );
+    }
+    let host = url;
+    try { host = new URL(url).hostname; } catch { /* ignore */ }
+    return (
+      <a href={url} target="_blank" rel="noreferrer noopener" className="block border border-border rounded-md p-3 my-2 hover:bg-accent">
+        <div className="text-sm font-medium truncate">{host}</div>
+        <div className="text-xs text-muted-foreground truncate">{url}</div>
+      </a>
+    );
+  }
+  if (block.type === "toggle" || block.type === "toggle-heading-1" || block.type === "toggle-heading-2" || block.type === "toggle-heading-3") {
+    const t = block as Extract<Block, { type: "toggle" | "toggle-heading-1" | "toggle-heading-2" | "toggle-heading-3" }>;
+    const headingClass =
+      block.type === "toggle-heading-1" ? "text-3xl font-bold" :
+      block.type === "toggle-heading-2" ? "text-2xl font-semibold" :
+      block.type === "toggle-heading-3" ? "text-xl font-semibold" :
+      "text-base";
+    return (
+      <details className="my-1" open={t.open}>
+        <summary className={`cursor-pointer ${headingClass}`}>
+          <span dangerouslySetInnerHTML={safeHtml(t.content)} />
+        </summary>
+      </details>
+    );
+  }
+  if (block.type === "equation") {
+    return <pre className="bg-muted/40 rounded p-3 font-mono text-sm whitespace-pre-wrap my-2">{(block as { content?: string }).content ?? ""}</pre>;
+  }
+  if (block.type === "table") {
+    const t = block as Extract<Block, { type: "table" }>;
+    return (
+      <div className="overflow-x-auto my-2">
+        <table className="border-collapse border border-border w-full text-sm">
+          <tbody>
+            {t.rows.map((row, ri) => (
+              <tr key={ri} className={t.hasHeaderRow && ri === 0 ? "bg-muted/40 font-medium" : ""}>
+                {row.map((cell, ci) => (
+                  <td key={ci} className={`border border-border px-2 py-1 ${t.hasHeaderCol && ci === 0 ? "bg-muted/40 font-medium" : ""}`}>
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  if (block.type === "table-of-contents") {
+    return <div className="text-xs text-muted-foreground italic my-2">(Table of contents)</div>;
+  }
+  if (block.type === "breadcrumb") {
+    return null;
+  }
+  if (block.type === "columns") {
+    return <div className="text-xs text-muted-foreground italic my-2">(Multi-column layout — open the workspace to view)</div>;
+  }
+  if (block.type === "database-inline" || block.type === "database-linked") {
+    return <div className="text-xs text-muted-foreground italic my-2 border border-border rounded p-3">(Embedded database — open the workspace to view)</div>;
+  }
+  if (block.type === "ai-block") {
+    const a = block as Extract<Block, { type: "ai-block" }>;
+    if (!a.result) return null;
+    return (
+      <div className="rounded-md border border-violet-300 dark:border-violet-700 bg-violet-50/40 dark:bg-violet-950/30 p-3 my-2 text-sm whitespace-pre-wrap">
+        {a.result}
+      </div>
+    );
+  }
+  if (block.type === "sub-page" || block.type === "page-link") {
+    return <div className="text-xs italic my-2">📄 (Sub-page link)</div>;
+  }
+  if (block.type === "synced-block" || block.type === "synced-block-ref") {
+    return <div className="text-xs text-muted-foreground italic my-2">(Synced content)</div>;
+  }
+  if (block.type === "button") {
+    const b = block as Extract<Block, { type: "button" }>;
+    return <div className="my-2"><span className="inline-block bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm font-medium">{b.emoji} {b.label}</span></div>;
+  }
+  if (block.type === "file") {
+    const f = block as Extract<Block, { type: "file" }>;
+    if (!/^https?:/i.test(f.url ?? "")) return null;
+    return <a href={f.url} target="_blank" rel="noreferrer noopener" className="text-sm underline">📎 {f.fileName ?? f.url}</a>;
   }
   if (block.type === "text") return <p dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
   return null;

@@ -152,29 +152,33 @@ function shallowEqual(a: unknown, b: unknown): boolean {
 }
 
 export function useStore<T>(selector: (s: AppState) => T): T {
-  const [value, setValue] = useState<T>(() => selector(_state));
+  // Force re-render handle.
+  const [, force] = useState(0);
   const selectorRef = useRef(selector);
-  const valueRef = useRef(value);
+  const valueRef = useRef<T | undefined>(undefined);
+
+  // Always evaluate the selector during render so closures that capture
+  // updated route params (e.g. useStore((s) => s.pages[pageId])) pick up
+  // the fresh value without waiting for an external store mutation. This
+  // fixes a navigation regression where the page body stuck on the old
+  // pageId until a hard reload (B-700).
+  const fresh = selector(_state);
+  if (valueRef.current === undefined || !shallowEqual(valueRef.current, fresh)) {
+    valueRef.current = fresh;
+  }
   selectorRef.current = selector;
-  valueRef.current = value;
 
   useEffect(() => {
-    // Re-check on mount in case state changed between initial getState and subscription
-    const initialNext = selectorRef.current(_state);
-    if (!shallowEqual(valueRef.current, initialNext)) {
-      valueRef.current = initialNext;
-      setValue(initialNext);
-    }
     return subscribe(() => {
       const next = selectorRef.current(_state);
       if (!shallowEqual(valueRef.current, next)) {
         valueRef.current = next;
-        setValue(next);
+        force((n) => n + 1);
       }
     });
   }, []);
 
-  return value;
+  return valueRef.current as T;
 }
 
 // expose a getState helper for non-component usage
@@ -1035,8 +1039,42 @@ export function updateDatabaseProperty(databaseId: string, propertyId: string, p
   setState((s) => {
     const db = s.databases[databaseId];
     if (!db) return s;
-    let nextDbs = {
-      ...s.databases,
+
+    // Cleanup: if a previously-dual relation is becoming non-relation OR has
+    // its dual flag flipped off, remove the orphan paired property from the
+    // target DB so we don't leave dangling links (B-702).
+    const previous = db.properties.find((p) => p.id === propertyId);
+    let nextDbs = { ...s.databases };
+    if (previous && previous.type === "relation") {
+      const wasDual = previous.isDual && previous.pairedPropertyId && previous.targetDatabaseId;
+      const becomingDual =
+        (patch as Partial<Extract<Property, { type: "relation" }>>).isDual === true ||
+        (previous.isDual && (patch.type === undefined || patch.type === "relation"));
+      const typeChanging = patch.type && patch.type !== "relation";
+      const dualToggledOff =
+        (patch as Partial<Extract<Property, { type: "relation" }>>).isDual === false &&
+        previous.isDual;
+      if (wasDual && (typeChanging || dualToggledOff) && previous.targetDatabaseId) {
+        const target = nextDbs[previous.targetDatabaseId];
+        if (target) {
+          nextDbs[previous.targetDatabaseId] = {
+            ...target,
+            properties: target.properties.filter((p) => p.id !== previous.pairedPropertyId),
+            views: target.views.map((v) => ({
+              ...v,
+              propertyOrder: v.propertyOrder.filter((id) => id !== previous.pairedPropertyId),
+              hiddenProperties: v.hiddenProperties.filter((id) => id !== previous.pairedPropertyId),
+            })),
+            updatedAt: Date.now(),
+          };
+        }
+      }
+      // becomingDual is handled below by the existing side-effect block.
+      void becomingDual;
+    }
+
+    nextDbs = {
+      ...nextDbs,
       [databaseId]: {
         ...db,
         properties: db.properties.map((p) => (p.id === propertyId ? ({ ...p, ...patch } as Property) : p)),
