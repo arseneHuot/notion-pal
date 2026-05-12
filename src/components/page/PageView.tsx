@@ -55,7 +55,7 @@ export function PageView({ pageId }: { pageId: string }) {
     window.addEventListener("show-word-count", showCount);
     function exportMd() {
       if (!page) return;
-      const md = pageToMarkdown(page, blocks);
+      const md = pageToMarkdown(page, blocks, allPages);
       const blob = new Blob([md], { type: "text/markdown" });
       const url = URL.createObjectURL(blob);
       const slug = (page.title || page.id).replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase();
@@ -71,7 +71,7 @@ export function PageView({ pageId }: { pageId: string }) {
       window.removeEventListener("show-word-count", showCount);
       window.removeEventListener("export-page-markdown", exportMd);
     };
-  }, [page, blocks]);
+  }, [page, blocks, allPages]);
 
   if (!page) {
     return (

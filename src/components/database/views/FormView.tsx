@@ -16,6 +16,30 @@ export function FormView({ databaseId, viewId }: { databaseId: string; viewId: s
   if (!db || !view || view.type !== "form") return null;
   const fields = db.properties.filter((p) => p.type !== "created-time" && p.type !== "created-by" && p.type !== "last-edited-time" && p.type !== "last-edited-by" && p.type !== "unique-id" && p.type !== "formula" && p.type !== "rollup" && p.type !== "button");
 
+  // Compute which property ids are hidden by the form's conditional rules
+  // (B-2003). A property is hidden when at least one rule that *would*
+  // show it doesn't match the current answers (existing schema:
+  // ConditionalRule.showPropertyIds + operator-based predicate).
+  const conditionalRules = view.conditionalLogic ?? [];
+  const hiddenByRules = new Set<string>();
+  if (conditionalRules.length > 0) {
+    // Start with: properties that are referenced as a "show target" by any
+    // rule are hidden by default; they become visible only if a rule matches.
+    const referenced = new Set<string>();
+    for (const rule of conditionalRules) for (const pid of rule.showPropertyIds) referenced.add(pid);
+    for (const pid of referenced) hiddenByRules.add(pid);
+    for (const rule of conditionalRules) {
+      const v = values[rule.ifPropertyId];
+      let pass = false;
+      if (rule.operator === "equals") pass = Array.isArray(v) ? v.includes(rule.value as never) : v === rule.value;
+      else if (rule.operator === "not-equals") pass = Array.isArray(v) ? !v.includes(rule.value as never) : v !== rule.value;
+      else if (rule.operator === "is-empty") pass = v == null || v === "" || (Array.isArray(v) && v.length === 0);
+      else if (rule.operator === "is-not-empty") pass = !(v == null || v === "" || (Array.isArray(v) && v.length === 0));
+      if (pass) for (const pid of rule.showPropertyIds) hiddenByRules.delete(pid);
+    }
+  }
+  const visibleFields = fields.filter((p) => !hiddenByRules.has(p.id));
+
   function submit() {
     const rowId = addDatabaseRow(databaseId, values);
     setSubmitted(true);
@@ -78,7 +102,7 @@ export function FormView({ databaseId, viewId }: { databaseId: string; viewId: s
             </div>
           ) : (
             <div className="space-y-3">
-              {fields.map((p) => (
+              {visibleFields.map((p) => (
                 <div key={p.id} data-testid={`form-field-${p.id}`}>
                   <label className="block text-xs font-medium mb-1">{p.name}</label>
                   <FormField

@@ -2713,3 +2713,125 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: mark page `isInTrash:true` → `sidebar-trash` lists page with `restore-<id>` + `delete-forever-<id>` testids. Click restore → page returns to tree without dialog.
 - Observed: works as expected. Note no confirm dialog on restore (intentional/fine).
 
+
+
+## 2026-05-13 14:00 — Test agent batch 32
+
+**FIX V1 — Form view interactive Preview mode** (PASS, was B-1901/I-1900)
+- `db_dates_test` → `db-view-v_form` renders 7 real `<input>`, 1 `<select>`, 2 `<textarea>`. Each field has `form-field-<propId>` (verified `form-field-p_dt`, `p_dd`, `p_dn`, `p_dms`, `prop_mp34dfab3dc8`, `prop_mp34ecd511qd`). Multi-select renders `form-multiselect-p_dms-tg_red` chips. Submit button `form-submit-v_form` present.
+
+**FIX V2 — `form-copylink` emits toast** (PASS, was B-1902/I-1901)
+- Click `form-copylink-v_form` → ephemeral DOM node `<div data-testid="toast">Form link copied to clipboard</div>` inserted then removed ~250ms.
+
+**FIX V3 — AI messages have `ai-msg-<index>` + `data-role`** (PASS, was B-1903/I-1902)
+- Sent "Test message 1" via `ai-input` → `ai-msg-0` (data-role="user", "Test message 1"), `ai-msg-1` (data-role="assistant", canned summary). Indexing starts at 0 monotonically.
+
+**FIX V4 — Synced-ref Link rejects unknown source ids with toast** (PASS, was B-1906/I-1903)
+- Created unbound `synced-block-ref blk_unbound_test_1` on page. `synced-source-input-<id>` = "bogus_source_id_xyz" → click `synced-source-link-<id>`.
+- Observed toast `data-testid="toast"`: "No synced-block with that id was found in this workspace". `sourceId` remains `null` in store.
+
+**FIX V5 — Mail compose disables Send for invalid To** (PASS, was B-1911/I-1908)
+- `compose-to` = "notvalid_email" → `compose-send.disabled=true`, `compose-to-error` = "Invalid address: notvalid_email".
+- `good@example.com` → enabled, no error.
+- `good@example.com, bad_one, also@ok.com` → disabled, error "Invalid address: bad_one" (first offender reported).
+- Empty → disabled, no error text (clean state).
+
+
+### B-2000 — Block-level commenting still missing (P2, open)
+- Steps: re-tested. Click block handle on `blk_mp33cd7dvdil4mjz` → no menu appears (popover library blocks synthetic clicks); hover handle → no `block-comment-*` testid in DOM. Confirms B-1716/B-1904 unchanged.
+
+### B-2001 — 500 text-block page is not virtualized (P2, info)
+- Steps: created `pg_perf500_test` with 500 sequential text blocks, navigated.
+- Observed: all 500 blocks rendered (`block-content-blk_perf500_0..499`). DOM nodes ~8969. First-keystroke latency on `blk_perf500_250` = 169ms; subsequent keys avg 76ms across 5 keystrokes (39..78ms). Noticeable lag on first key, then acceptable. No virtualization. Acceptable today (≤500), watch at 1000+.
+
+### B-2002 — AI panel input is single-line `<input>` with no maxlength (P3, open)
+- Steps: stuffed `ai-input` with 50,000 characters via DOM, clicked `ai-send`.
+- Observed: accepted instantly (msSet=13ms); chat appended `ai-msg-2`/`ai-msg-3` with full 50k user text and assistant reply built around the 50k snippet. No warning, no truncation, no scrollable textarea. UX: 50k characters in a single-line input is unreadable. Suggest `<textarea>` and ~10k char soft-limit.
+
+### B-2003 — `ConditionalRule` type defined but never honored (P2, fixed)
+- Source check: `src/lib/types.ts:494` `FormView.conditionalLogic?: ConditionalRule[]` declared, `:501` `ConditionalRule` interface defined. `grep -rn "conditionalLogic" src/` returns only the type declaration — no consumer reads it, no editor writes it. Form view always renders all fields regardless. Promised feature absent from code.
+
+### B-2004 — Database rows are not drag-reorderable (P2, open)
+- Steps: db_dates_test → Main (`v_dates_test`) → inspect `<tr>` of `r_dt1`.
+- Observed: `tr.draggable === false`, `td.draggable === false`, no `row-drag-<id>` / `row-handle-<id>` testid. Cells are inputs but no reorder affordance. Same in `board-card-*` (`cursor-pointer`, not draggable). Sort works via header `add-sort-v_a` but manual reorder absent.
+
+### B-2005 — Markdown export drops synced-block source `content` (P2, open, re-verify B-1905)
+- Steps: built `pg_export_synced_cols` with `synced-block` source (`content:"SYNC ROOT"`, one child "Synced source child line"), a ref, and 2 columns.
+- Observed export:
+  ```
+  # Export Synced & Cols\n\n# Export Test\n\nSynced source child line\n\nSynced source child line\n\n<!-- multi-column layout: -->\n<!-- column -->\nLeft column body\n<!-- column -->\nRight column body\n
+  ```
+- Source's own `content` ("SYNC ROOT") dropped — only child emitted. Both source AND ref emit their children (intentional Notion semantics: ref is a mirror). Columns serialize correctly using `columnIds`/`blockIds`.
+- File: `src/lib/export-markdown.ts:155-169`.
+
+### B-2006 — Markdown export of sub-page uses hard-coded "📄 Sub-page" (P3, fixed)
+- Steps: page with `sub-page` block → export.
+- Observed: line "📄 Sub-page" — page title, slug, even own emoji dropped.
+- Expected: `📄 [Sub Child](/p/pg_export_subpage)` or at least include title.
+- File: `src/lib/export-markdown.ts:136-138`.
+
+### B-2007 — Markdown export silently drops empty image/video/table blocks (P3, info)
+- Steps: page with `image{url:""}`, `video{url:""}`, `table{rows:[]}` → export returns empty string for each.
+- Observed: blocks vanish from output (no placeholder comment). Confusing for round-tripping. Suggest emit `<!-- empty image -->` etc.
+- File: `src/lib/export-markdown.ts:101-130`.
+
+### B-2008 — Templates page items are non-functional (P2, fixed)
+- Steps: /app/templates → click `template-Daily journal` (and others).
+- Observed: nothing happens — no navigation, no toast, no preview dialog, no new page created. All 8 templates inert. `template-1:1 agenda` testid contains `:` which makes CSS selection fiddly.
+
+### B-2009 — Calendar view still missing `cal-today` / `cal-add-event` testids (P3, open, re-verify B-1713/B-1908)
+- Steps: /app/calendar.
+- Observed: "Today", Month/Week/Day toggles, day numbers, event labels all without testids. Only `cal-prev`, `cal-next`, `calendar-grid` exposed. Event "Test Cal Event Batch 15" visible but no `cal-event-<id>` testid.
+
+### B-2010 — Home dashboard cards lack any `home-*` testid (P3, open, re-verify B-1909)
+- Steps: /app → ⭐ Favorites + 🕐 Recently visited render real page list.
+- Observed: 0 testids on home view (`home-fav-<id>`, `home-recent-<id>` all missing). Pages exist as plain buttons rendering icon+title+date. Hard to assert in automation.
+
+### B-2011 — Public published page: "Copy" button has no testid (P3, open)
+- Steps: share dialog → `publish-toggle` → toggle on → URL appears with "Copy" button.
+- Observed: the Copy button is a plain `<button>` with text "Copy" — no `publish-copy-url` / `share-copy-link` testid.
+
+### B-2012 — History dialog "Restore" button has no testid (P3, open)
+- Steps: `history-btn` opens history panel (inline, no `role="dialog"`). `snapshot-now` → snapshot row appears with "Restore" text button.
+- Observed: no `restore-snapshot-<id>` / `history-restore-*` testid; only `snapshot-now` exposed.
+
+### B-2013 — Inbox rows expose only `inbox-resolve-<id>` testid, no row testid (P3, info)
+- Steps: /app/inbox.
+- Observed: each notification renders icon + page-title link + date + comment text + "Mark as read" button. Only the "Mark as read" carries a testid (`inbox-resolve-cmt_*`); the row container, the page-link, and the date have none. Mark-as-read click cleanly removes the row.
+
+### B-2014 — 800-row table view: all rows rendered, no virtualization (P2, info)
+- Steps: db_a expanded to 803 rows, embedded as inline-database on `pg_perf500_test` → Main table view.
+- Observed: 802 `row-open-*` testids rendered. DOM≈29183 nodes. ~5s rendering wait. Acceptable single-shot but pile-up with 500 text blocks already on same page = ~29k DOM nodes total. Would benefit from virtualization (windowing rows + sticky header) at this scale.
+
+### B-2015 — 800-row gallery view: all 802 cards rendered (P2, info)
+- Steps: same db_a, view=gallery.
+- Observed: 802 `gallery-card-<id>` testids in DOM. Same pattern as table — no windowing.
+
+### B-2016 — Board view: card not draggable (P2, open)
+- Steps: `db-view-v_a_board` → inspect `board-card-row_perf1k_0`.
+- Observed: `<div class="… cursor-pointer hover:bg-accent/40">`, no `draggable=true`, no `data-rbd-*`, no pointer-down rearrange handler observed in DOM. 536 cards rendered. Cards are click-to-open only — Notion-style status-change-by-drag absent. (Distinct from B-2004 which is about table rows.)
+
+### B-2017 — `view-rename-v_a` requires window.prompt() to commit (P3, info)
+- Steps: clicked `view-rename-v_a` with `window.prompt = () => "auto"` mock.
+- Observed: view name remained "Main" — rename is implemented via a Radix dialog input rather than `window.prompt`, so the mock doesn't apply. Fine for users; just a heads-up for automation.
+
+### B-2018 — Sub-page on a published page is correctly marked "unpublished" (P3, info)
+- Steps: publish `pg_export_misc`, visit `/p/misc-export`.
+- Observed: shows sub-page row with "Sub Child (unpublished)" label — correct privacy boundary.
+
+### B-2019 — Snapshot/version system works end-to-end (P3, info)
+- Steps: `history-btn` → `snapshot-now`.
+- Observed: history list now contains "13/05/2026 01:33:13 / Misc Export / Restore" row. No `restore-<id>` testid (see B-2012).
+
+### B-2020 — Slash menu only triggers on real keystroke (P3, info)
+- Steps: focused contentEditable text block, used `execCommand('insertText', '/')` and synthetic `KeyboardEvent` — `[data-testid="slash-menu"]` never appears.
+- Observed: tied to genuine `keydown` events; affects automation but not user UX. Source confirms `slash-synced` (id="synced") and `slash-synced-ref` (id="synced-ref") both present in `src/lib/slash-commands.ts:285,295`.
+
+### B-2021 — Page-options menu closes on click-out before any sub-item is clickable via eval (P3, info)
+- Steps: programmatic `.click()` on `page-options` — `page-options-menu` never appears in DOM (still 0 `page-opt-*` elements after click). Direct preview_click(...) also fails to keep menu open.
+- Observed: most likely the React state toggles in `onClick` but a global mousedown handler fires inside the same JS task and re-closes. Real user clicks work in `share-btn`, `history-btn` etc. — only `page-options` toggle exhibits this. Automation impact only.
+
+### B-2022 — `publish-toggle` works, slug deterministic from title (P3, info)
+- Steps: share-btn → publish-toggle on a page titled "Misc Export".
+- Observed: `pages[…].publishSlug = "misc-export"`, `isPublished = true`, URL `/p/misc-export` renders public read-only view immediately. No path collision check tested.
+

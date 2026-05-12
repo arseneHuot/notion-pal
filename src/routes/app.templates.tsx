@@ -173,7 +173,7 @@ function TemplatesPage() {
             key={t.name}
             onClick={() => applyTemplate(t)}
             className="text-left p-4 border border-border rounded-lg hover:bg-accent transition"
-            data-testid={`template-${t.name}`}
+            data-testid={`template-${t.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`}
           >
             <div className="text-2xl mb-2">{t.icon}</div>
             <div className="font-semibold">{t.name}</div>

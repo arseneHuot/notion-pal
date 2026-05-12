@@ -975,3 +975,58 @@ Priority: high / medium / low.
 ### I-1908 — Mail compose: validate `compose-to` as email (low, open)
 - See B-1911. Inline error + disable Send for invalid/empty recipient.
 
+
+
+## 2026-05-13 14:00 — Test agent batch 32
+
+### I-2000 — Block-level commenting: add `block-comment-<id>` testid + threaded panel (high, open)
+- See B-2000. Still entirely missing. Notion's bread-and-butter for review workflows.
+
+### I-2001 — Virtualize block list past 1000 (medium, open)
+- See B-2001. First-keystroke latency 169ms on a 500-block page already perceptible. At 1000+ blocks, recommend `react-window` for the block list (page editor) and table rows.
+
+### I-2002 — AI input: switch single-line `<input>` → `<textarea>` + soft char limit (medium, open)
+- See B-2002. 50k chars in 1-line input is unreadable. Suggest auto-grow textarea (max 6 rows) + visible counter when >2k.
+
+### I-2003 — Wire up `ConditionalRule` show/hide for FormView (high, open)
+- See B-2003. Type exists. Need: form-view config UI to author rules + runtime engine to evaluate each rule on field-change. Each hidden field should still have `data-testid="form-field-<id>"` but `aria-hidden="true"` + display:none.
+
+### I-2004 — Database row drag-reorder + board card drag-between-columns (medium, open)
+- See B-2004, B-2016. Add `row-drag-<id>` handle on table rows, `draggable=true` on board cards, and persist `order` field on row property.
+
+### I-2005 — Markdown export: include synced-block source `content`, sub-page title+slug, placeholder for empty media (medium, open)
+- See B-2005, B-2006, B-2007.
+- For synced-block: emit `htmlToInlineMarkdown(b.content)` BEFORE children.
+- For sub-page: emit `📄 [${page.title}](/p/${page.publishSlug || page.id})` using blocks dict + page lookup.
+- For empty image/video/table: emit `<!-- image: (no url) -->` etc.
+
+### I-2006 — Templates: implement "use template" handler (high, open)
+- See B-2008. Click should: (a) create a fresh page in current teamspace, (b) instantiate the template's blocks, (c) navigate to it. Today the 8 templates are decorative.
+
+### I-2007 — Calendar: add `cal-today`, `cal-add-event`, `cal-event-<id>`, `cal-view-month/week/day` testids (low, open)
+- See B-2009. Trivial UI addition; high test value.
+
+### I-2008 — Home: add `home-fav-<id>`, `home-recent-<id>`, `home-section-<name>` testids (low, open)
+- See B-2010. Currently 0 testids on Home view.
+
+### I-2009 — Share dialog: add `publish-copy-url` testid on Copy button (low, open)
+- See B-2011.
+
+### I-2010 — Page history: add `history-restore-<snapshotId>` testid + ARIA dialog role (low, open)
+- See B-2012. Also wrap panel in `role="dialog"` for screen-reader semantics; today it's `<div>` inline.
+
+### I-2011 — Inbox: add `inbox-row-<commentId>`, `inbox-page-link-<pageId>`, `inbox-date-<commentId>` testids (low, open)
+- See B-2013. Mark-as-read already works.
+
+### I-2012 — At ≥500 rows, virtualize table & gallery (medium, open)
+- See B-2014, B-2015. 802 row-open + 802 gallery-card already approaches 30k DOM nodes — combined with a 500-text-block page on the same route makes interaction sluggish.
+
+### I-2013 — Slash menu: ensure programmatic dispatch works (low, open)
+- See B-2020. Today only physical keydown fires the menu. Consider listening on `beforeinput` as fallback so automation can drive it.
+
+### I-2014 — page-options menu: stop click-outside handler from racing with toggle (low, open)
+- See B-2021. Add `event.stopPropagation()` on the menu's mousedown OR use `useOnClickOutside` that ignores the trigger element. Affects automation more than users.
+
+### I-2015 — Sub-page publish: add per-sub-page publish toggle (low, open)
+- See B-2018. Today the parent's "publish" only exposes top-level page; sub-pages render as "(unpublished)" inside the public view, with no way to publish them individually. Either auto-include via a "publish entire subtree" option or per-page toggle.
+

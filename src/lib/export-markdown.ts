@@ -30,7 +30,7 @@ function htmlToInlineMarkdown(html: string): string {
   return Array.from(wrapper.childNodes).map(walk).join("");
 }
 
-export function pageToMarkdown(page: Page, blocks: Record<string, Block>): string {
+export function pageToMarkdown(page: Page, blocks: Record<string, Block>, pages: Record<string, Page> = {}): string {
   const lines: string[] = [];
   const title = page.title?.trim() || "Untitled";
   lines.push(`# ${title}`);
@@ -41,7 +41,7 @@ export function pageToMarkdown(page: Page, blocks: Record<string, Block>): strin
     const b = blocks[blockId];
     if (!b) continue;
     if (b.type !== "numbered-list") numberedRun = 0;
-    const md = blockToMarkdown(b, blocks, 0);
+    const md = blockToMarkdown(b, blocks, 0, pages);
     if (b.type === "numbered-list") {
       numberedRun += 1;
       lines.push(`${numberedRun}. ${md}`);
@@ -54,7 +54,7 @@ export function pageToMarkdown(page: Page, blocks: Record<string, Block>): strin
   return lines.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
-function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number): string {
+function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number, pages: Record<string, Page> = {}): string {
   const indent = "  ".repeat(depth);
   switch (b.type) {
     case "heading-1":
@@ -134,8 +134,18 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number)
       return "> 🤖 " + a.result.replace(/\n/g, "\n> ");
     }
     case "page-link":
-    case "sub-page":
-      return `📄 Sub-page`;
+    case "sub-page": {
+      const link = b as Extract<Block, { type: "page-link" | "sub-page" }>;
+      const target = link.pageId ? pages[link.pageId] : undefined;
+      const title = target?.title?.trim() || "Sub-page";
+      const icon = target?.icon ?? "📄";
+      const href = target?.isPublished && target.publishSlug
+        ? `/p/${target.publishSlug}`
+        : link.pageId
+          ? `/app/p/${link.pageId}`
+          : "";
+      return href ? `${icon} [${title}](${href})` : `${icon} ${title}`;
+    }
     case "columns": {
       const c = b as Extract<Block, { type: "columns" }>;
       const colIds = c.columnIds ?? [];
