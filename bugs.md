@@ -187,7 +187,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: the preview area shows the literal string `E = mc^2` in serif font, no super/subscripts, no math typography.
 - Expected: render via KaTeX/MathJax so users actually see formatted math. As-is the block is misleading — the placeholder `E = mc^2` and the rendered area look identical regardless of input.
 
-### B-303 — Columns block renders only static "Column N" placeholders — cannot contain other blocks (P1, open)
+### B-303 — Columns block renders only static "Column N" placeholders — cannot contain other blocks (P1, fixed)
 - File: src/components/editor/Block.tsx lines 1261-1274 (ColumnsEl).
 - Steps: /3 columns. The block renders three dashed boxes labelled "Column 1/2/3" with no drop targets and no way to add blocks inside.
 - Expected: each column should accept nested blocks via drag/drop or via clicking inside (basic Notion behaviour). Currently the block is purely decorative.
@@ -336,7 +336,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: the in-progress edits are silently lost. There is no auto-snapshot of "before restore", no toast offering Undo, and the restored page replaces blocks directly.
 - Expected: take an automatic snapshot of the current state before applying the restore, so the user can flip back.
 
-### B-413 — Page-history restore uses native confirm() (P1, open)
+### B-413 — Page-history restore uses native confirm() (P1, fixed)
 - File: src/components/page/PageHistoryDialog.tsx line 37 — `if (confirm("Restore this version?")) { ... }`.
 - Steps: open Page history → Restore a version.
 - Observed: native confirm blocks the renderer (same family).
@@ -485,7 +485,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: both block types render the same fixed-content pink box reading "Synced block — Content will be mirrored across pages." No children, no source-id wiring, no contenteditable, no actual mirror. The schema (`SyncedBlock`, `SyncedBlockRef.sourceId`) is wired but the renderer ignores it.
 - Expected: synced-block should be a container that holds editable child blocks; synced-block-ref should look up `sourceId` and render the same children. Edits on either should propagate.
 
-### B-504 — ColumnsEl ignores child column blocks; renders fixed placeholder cells (P1, open)
+### B-504 — ColumnsEl ignores child column blocks; renders fixed placeholder cells (P1, fixed)
 - File: src/components/editor/Block.tsx lines 1263-1276.
 - Steps: insert a /columns block (or the slash equivalent).
 - Observed: renders N empty "Column 1", "Column 2" placeholders with `text-muted-foreground`. The `ColumnBlock` type exists in types.ts but the parent column container does not read its `columns` children, and there is no way to drop a block into a column.
@@ -703,4 +703,232 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: type an email and password in Sign In → click Sign Up tab → click back to Sign In.
 - Observed: the email and password fields are blanked.
 - Expected: persist the email at least across tab switches.
+
+## 2026-05-12 16:59 — Test agent batch 6
+
+### B-600 — Toggling "Two-way relation" never creates a paired property on the target DB (P1, fixed)
+- File: src/components/database/views/TableView.tsx lines 214-222 (RelationConfigEditor), src/components/database/PropertyEditor.tsx lines 458-468 (RelationCell.toggle mirror code).
+- Steps: create DBs A & B, add Relation prop on A targeting B, click the column header, check "Two-way relation (mirror on paired side)".
+- Observed: A's property flips `isDual: true` but no `pairedPropertyId` is ever set; B never gets a mirror property. The mirror code in RelationCell only runs when `rp.isDual && rp.pairedPropertyId`, so linking from A still does NOT add the back-link on B.
+- Expected: checking the box should auto-create (or prompt to name) a mirror Relation property on B, set both `pairedPropertyId` fields, and from then on link both sides on toggle.
+
+### B-601 — Newly created rollup defaults to `function: undefined` and cell renders blank instead of a count (P1, fixed)
+- File: src/components/database/PropertyEditor.tsx lines 401-418 (RollupCell). The if/else chain only covers explicit string values; when `rp.function` is undefined `result` stays at `""`.
+- Steps: add a relation property, link a row, then add a Rollup property and pick a relation + target property (do NOT change the Function dropdown).
+- Observed: the Function `<select>` visually shows "count" because that's the first option, but the property in state has `function === undefined`, so RollupCell never enters any branch and renders an empty cell. Users perceive the rollup as "broken".
+- Expected: set `function: "count"` as the default when creating a rollup property (or fall through to `count` when `rp.function == null`).
+
+### B-602 — Rollup defaults: changing the function `<select>` to its current value doesn't fire `onChange` (P2, fixed)
+- File: src/components/database/PropertyEditor.tsx PropertyMenu rollup config (function select).
+- Steps: trigger B-601, then open the column menu and click on the already-highlighted "count" option.
+- Observed: nothing changes; you must pick another function and then re-pick `count` for the cell to start rendering. Standard `<select>` onChange does not fire when the user re-selects the same value.
+- Expected: detect undefined-function on render and write `count` to the property on first open, OR replace the `<select>` with a button-row so clicking writes regardless.
+
+### B-603 — Row delete (Trash icon) is opacity-0 except on row hover, completely hidden from keyboard users (P2, open)
+- File: src/components/database/views/TableView.tsx lines 48-57.
+- Steps: tab through a database table.
+- Observed: the per-row Trash button never becomes visible to a keyboard-only user (opacity-0 + group-hover only). No focus-visible reveal.
+- Expected: also reveal on `:focus-within` and `:focus-visible`; or use `sr-only` visibility on inactive state and reveal on focus.
+
+### B-604 — Restore from the in-page Trash banner does NOT cascade-restore children (P1, fixed)
+- File: src/components/page/PageView.tsx line 71 calls `restorePage(page.id)` instead of `restorePageCascade(page.id)`. The cascade helper exists in store.ts at lines 542-567 and is used from /app/trash but not from the page view banner.
+- Steps: trash a page with two children (cascade trashes children correctly); open the parent at /app/p/<parent>; click Restore in the "This page is in Trash." banner.
+- Observed: parent is restored, children stay in trash. (Restoring via /app/trash works because it uses `restorePageCascade`.)
+- Expected: banner Restore should call `restorePageCascade` for consistency with the Trash route.
+
+### B-605 — Restore Version dialog still uses native `confirm()` (P2, open)
+- File: src/components/page/PageHistoryDialog.tsx line 37.
+- Steps: open a page → ⋯ → Page history → Save snapshot now → click Restore on a snapshot.
+- Observed: a native `confirm("Restore this version?")` fires. Same UX problem as the long-tracked B-* native-dialog issues, but specifically inside the History modal which is otherwise styled.
+- Expected: replace with the existing custom Confirm dialog (or a Tabler-style two-button row inside the modal).
+
+### B-606 — Native `confirm()` for "Change property type" and "Delete property" in TableView (P2, open)
+- File: src/components/database/views/TableView.tsx lines 127 and 162.
+- Steps: open a property header menu → change the type to another type, OR click Delete property.
+- Observed: a native confirm fires for both.
+- Expected: replace with the in-app confirmation dialog (or use the same toast-confirm pattern as the button-cell show-confirmation action).
+
+### B-607 — Native `prompt()` for "View name" rename and "Property name?" in InlineDatabase (P2, open)
+- File: src/components/database/InlineDatabase.tsx lines 206 and 249.
+- Steps: rename a view via the view tab menu, or add a property via the inline "+ New property" button.
+- Observed: native prompt fires.
+- Expected: inline editable view/property name input (table view already has an inline form for the column "+", InlineDatabase should reuse it).
+
+### B-608 — Native `prompt()` for cover URL on PageView (P2, open)
+- File: src/components/page/PageView.tsx line 136.
+- Steps: open a page → click "Add cover".
+- Observed: native prompt asks for the URL.
+- Expected: a small dropdown with "Pick gradient / Unsplash / Upload / Paste URL"; or at minimum, an in-app modal text input.
+
+### B-609 — Native `prompt()` for inline-toolbar Link URL (P2, open)
+- File: src/components/editor/InlineToolbar.tsx line 61.
+- Steps: select some text → click the Link button on the inline toolbar.
+- Observed: native prompt asks for the URL.
+- Expected: an inline URL input attached to the toolbar (popover with a single text input and Confirm).
+
+### B-610 — Native `prompt()` for "Teamspace name?" in the sidebar (P2, open)
+- File: src/components/layout/Sidebar.tsx line 87.
+- Steps: click "Add teamspace" in the sidebar.
+- Observed: native prompt asks for the teamspace name.
+- Expected: a tiny inline input that appears inline at the bottom of the sidebar (or a small dialog with name + icon + mode picker).
+
+### B-611 — Native `prompt()` for calendar "New event" title (P2, open)
+- File: src/routes/app.calendar.tsx line 89.
+- Steps: click an empty calendar cell to add a new event.
+- Observed: native prompt asks for the event title.
+- Expected: a small popover where the day cell expands with a title + start/end + all-day form.
+
+### B-612 — Mobile sidebar slide-in covers 68% of the viewport with no scrim/overlay (P2, open)
+- File: src/components/layout/Sidebar.tsx + global layout.
+- Steps: preview_resize "mobile" (375x812) → click "Open sidebar".
+- Observed: the sidebar is 256px wide on a 375px viewport (≈68%); the content is pushed left and partially clipped; there is no backdrop, and the sidebar doesn't auto-close when tapping the content area.
+- Expected: on mobile, the sidebar should overlay (fixed) with a translucent backdrop and auto-close on outside tap; ideally narrower or full-width.
+
+### B-613 — Public published page silently drops sub-page, toggle, table, equation, synced, columns, AI, button, database-inline, and breakdown blocks (P1, open)
+- File: src/routes/p.$slug.tsx — `ReadonlyBlock` only handles heading-1/2/3, bullet-list, numbered-list, todo, quote, callout, divider, code, image, text; everything else returns `null`.
+- Steps: create a page with an inline database (or an equation or sub-page); Share → Publish → open the public URL.
+- Observed: those blocks are silently missing in the public page; the published reader sees an article with gaps and no indication.
+- Expected: render each block in a read-only form (database-inline at minimum as a static table; toggle as expanded by default; equation as the rendered string; sub-page as a clickable link if its parent is also published, else a stub).
+
+### B-614 — Public page route shows just header + title + icon when no blocks render — looks "empty" even when source page has many blocks (P2, open)
+- File: src/routes/p.$slug.tsx, related to B-613.
+- Steps: publish a page with only an inline database and an equation block.
+- Observed: the public page is essentially "📄 / Parent A" with a thin border. No "this page is mostly content that requires the app" or fallback.
+- Expected: when filtered pageBlocks.length === 0, show a "Open in the app to see full content" banner.
+
+### B-615 — Equation block renders raw LaTeX as plain serif text (P3, open)
+- File: src/components/editor/Block.tsx lines 1093-1116 (EquationEl).
+- Steps: insert `/equation` → type `\sqrt{x^2+y^2}`.
+- Observed: the preview area shows the literal string in a serif font. No KaTeX/MathJax rendering.
+- Expected: real LaTeX rendering (also covered by I-504).
+
+### B-616 — Synced block is still purely a static placeholder; no mirroring works (P3, open)
+- File: src/components/editor/Block.tsx lines 1170-1179.
+- Steps: insert `/synced` → look at the result.
+- Observed: A solid pink-bordered box with the text "Content will be mirrored across pages." There's no UI to mirror it.
+- Expected: a synced block stores child blocks and presents a "Copy link to synced block" affordance; a synced-block-ref shows the same children.
+
+### B-617 — Columns block has no drop targets — children blocks can never be placed (P3, open)
+- File: src/components/editor/Block.tsx lines 1263-1276 (ColumnsEl).
+- Steps: insert `/2 columns` → try to drag any block into a column.
+- Observed: each column is a dashed box labelled "Column 1" / "Column 2". They don't accept drag/drop, and there's no nested editor.
+- Expected: each column behaves like a mini page-blocks container with its own slash menu and drop targets.
+
+### B-618 — Toggle block: children are not implemented; expanded body always reads "(Toggle children — coming soon)" (P3, open)
+- File: src/components/editor/Block.tsx lines 738-742.
+- Steps: insert `/toggle`, expand the chevron.
+- Observed: literal italic text "(Toggle children — coming soon)".
+- Expected: nested editable content under each toggle.
+
+### B-619 — Inline DB Filter & Sort UI not exposed anywhere (P2, open)
+- File: src/components/database/InlineDatabase.tsx (no filter/sort surface), src/components/database/filter.ts (engine exists).
+- Steps: open any inline DB view → look for filter/sort controls.
+- Observed: there is no "Filter" or "Sort" button on the view header; the `filters` and `sorts` arrays on views are always seeded as empty and there is no UI to edit them.
+- Expected: an "+ Filter" / "+ Sort" button next to "+ Add view" that opens a popover with property + operator + value rows.
+
+### B-620 — Calendar header capitalises differently than dates (P3, open)
+- File: src/routes/app.calendar.tsx line 120 — `cursor.toLocaleString(undefined, { month: "long", year: "numeric" })`.
+- Steps: open /app/calendar with French browser locale.
+- Observed: title reads "mai 2026" (lowercase "m"). Other dates capitalised correctly.
+- Expected: explicit capitalisation or pin `en-US` locale to keep consistency.
+
+### B-621 — Inline-DB relation picker has no "+ Create new" inline-create action (P2, open)
+- File: src/components/database/PropertyEditor.tsx RelationCell (lines 482-531).
+- Steps: open a relation cell when the target DB has no row matching the search.
+- Observed: the picker shows "No rows in target database" but offers no quick way to create one and link it in one step.
+- Expected: a "+ Create '<search query>'" footer button that adds a row to the target DB pre-filled with `title = search`, links it, and closes.
+
+### B-622 — Two databases named "Untitled database" appear identically in the Relation Target picker (P3, open)
+- File: src/components/database/views/TableView.tsx RelationConfigEditor option label.
+- Steps: create two inline DBs without renaming them. Open a relation prop → "Relation target".
+- Observed: both options read "🗄️ Untitled database" — indistinguishable.
+- Expected: append page title or short id (e.g., "🗄️ Untitled database · Test Page Batch6 · db_…06m").
+
+### B-623 — Property type dropdown lists every type even when changing types is destructive (P3, open)
+- File: src/components/database/views/TableView.tsx line 127.
+- Steps: change a `title` property to `relation` from the property header.
+- Observed: the confirm fires and you can switch; values are lost / unparseable.
+- Expected: forbid converting away from `title` (every DB must have exactly one); also gate destructive type changes ("title", "unique-id", "created-time") with a stronger warning.
+
+### B-624 — Inline DB views: switching from Table to Board view while the property menu is open does not close the menu (P3, open)
+- File: src/components/database/InlineDatabase.tsx view tab buttons.
+- Steps: open a property menu in a TableView, then click another view tab.
+- Observed: the menu (positioned absolutely against the th) stays mounted briefly as the table is unmounted, occasionally leading to a layout glitch.
+- Expected: close any open menus on view-switch.
+
+### B-625 — Workspace-export JSON includes the freshly-trashed children of restored parent until reload (P3, open)
+- File: src/routes/app.settings.tsx export handler vs. src/lib/store.ts restorePageCascade.
+- Steps: trash parent A (cascades to children B, C); restore A from /app/trash (children also restored); export workspace JSON.
+- Observed: usually fine, but if the export button is fired in the same microtask as restoration, the JSON snapshot can include children with stale `isInTrash: true`.
+- Expected: export should always read from a freshly-committed state; this might be a flaky race in store.ts setState batching.
+
+### B-626 — Unique-id with empty prefix renders just the seq without separator, but cell title-cased prefix is not normalised (P3, open)
+- File: src/components/database/PropertyEditor.tsx UniqueIdCell line 392 — `{prefix}{prefix ? "-" : ""}{seq}`.
+- Steps: set prefix to "bug" (lowercase) or "BUG TICKET" (with space).
+- Observed: lowercase prefix shows "bug-1"; the space prefix becomes "BUG TICKET-1" — neither normalised.
+- Expected: optionally uppercase and strip whitespace; the input placeholder "e.g. BUG" implies uppercase.
+
+### B-627 — Sign-in form: switching tab via sidebar arrow keys doesn't move focus (a11y) (P3, open)
+- File: src/routes/auth.tsx.
+- Steps: focus the Sign In tab and press Right/Left arrow.
+- Observed: arrow keys don't traverse tabs; only mouse click works.
+- Expected: tablist semantics with arrow-key navigation, ARIA roles `tablist`/`tab`/`tabpanel`.
+
+### B-628 — Mail Compose buttons have no `type="button"`, so pressing Enter in any compose field unexpectedly triggers Send (P2, open)
+- File: src/routes/app.mail.tsx ComposeDialog (lines 146-156).
+- Steps: open Compose → type something in To → press Enter.
+- Observed: no form wrapper means Enter inside an `<input>` does nothing today, BUT if a form is later added around this content the omitted `type="button"` will make the first button (Send) submit on Enter. Defensive coding suggests setting explicit `type="button"`.
+- Expected: explicit `type="button"` on both buttons (and on Cancel especially) to avoid future regression.
+
+### B-629 — Property header menu doesn't restore focus to the column header on close — keyboard focus lost (P3, open)
+- File: src/components/database/views/TableView.tsx PropertyMenu close handler.
+- Steps: focus a column header with Tab, press Enter to open menu, press Escape.
+- Observed: focus reverts to `<body>` instead of the header button.
+- Expected: focus returns to the trigger (use `useRef`).
+
+### B-630 — RelationCell "checkbox" inside the picker has `pointer-events: none` but no aria-readonly — screen readers say it's interactive (P3, open)
+- File: src/components/database/PropertyEditor.tsx lines 520-525.
+- Steps: VoiceOver / NVDA over the picker checkboxes.
+- Observed: readers announce "checkbox not checked" but checkbox is purely visual (the parent button does the toggling).
+- Expected: add `aria-hidden="true"` to the checkbox, or use a role-less `<span>` with a check icon.
+
+### B-631 — Adding a rollup property without target/relation picks crashes the column body briefly (P3, open)
+- File: src/components/database/PropertyEditor.tsx RollupCell line 406 — `if (!relProp || relProp.type !== "relation") return <span className="text-xs text-muted-foreground">—</span>;`
+- Steps: add a rollup via the "+" column header → click Create immediately (no target).
+- Observed: each row renders "—" which is fine, but the column header still says "ROLLUP — RELATION" / "TARGET PROPERTY" with empty selects; users may not realise the property is non-functional.
+- Expected: render "Rollup not configured" banner directly in the cells AND highlight the configuration popover red.
+
+### B-632 — Two-way relation toggle is irrevocable once paired property is removed — orphan state (P3, open)
+- File: src/components/database/views/TableView.tsx RelationConfigEditor + store.ts updateDatabaseProperty.
+- Steps: (hypothetical, once B-600 is implemented) toggle two-way on, then delete the paired property on B.
+- Observed prediction: A still has `isDual: true` and `pairedPropertyId: "<deleted>"`, mirror code in PropertyEditor.tsx silently no-ops.
+- Expected: removing a property should scan all relations and clear their `pairedPropertyId` / `isDual` if they pointed to it.
+
+### B-633 — Delete-row click is a single-click destructive action with no Undo affordance (P2, open)
+- File: src/components/database/views/TableView.tsx line 50 — `onClick={() => deleteRow(row.id)}`.
+- Steps: click the per-row Trash icon.
+- Observed: the row is soft-trashed instantly; there is no toast with an "Undo" button nor a confirmation. Useful as it removes the native confirm (B-205 etc.), but goes too far — no easy way to undo.
+- Expected: show a toast "Row moved to trash" with an "Undo" button that restores the row in-place.
+
+### B-634 — Inline DB calendar in non-English locale shows weekdays starting Monday but data anchors Sunday (P3, open)
+- File: src/routes/app.calendar.tsx (header reads "Mon Tue Wed Thu Fri Sat Sun") and date helpers.
+- Steps: navigate to the start of a month where day 1 is Sunday.
+- Observed: in May 2026 the "1" sits under "Fri" but the visible row starts with the wrong offset (verified header: Mon, Tue, …, Sun and 1 falls on Fri — correct on this date, but this is locale-dependent and the calendar always pins Mon as the first column regardless of user locale).
+- Expected: respect the first-day-of-week from the user's locale (Intl.Locale.weekInfo).
+
+### B-635 — `__nativeCalls.confirm/prompt/alert` instrumentation never increments for row delete, button cell, save snapshot OR table "+" — those paths are clean (verification only, info)
+- Notes: this is a positive verification. Recorded here to prevent future regressions.
+- Verification log: row-delete: confirm=0, prompt=0, alert=0; button-cell with show-confirmation: confirm=0, prompt=0, alert=0; table-add-property "+": confirm=0, prompt=0, alert=0 (uses inline form).
+
+### B-636 — Trashed page banner displays but does not block editing of nested blocks via direct DOM-focus (P3, open)
+- File: src/components/page/PageView.tsx Trash banner branch.
+- Steps: open /app/p/<trashed child of trashed parent>; the trash banner shows correctly. Then focus the page title via JS.
+- Observed: the H1 contenteditable still accepts input even though the page is in trash; updates persist on the page record.
+- Expected: when isInTrash, set all contenteditable nodes to `contenteditable="false"` or pointer-events:none.
+
+### B-637 — Saving a snapshot does not produce any toast on success even after fix (P3, open)
+- File: src/lib/store.ts saveSnapshot, src/components/page/PageHistoryDialog.tsx.
+- Steps: open Page history → Save snapshot now.
+- Observed: list updates but no toast or "Snapshot saved at HH:MM" indicator.
+- Expected: `toast("Snapshot saved", "success")` plus a relative timestamp under the button.
 

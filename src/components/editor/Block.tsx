@@ -5,7 +5,7 @@ import {
   Type as TypeIcon, X,
 } from "lucide-react";
 import type { Block, BlockType } from "@/lib/types";
-import { useStore, createBlock, updateBlock, deleteBlock, reorderBlocks, createPage, createDatabase } from "@/lib/store";
+import { useStore, createBlock, updateBlock, deleteBlock, reorderBlocks, createPage, createDatabase, insertBlock } from "@/lib/store";
 import { SlashMenu } from "./SlashMenu";
 import { filterSlash, type SlashCommand } from "@/lib/slash-commands";
 import { InlineDatabase } from "@/components/database/InlineDatabase";
@@ -1262,16 +1262,111 @@ function ButtonBlockEl({ block, pageId }: { block: Block; pageId: string }) {
 
 function ColumnsEl({ block, pageId }: { block: Block; pageId: string }) {
   const c = block as Extract<Block, { type: "columns" }>;
+  const allBlocks = useStore((s) => s.blocks);
+  const blocksRef = useRef(allBlocks);
+  blocksRef.current = allBlocks;
+
+  // Lazily materialise column children the first time we render this columns block.
+  useEffect(() => {
+    if (!c.columnIds || c.columnIds.length !== c.columns) {
+      // Compute new ids: keep existing columns when possible, append/trim.
+      const existing = c.columnIds ?? [];
+      const now = Date.now();
+      const newColumnIds = existing.slice(0, c.columns);
+      const newColumnBlocks: Block[] = [];
+      while (newColumnIds.length < c.columns) {
+        const colId = "blk_" + Math.random().toString(36).slice(2, 10);
+        const txtId = "blk_" + Math.random().toString(36).slice(2, 10);
+        const txt: Block = {
+          id: txtId,
+          type: "text",
+          parentId: colId,
+          order: 0,
+          content: "",
+          createdAt: now,
+          updatedAt: now,
+        };
+        const col: Block = {
+          id: colId,
+          type: "column",
+          parentId: block.id,
+          order: newColumnIds.length,
+          blockIds: [txtId],
+          createdAt: now,
+          updatedAt: now,
+        };
+        newColumnBlocks.push(col, txt);
+        newColumnIds.push(colId);
+      }
+      // Insert new column + initial text blocks (they don't live in page.blocks).
+      for (const b of newColumnBlocks) insertBlock(b);
+      updateBlock(block.id, { columnIds: newColumnIds } as Partial<Block>);
+    }
+  }, [block.id, c.columns, c.columnIds]);
+
+  const columnIds = c.columnIds ?? [];
+
   return (
     <BlockShell block={block} pageId={pageId}>
-      <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${c.columns}, minmax(0, 1fr))` }}>
-        {Array.from({ length: c.columns }).map((_, i) => (
-          <div key={i} className="rounded border border-dashed border-border p-2 text-sm text-muted-foreground min-h-[60px]">
-            Column {i + 1}
-          </div>
-        ))}
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: `repeat(${c.columns}, minmax(0, 1fr))` }}
+        data-testid={`columns-${block.id}`}
+      >
+        {columnIds.map((colId, idx) => {
+          const col = allBlocks[colId];
+          if (!col || col.type !== "column") return (
+            <div key={idx} className="rounded border border-dashed border-border p-2 text-xs text-muted-foreground">…</div>
+          );
+          return <ColumnEl key={colId} columnBlock={col} pageId={pageId} />;
+        })}
       </div>
     </BlockShell>
+  );
+}
+
+function ColumnEl({ columnBlock, pageId }: { columnBlock: Block; pageId: string }) {
+  const allBlocks = useStore((s) => s.blocks);
+  const col = columnBlock as Extract<Block, { type: "column" }>;
+  const childIds = col.blockIds ?? [];
+
+  function addChild() {
+    const id = "blk_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const txt: Block = {
+      id,
+      type: "text",
+      parentId: col.id,
+      order: childIds.length,
+      content: "",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    insertBlock(txt);
+    updateBlock(col.id, { blockIds: [...childIds, id] } as Partial<Block>);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-block-id="${id}"] [contenteditable]`) as HTMLElement;
+      el?.focus();
+    }, 50);
+  }
+
+  return (
+    <div className="rounded border border-dashed border-border/60 p-2 min-h-[60px]" data-testid={`column-${col.id}`}>
+      {childIds.length === 0 && (
+        <div className="text-xs text-muted-foreground italic mb-1">Empty column</div>
+      )}
+      {childIds.map((cid) => {
+        const child = allBlocks[cid];
+        if (!child) return null;
+        return <BlockComponent key={cid} block={child} pageId={pageId} />;
+      })}
+      <button
+        onClick={addChild}
+        className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 mt-1"
+        data-testid={`column-add-${col.id}`}
+      >
+        + Add block
+      </button>
+    </div>
   );
 }
 

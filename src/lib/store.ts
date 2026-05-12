@@ -683,6 +683,15 @@ export function updateBlock(id: string, patch: Partial<Block>) {
   });
 }
 
+/** Insert a fully-formed block into the store. Used for nested children
+ *  (e.g. blocks inside a column) where we don't want page.blocks to change. */
+export function insertBlock(block: Block) {
+  setState((s) => ({
+    ...s,
+    blocks: { ...s.blocks, [block.id]: block },
+  }));
+}
+
 export function deleteBlock(blockId: string, pageId: string) {
   setState((s) => {
     const page = s.pages[pageId];
@@ -1026,17 +1035,86 @@ export function updateDatabaseProperty(databaseId: string, propertyId: string, p
   setState((s) => {
     const db = s.databases[databaseId];
     if (!db) return s;
-    return {
-      ...s,
-      databases: {
-        ...s.databases,
-        [databaseId]: {
-          ...db,
-          properties: db.properties.map((p) => (p.id === propertyId ? ({ ...p, ...patch } as Property) : p)),
-          updatedAt: Date.now(),
-        },
+    let nextDbs = {
+      ...s.databases,
+      [databaseId]: {
+        ...db,
+        properties: db.properties.map((p) => (p.id === propertyId ? ({ ...p, ...patch } as Property) : p)),
+        updatedAt: Date.now(),
       },
     };
+
+    // Side-effect: keep dual relations in sync (B-600 / B-404).
+    // When isDual is enabled on a relation, ensure the target DB has a
+    // mirroring relation property and that both sides' pairedPropertyId
+    // points at each other.
+    const updatedProp = nextDbs[databaseId].properties.find((p) => p.id === propertyId);
+    if (updatedProp && updatedProp.type === "relation" && updatedProp.isDual && updatedProp.targetDatabaseId) {
+      const targetDb = nextDbs[updatedProp.targetDatabaseId];
+      if (targetDb && targetDb.id !== databaseId) {
+        let pairedId = updatedProp.pairedPropertyId;
+        let paired = pairedId ? targetDb.properties.find((p) => p.id === pairedId) : undefined;
+        if (!paired) {
+          // Look for an existing mirror first so toggling doesn't dupe.
+          paired = targetDb.properties.find(
+            (p) =>
+              p.type === "relation" &&
+              (p as Extract<Property, { type: "relation" }>).targetDatabaseId === databaseId &&
+              (!pairedId || p.id === pairedId),
+          );
+        }
+        if (!paired) {
+          const newPaired: Property = {
+            id: uid("prop"),
+            name: `Related to ${db.name}`,
+            type: "relation",
+            targetDatabaseId: databaseId,
+            isDual: true,
+            pairedPropertyId: propertyId,
+          };
+          nextDbs = {
+            ...nextDbs,
+            [targetDb.id]: {
+              ...targetDb,
+              properties: [...targetDb.properties, newPaired],
+              views: targetDb.views.map((v) => ({
+                ...v,
+                propertyOrder: [...v.propertyOrder, newPaired.id],
+              })),
+              updatedAt: Date.now(),
+            },
+          };
+          paired = newPaired;
+        }
+        // Cross-link both sides.
+        nextDbs = {
+          ...nextDbs,
+          [databaseId]: {
+            ...nextDbs[databaseId],
+            properties: nextDbs[databaseId].properties.map((p) =>
+              p.id === propertyId && p.type === "relation"
+                ? ({ ...p, pairedPropertyId: paired!.id } as Property)
+                : p,
+            ),
+          },
+        };
+        if ((paired as Extract<Property, { type: "relation" }>).pairedPropertyId !== propertyId) {
+          nextDbs = {
+            ...nextDbs,
+            [paired!.id ? targetDb.id : targetDb.id]: {
+              ...nextDbs[targetDb.id],
+              properties: nextDbs[targetDb.id].properties.map((p) =>
+                p.id === paired!.id && p.type === "relation"
+                  ? ({ ...p, pairedPropertyId: propertyId, targetDatabaseId: databaseId } as Property)
+                  : p,
+              ),
+            },
+          };
+        }
+      }
+    }
+
+    return { ...s, databases: nextDbs };
   });
 }
 

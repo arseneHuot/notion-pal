@@ -124,19 +124,23 @@ function PropertyHeader({ property, databaseId }: { property: Property; database
             <button
               key={t}
               onClick={() => {
-                if (confirm(`Change property type to ${t}?`)) {
-                  const patch: Partial<Property> = { type: t } as Partial<Property>;
-                  if (t === "select" || t === "multi-select" || t === "status") {
-                    (patch as Record<string, unknown>).options = [];
-                  }
-                  if (t === "status") {
-                    (patch as Record<string, unknown>).groups = [];
-                  }
-                  if (t === "formula") {
-                    (patch as Record<string, unknown>).expression = '""';
-                  }
-                  updateDatabaseProperty(databaseId, property.id, patch);
+                const patch: Partial<Property> = { type: t } as Partial<Property>;
+                if (t === "select" || t === "multi-select" || t === "status") {
+                  (patch as Record<string, unknown>).options = [];
                 }
+                if (t === "status") {
+                  (patch as Record<string, unknown>).groups = [];
+                }
+                if (t === "formula") {
+                  (patch as Record<string, unknown>).expression = '""';
+                }
+                if (t === "rollup") {
+                  // Sensible defaults so the cell doesn't render blank (B-601).
+                  (patch as Record<string, unknown>).function = "count";
+                  (patch as Record<string, unknown>).relationPropertyId = "";
+                  (patch as Record<string, unknown>).targetPropertyId = "";
+                }
+                updateDatabaseProperty(databaseId, property.id, patch);
                 setOpen(false);
               }}
               className={`w-full text-left px-3 py-1.5 text-xs hover:bg-accent ${property.type === t ? "font-medium bg-accent/50" : ""}`}

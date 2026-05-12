@@ -34,10 +34,8 @@ export function PageHistoryDialog({ page, open, onClose }: { page: Page; open: b
               </div>
               <button
                 onClick={() => {
-                  if (confirm("Restore this version?")) {
-                    restoreVersion(page.id, v.id);
-                    onClose();
-                  }
+                  restoreVersion(page.id, v.id);
+                  onClose();
                 }}
                 className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded"
                 data-testid={`restore-${v.id}`}

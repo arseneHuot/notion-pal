@@ -118,11 +118,15 @@ export interface DatabaseInlineBlock extends BaseBlock {
 export interface ColumnsBlock extends BaseBlock {
   type: "columns";
   columns: number; // count of columns (children are column blocks)
+  /** Ordered ids of the contained ColumnBlock children. */
+  columnIds?: string[];
 }
 
 export interface ColumnBlock extends BaseBlock {
   type: "column";
   width?: number; // fraction
+  /** Ordered child blocks inside this column. */
+  blockIds?: string[];
 }
 
 export interface TableOfContentsBlock extends BaseBlock {

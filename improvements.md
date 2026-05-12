@@ -318,4 +318,86 @@ Priority: high / medium / low.
 ### I-527 — Persist AI chat thread under user state (low, open)
 - See B-431. Save messages to `state.aiThreads[currentUserId]` and rehydrate on open.
 
+## 2026-05-12 16:59 — Test agent batch 6
+
+### I-600 — Auto-create paired property on "Two-way relation" toggle (high, open)
+- See B-600. When `isDual` flips from false to true, create a Relation property on the target DB with `targetDatabaseId = sourceDb.id`, set both ends' `pairedPropertyId`. Reuse the property type and a default name like `"← <source>.<propname>"`.
+
+### I-601 — Default rollup function to "count" when undefined (high, open)
+- See B-601. Either initialise the property as `{ function: "count", ... }` on `addDatabaseProperty`, or treat `rp.function ?? "count"` in RollupCell. Initialising the property is preferred because it makes the data stable across schema migrations.
+
+### I-602 — Use the cascade-restore helper from the PageView trash banner (high, open)
+- See B-604. Replace `restorePage(page.id)` with `restorePageCascade(page.id)` in `PageView.tsx`. Same cascade-restore should be wired from the command palette "Restore" action if it exists.
+
+### I-603 — Replace ALL remaining native `confirm()`/`prompt()`/`alert()` with in-app dialogs/toasts (high, open)
+- See B-605, B-606, B-607, B-608, B-609, B-610, B-611.
+- File scope: `src/components/page/PageHistoryDialog.tsx`, `src/components/database/views/TableView.tsx`, `src/components/database/InlineDatabase.tsx`, `src/components/page/PageView.tsx`, `src/components/editor/InlineToolbar.tsx`, `src/components/layout/Sidebar.tsx`, `src/routes/app.calendar.tsx`.
+- A single shared `<ConfirmDialog />` and `<PromptDialog />` component reused across the app would close most of the back-catalog of native-dialog bugs.
+
+### I-604 — Inline Filter/Sort UI on database views (high, open)
+- See B-619. `filter.ts` already supports operators; just need a Filter bar at the top of any inline DB.
+
+### I-605 — Public published-page renderer for richer block types (high, open)
+- See B-613, B-614. Extend `ReadonlyBlock` to render database-inline, equation, toggle, columns, sub-page (as link if also published or stub), AI block (last result), button (disabled with label), synced-block (its children).
+
+### I-606 — Mobile sidebar should be a fixed overlay with backdrop and outside-tap close (high, open)
+- See B-612. Add a Drawer-like pattern: position fixed, z-50, backdrop `bg-black/40`, slides in from the left, dismissed by tapping outside.
+
+### I-607 — Reveal per-row Trash icon on focus-within (medium, open)
+- See B-603. Add `focus-within:opacity-100` to the row's button group.
+
+### I-608 — Inline "+ Create new" in the relation picker (medium, open)
+- See B-621. Footer button creates a new row in the target DB, links it, and re-runs filter.
+
+### I-609 — Show DB display label + page in Relation Target picker (medium, open)
+- See B-622. `option` text should include the parent page title (e.g., `"🗄️ Untitled database · in Test Page"`).
+
+### I-610 — Confirm row deletion via undo-toast instead of immediate hard delete (medium, open)
+- See B-633. Use the toast pattern: `toast("Row moved to trash", { action: "Undo", onAction: () => restoreRow(rowId) })`.
+
+### I-611 — Native LaTeX rendering for equation block (medium, open)
+- See B-615. Use KaTeX (~8 KB gzipped) — see also I-504.
+
+### I-612 — Notify user on snapshot save (medium, open)
+- See B-637. Toast + "Last snapshot 3 min ago".
+
+### I-613 — Disable contenteditable for blocks on trashed pages (medium, open)
+- See B-636. Walk all `[contenteditable]` nodes and set `contentEditable = "false"`.
+
+### I-614 — Property removal should clean up paired-relation references on other DBs (medium, open)
+- See B-632. `removeDatabaseProperty` should also scan all `databases[*].properties` and clear `pairedPropertyId === removedId` / set `isDual: false`.
+
+### I-615 — Use locale-aware first-day-of-week for the calendar (low, open)
+- See B-634. Use `new Intl.Locale(navigator.language).weekInfo?.firstDay`.
+
+### I-616 — Add explicit `type="button"` to non-submit buttons in compose dialog (low, open)
+- See B-628. Defensive coding to avoid future regressions.
+
+### I-617 — Add accessible tablist semantics + arrow-key navigation on sign-in tabs (low, open)
+- See B-627. role="tablist" / "tab" / "tabpanel", and arrow-key handlers.
+
+### I-618 — Normalise unique-id prefix on input (low, open)
+- See B-626. On change, trim and (optionally) uppercase the prefix; pattern `/^[A-Z0-9_-]{1,8}$/` could be enforced.
+
+### I-619 — Capitalise the calendar month title regardless of locale (low, open)
+- See B-620. `s.charAt(0).toLocaleUpperCase(locale) + s.slice(1)`.
+
+### I-620 — Return focus to property-header trigger when its menu closes (low, open)
+- See B-629. Store the trigger ref and call `.focus()` in the `useEffect` cleanup.
+
+### I-621 — Mark the relation picker checkbox as decorative for screen readers (low, open)
+- See B-630. `aria-hidden="true"` or replace with a check icon.
+
+### I-622 — Forbid changing a `title` property's type (low, open)
+- See B-623. Remove `title` from the destination-type list, since each DB must have exactly one title.
+
+### I-623 — Close open property menus when switching DB views (low, open)
+- See B-624. Use a `useEffect` that clears `openPropertyId` whenever `viewId` changes.
+
+### I-624 — Document/UI clarification: rollup over text returns NaN — show "—" instead (low, open)
+- See existing B-534 plus B-631. RollupCell should detect non-numeric values and short-circuit to "—".
+
+### I-625 — Chart view should adapt grid/tooltip colours for dark mode (low, open)
+- File: src/components/database/views/ChartView.tsx hardcoded `#ccc` and `#3b82f6`. Use CSS variables or `useTheme`. Tooltip currently uses recharts defaults (white background) which is unreadable on dark mode.
+
 

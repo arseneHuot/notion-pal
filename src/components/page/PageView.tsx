@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
-import { useStore, updatePage, createBlock, deletePage, restorePage, permanentlyDeletePage } from "@/lib/store";
+import { useStore, updatePage, createBlock, deletePage, restorePage, restorePageCascade, permanentlyDeletePage } from "@/lib/store";
 import { BlockComponent } from "@/components/editor/Block";
 import { EmojiOrCoverPicker } from "@/components/page/EmojiOrCoverPicker";
 import { PageComments } from "@/components/page/PageComments";
@@ -68,15 +68,14 @@ export function PageView({ pageId }: { pageId: string }) {
         <div className="bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-200 dark:border-yellow-800 rounded-md p-3 mb-6 text-sm flex items-center justify-between">
           <span>This page is in Trash.</span>
           <div className="flex gap-2">
-            <button onClick={() => restorePage(page.id)} className="text-xs bg-primary text-primary-foreground rounded px-2 py-1">Restore</button>
+            <button onClick={() => restorePageCascade(page.id)} className="text-xs bg-primary text-primary-foreground rounded px-2 py-1" data-testid="banner-restore">Restore</button>
             <button
               onClick={() => {
-                if (confirm("Permanently delete?")) {
-                  permanentlyDeletePage(page.id);
-                  window.history.back();
-                }
+                permanentlyDeletePage(page.id);
+                window.history.back();
               }}
               className="text-xs bg-destructive text-white rounded px-2 py-1"
+              data-testid="banner-delete-forever"
             >
               Delete permanently
             </button>
