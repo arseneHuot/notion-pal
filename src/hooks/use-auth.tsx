@@ -27,7 +27,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const off = onAuthChange((u) => {
       if (!mounted) return;
-      setUser(u);
+      setUser((cur) => {
+        // Only update if id actually changed to avoid render loops on token refresh
+        if (cur?.id === u?.id) return cur;
+        return u;
+      });
       if (u) initializeForUser(u);
     });
     return () => {

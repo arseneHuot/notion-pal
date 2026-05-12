@@ -1,4 +1,4 @@
-import { useSyncExternalStore, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
   Automation,
   Block,
@@ -152,16 +152,29 @@ function shallowEqual(a: unknown, b: unknown): boolean {
 }
 
 export function useStore<T>(selector: (s: AppState) => T): T {
-  const cacheRef = useRef<{ value: T; init: boolean }>({ value: undefined as T, init: false });
-  const getSnapshot = () => {
-    const next = selector(_state);
-    if (cacheRef.current.init && shallowEqual(cacheRef.current.value, next)) {
-      return cacheRef.current.value;
+  const [value, setValue] = useState<T>(() => selector(_state));
+  const selectorRef = useRef(selector);
+  const valueRef = useRef(value);
+  selectorRef.current = selector;
+  valueRef.current = value;
+
+  useEffect(() => {
+    // Re-check on mount in case state changed between initial getState and subscription
+    const initialNext = selectorRef.current(_state);
+    if (!shallowEqual(valueRef.current, initialNext)) {
+      valueRef.current = initialNext;
+      setValue(initialNext);
     }
-    cacheRef.current = { value: next, init: true };
-    return next;
-  };
-  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+    return subscribe(() => {
+      const next = selectorRef.current(_state);
+      if (!shallowEqual(valueRef.current, next)) {
+        valueRef.current = next;
+        setValue(next);
+      }
+    });
+  }, []);
+
+  return value;
 }
 
 // expose a getState helper for non-component usage
@@ -172,10 +185,14 @@ export function useStoreGetState(): AppState {
 // =========== Initialization ============
 
 export function initializeForUser(user: UserProfile) {
+  // Idempotent: if already initialized for this user, do nothing.
+  if (_state.currentUser?.id === user.id && _state.currentWorkspaceId) {
+    return;
+  }
   const loaded = loadFromStorage(user.id);
   if (loaded.currentUser?.id === user.id && loaded.currentWorkspaceId) {
-    // already initialized; update currentUser
-    setState({ ...loaded, currentUser: user });
+    // Restore from localStorage
+    setState({ ...loaded, currentUser: { ...loaded.currentUser, ...user, id: user.id } });
     return;
   }
   // Fresh user: create a default workspace, default teamspaces, and a starter page
