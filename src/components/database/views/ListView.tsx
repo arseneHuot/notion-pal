@@ -16,7 +16,12 @@ export function ListView({ databaseId, viewId }: { databaseId: string; viewId: s
     <div className="rounded border border-border divide-y divide-border">
       {sorted.length === 0 && <div className="text-sm text-muted-foreground p-3">No rows.</div>}
       {sorted.map((r) => (
-        <div key={r.id} className="flex items-center gap-3 p-2 hover:bg-muted/20" data-testid={`list-row-${r.id}`}>
+        <div
+          key={r.id}
+          onClick={() => window.dispatchEvent(new CustomEvent("open-row-detail", { detail: { rowId: r.id } }))}
+          className="flex items-center gap-3 p-2 hover:bg-muted/20 cursor-pointer"
+          data-testid={`list-row-${r.id}`}
+        >
           {titleProp && (
             <div className="flex-1 min-w-0 font-medium truncate">
               <PropertyCell database={db} property={titleProp} row={r} />

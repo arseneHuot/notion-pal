@@ -17,7 +17,12 @@ export function GalleryView({ databaseId, viewId }: { databaseId: string; viewId
   return (
     <div className="flex flex-wrap gap-3">
       {sorted.map((r) => (
-        <div key={r.id} className={`bg-card border border-border rounded-md shadow-sm overflow-hidden ${sizeClass}`} data-testid={`gallery-card-${r.id}`}>
+        <div
+          key={r.id}
+          onClick={() => window.dispatchEvent(new CustomEvent("open-row-detail", { detail: { rowId: r.id } }))}
+          className={`bg-card border border-border rounded-md shadow-sm overflow-hidden cursor-pointer hover:ring-1 hover:ring-border ${sizeClass}`}
+          data-testid={`gallery-card-${r.id}`}
+        >
           <div className="aspect-square bg-muted flex items-center justify-center text-4xl">
             {(r.icon as string) ?? titleProp?.name?.[0] ?? "📄"}
           </div>

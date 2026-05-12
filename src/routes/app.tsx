@@ -8,6 +8,7 @@ import { CommandPalette } from "@/components/command/CommandPalette";
 import { AIChat } from "@/components/ai/AIChat";
 import { InlineToolbar } from "@/components/editor/InlineToolbar";
 import { Toaster } from "@/components/ui/Toast";
+import { RowDetailDrawer } from "@/components/database/RowDetailDrawer";
 
 export const Route = createFileRoute("/app")({
   component: AppLayout,
@@ -73,6 +74,7 @@ function AppLayout() {
       <AIChat />
       <InlineToolbar />
       <Toaster />
+      <RowDetailDrawer />
     </div>
   );
 }

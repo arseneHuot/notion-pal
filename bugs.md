@@ -1765,3 +1765,217 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-1324 — Export workspace as JSON works (P3, info)
 - Steps: /app/settings → click `[data-testid="settings-export"]`. Stub `URL.createObjectURL` to capture: receives a `application/json` blob, size ~10KB for a small workspace.
+
+
+## 2026-05-12 21:00 — Test agent batch 16
+
+### Verification of implementer fixes (B-1304, B-1305, B-1312, B-1318)
+- **B-1304 (date filter coerce):** VERIFIED. Seeded DB with date column + 3 rows (2026-01-15, 2026-06-15, 2026-12-15). Filter `When greater-than 2026-03-01` returns 2 rows (Jun, Dec). `less-than 2026-08-01` returns 2 rows (Jan, Jun). `Date.parse` coercion in `toComparable` works.
+- **B-1305 (multi-select contains):** VERIFIED. Row with `Tags=[tg_red,tg_blue]` matches `contains "red"`, `contains "blue"`, and `contains "tg_red"`. Array branch in `evalFilter` triggers `v.some((item) => …includes(needle))`.
+- **B-1312 (synced-block cycle):** VERIFIED. Built ref1 → source → ref2 → source cycle via localStorage and reloaded. Page renders the `synced-cycle-blk_sync_ref2` placeholder "⚠ Synced reference cycle detected — stopped mirroring…" twice (once inside source, once inside ref1). No hang, no crash, error boundary not triggered.
+- **B-1318 (relation target swap):** VERIFIED. Changed `rel-target-p_rel` from `db_b` to `db_c` via the property-header select. Store reflects: `targetDatabaseId = "db_c"` and `r_a1.values.p_rel = []`. UI cell shows "Empty" instead of stale "Untitled, Untitled".
+
+### B-1400 — `/equation` (`slash-math`) block renders raw LaTeX text, no math typesetting (P2, open)
+- Steps: open any page → `/` → click `slash-math` → block inserts → fill the textarea with `\frac{a}{b} + \sqrt{x^2 + y^2}`.
+- Observed: preview area below the textarea shows the literal string `\frac{a}{b} + \sqrt{x^2 + y^2}` in serif font.
+- Expected: KaTeX or MathJax rendering of the LaTeX expression. Notion uses KaTeX for inline + block equations.
+- Code: `src/components/editor/Block.tsx` `EquationEl` (~line 1104) renders `{content || "(empty equation)"}` directly.
+
+### B-1401 — Code block Tab key does not insert a tab character (P3, open)
+- Steps: insert `/code` block → focus textarea → press Tab.
+- Observed: focus moves to next element. Textarea value remains unchanged (no `\t` insertion).
+- Expected: in a code block, Tab should insert a literal tab (or 2/4 spaces) and Shift+Tab should outdent. Standard behavior of code editors.
+- Note: pasting indented code works correctly — only direct Tab keypress fails.
+
+### B-1402 — Sort tiebreaker between numeric strings and non-numeric strings is brittle (P3, info/open)
+- Steps: DB with rows whose `text` column values are `"0", "3", "9", "20", "100", "apple", "banana", "zebra"`; sort asc.
+- Observed: `0, 3, 9, 20, 100, apple, banana, zebra` — numerics first (numeric-aware), then strings alphabetically.
+- Edge case: if any string starts with digits (e.g. `"3 items"`, `"20 reasons"`) it would silently mix with numerics. `Number("3 items")` returns NaN so it falls to localeCompare against a true numeric, producing inconsistent ordering. Add a parse strictness check: only treat as numeric if `String(v).trim()` parses cleanly via `/^-?\d+(\.\d+)?$/`.
+
+### B-1403 — Cascading view options (filter + sort + hidden) work as expected (P3, info)
+- Steps: seeded DB `Mixed` with `view.filters=[Val>5]`, `view.sorts=[Val asc]`, `view.hiddenProperties=[Title]`. Reloaded → table renders only Val column with `9, 20, 100` (string rows excluded because NaN>NaN is false). Confirmed working.
+
+### B-1404 — Button block with `open-page` action navigates correctly (P3, info)
+- Steps: seed a button block on Getting Started with `actions: [{kind: 'open-page', pageId: pg_mp33cd7d7bhkdxpb}]` → reload → click the button.
+- Observed: `window.location.href = "/app/p/pg_mp33cd7d7bhkdxpb"` fires; the destination page loads. Confirmed working.
+- Note: uses hard navigation (`window.location.href = ...`) instead of TanStack Router's `navigate()` — see I-1400.
+
+### B-1405 — Board view shows per-column row count next to column name (P3, info)
+- Steps: /app/db/db_a → Board view → confirmed columns "No status", "A", "B" each render a small count badge ("0", "0", "2"). Confirmed working.
+
+### B-1406 — Form view multi-select field renders as plain text input; submitted value stored as raw comma string, not an array (P2, fixed)
+- Steps: add a form view to a DB with a `multi-select` property → switch to Preview → the multi-select field is a plain text `<input>`; type `tg_red,tg_blue` and Submit.
+- Observed: `row.values[multiSelectPropId] === "tg_red,tg_blue"` (string) instead of `["tg_red","tg_blue"]` (array). Subsequent renders treat it as a single unknown option label.
+- Expected: render a multi-select chip picker in the form (Notion shows tag chips with auto-complete). Even if the picker isn't built, the value should at minimum be split on `,` and stored as an array. As-is, multi-select form submissions are corrupt.
+- File: `src/components/database/views/FormView.tsx` `FormField` — no `multi-select` branch.
+
+### B-1407 — Form view has no conditional logic (P3, open)
+- Steps: examined FormView.tsx — there is no concept of `showIf` / `requireIf` / branching based on previous answers.
+- Expected: per-field conditional logic ("show this field only if status === 'in progress'"). Notion's "Forms" feature includes basic conditional logic.
+
+### B-1408 — Page duplicate shares the underlying database (shallow clone); deleting one DB block deletes data from both pages (P2, open)
+- Steps: page "Getting Started" contains an inline-database block referencing `db_dates_test`. Right-click → Duplicate. The duplicate page's inline-database block has `databaseId === "db_dates_test"` (same reference).
+- Observed: any row added on the duplicate appears on the original. This is debatable — Notion offers both behaviors via a confirmation dialog ("Keep as linked database" vs "Duplicate database").
+- Expected: at minimum, prompt the user "Duplicate the underlying database too?" or default to deep-copy with a follow-up linked-DB option.
+
+### B-1409 — Inbox shows "All caught up!" but there is no @mention / notification creation path anywhere in the app (P3, info)
+- Steps: /app/inbox shows the empty state. Grep across `src/components` finds no mention-handling, no notification creation when comments are posted, no @user trigger in any block content / palette / comment input.
+- Expected: posting a comment containing `@username` (or `@mention`) should create an entry in the recipient's inbox. Today the inbox is purely a UI shell.
+
+### B-1410 — Page duplicate clones block contents and button-block actions (P3, info)
+- Steps: page "Getting Started" → Duplicate → new page has fresh block ids and correctly preserves `button.actions = [{kind:'open-page', pageId}]` on the cloned button. Confirmed working for blocks (not for DB ref — see B-1408).
+
+### B-1411 — Trash restore + delete-forever flow works (P3, info)
+- Steps: page → Move to Trash → /app/trash shows it → Restore returns it to teamspace; Move to Trash → Delete forever removes it from `s.pages` map. Confirmed working.
+
+### B-1412 — Add-to-favorites / Remove-from-favorites toggles + FAVORITES sidebar section renders correctly (P3, info)
+- Steps: page-menu → Add to favorites → sidebar shows FAVORITES section with the page → re-open menu → label is now "Remove from favorites". Confirmed working.
+
+### B-1413 — Search palette matches page titles and block content (P3, info)
+- Steps: ⌘K → "Roadmap" → matches the page by title; "orientation" → matches the page because of a block "Welcome! Here's a quick orientation." Confirmed working.
+
+## 2026-05-12 21:30 — Test agent batch 17
+
+### B-1414 — Slash menu disappears entirely when query matches nothing (P3, open)
+- Steps: in a block, type `/xyzzyabc` (no matches).
+- Observed: the `[data-testid="slash-menu"]` is removed from the DOM.
+- Expected: show an empty-state "No results" inside the menu (matches Notion). Improves discoverability — users see the menu was active, the query just didn't match.
+
+### B-1415 — Chart view ignores `view.xProperty` from serialized localStorage on initial mount (P3, open)
+- Steps: set `view.xProperty = "p_grp"` in localStorage and reload.
+- Observed: the X-axis dropdown still shows "First non-title" / `value=""`. Reading from `view.xProperty` only happens AFTER first manual interaction.
+- Expected: chart-view init should hydrate the `<select value>` from `view.xProperty`. Currently the controlled select's `value` doesn't reflect the persisted view state (see ChartView.tsx line 18 — `xProp` fallback uses `view.xProperty` but the select uses `value={view.xProperty}` which is undefined for legacy / freshly seeded views).
+
+### B-1416 — Chart view X-axis labels still show raw option ids — confirms B-1315 (P2, open)
+- Steps: chart view with X=Group (select), single group `g_b` containing 2 rows.
+- Observed: X axis label reads `g_b`, not the option name `B`.
+- File: `src/components/database/views/ChartView.tsx` line 36 `key = String(v ?? "Empty");` — never resolves through `property.options`.
+
+### B-1417 — Timeline view bars all use identical width 96px — confirms B-1314 (P3, open)
+- Steps: timeline view on `db_dates_test` with 4 rows spanning 2026-01-15 to 2026-12-15.
+- Observed: 4 `tl-bar-*` elements, all `style="width: 96px"`. Only `left` differs.
+- Same as B-1314 — implementer hasn't picked this up yet.
+
+### B-1418 — Calendar view in DB only shows events when navigated to the right month (P3, info)
+- Steps: db_dates_test calendar view defaulted to May 2026; rows have dates in Jan/Jun/Sep/Dec 2026; no bars in May.
+- Confirmed: clicking `cal-next-db_dates_test` to June reveals "Mid" on Jun 15. Calendar↔DB sync works once you navigate.
+
+### B-1419 — Mail UI: detail pane has no Reply / Forward / Archive / Apply Label affordances (P3, info)
+- Steps: /app/mail → "Load sample emails" → click an email.
+- Observed: detail pane renders from/subject/timestamp/body only. There are no action buttons.
+- Expected: Reply, Forward, Archive, Delete, Move to label, Mark unread. The label tag (e.g. `customer-feedback`, `scheduling`) is rendered in the list but cannot be assigned/changed.
+
+### B-1420 — Mail: list view "Compose" button has no testid (P3, open)
+- Steps: /app/mail → click "Compose" button. The button has a label but no `data-testid`. Same for the seeded label chips (`customer-feedback`, `scheduling`) which are rendered as text spans, not interactive elements with stable selectors.
+
+### B-1421 — Templates page applies the template correctly (P3, info)
+- Steps: /app/templates → click `template-Meeting notes` → new page is created with the expected scaffolding (Date, Attendees, Agenda, Decisions, Action items) and routed to. Confirmed working.
+
+### B-1422 — Inbox does not surface notifications when comments are posted (P3, open)
+- Steps: posted a comment on a page → checked /app/inbox.
+- Observed: still "All caught up!". No notification record is created in `s.notifications` (no such slice in store).
+- Expected: posting a comment on a page you don't own should notify the page owner (and any prior commenter). See I-1408.
+
+## 2026-05-12 22:00 — Test agent batch 18
+
+### B-1423 — URL property cell does not expose a clickable `<a href>` link (P3, open)
+- Steps: add a URL property → fill `https://example.com` → check rendered cell.
+- Observed: cell is a `<input type="url">` with text + underline. No anchor element to click; the user has to copy-paste the URL.
+- Expected: when not focused, render as `<a href={value} target="_blank">{value}</a>`; on focus / dbl-click, switch to the input. Notion's URL cell behaves this way.
+- File: `src/components/database/PropertyEditor.tsx` `URLCell` (line ~292).
+
+### B-1424 — Files property cell has no `data-testid` on the container (P3, open)
+- Steps: add a `files` property → cell renders an "Empty" span plus a "+" file-upload label.
+- Observed: only the inner `<input type="file">` exists; no `cell-files-<row>-<prop>` testid like other cells. Hard to target in E2E.
+- Expected: add `data-testid={`cell-files-${row.id}-${property.id}`}` on the outer `<div>`.
+
+### B-1425 — Rollup property with `function=count` works (P3, info)
+- Steps: db_a relation property `p_rel` linked to db_b; rollup property `Count` rolled up via `function: "count"`.
+- Confirmed: cell shows `2` for r_a1 (2 linked rows), `0` for r_a2. Verifies rollup is functional.
+
+### B-1426 — Formula `length(prop("Title"))` works correctly (P3, info)
+- Steps: set formula expression to `length(prop("Title"))` on rows "A row 1" / "A row 2".
+- Confirmed: both cells return `7`. Verifies `prop()` + `length()` are wired.
+
+### B-1427 — Formula `prop("Nonexistent")` returns empty silently — confirms B-1323 (P3, open)
+- Steps: set expression to `prop("Nonexistent")` → cells render blank.
+- Compare: a syntax-error expression like `1 + +` correctly surfaces `#ERR: Unexpected token +`.
+- Expected: `prop()` should throw a `FormulaError("Unknown property \"Nonexistent\"")` so users notice typos.
+
+### B-1428 — Dark mode toggle works from Settings (P3, info)
+- Steps: /app/settings → click `settings-darkmode` → `documentElement.classList` toggles `dark`. Confirmed.
+
+### B-1429 — No undo/redo (Cmd+Z) shortcut for any block / page mutation (P2, open)
+- Steps: type something into a block, press Cmd+Z (via DOM dispatch).
+- Observed: nothing happens (no Toast, no state revert).
+- Expected: a proper undo stack on the store — at minimum block content edits, block creation/deletion, row updates. Today the only "history" is the manual page-history snapshot dialog.
+
+### B-1430 — Toggle block expand / collapse works (P3, info)
+- Steps: /toggle → click toggle-blk_<id> → children area collapses; click again → expands. Confirmed working end-to-end.
+
+### B-1431 — Slash menu typing filters items by prefix match (P3, info)
+- Steps: `/head` → only h1/h2/h3 + toggle-h1/h2/h3 items remain. Confirmed.
+
+### B-1432 — Slash menu hides entirely on no matches (P3, info)
+- See B-1414. Confirmed empty-query → no menu. Should render "No matches" instead (I-1409).
+
+## 2026-05-12 22:30 — Test agent batch 19
+
+### B-1433 — Page publish-to-web flow (P3, info)
+- Steps: Share button → toggle Publish → page gets `isPublished=true, publishSlug="getting-started"` → /p/getting-started renders the public page with all blocks (text, headings, equation, button). Inline database appears as "(Embedded database — open the workspace to view)". Confirmed working.
+
+### B-1434 — Inline link popover replaces native prompt (P3, info)
+- Steps: code review of `src/components/editor/InlineToolbar.tsx` confirms `ib-link-popover` + `ib-link-input` + `ib-link-apply` testids exist (lines 184/196/201). The earlier B-1221 (native prompt) is fixed in code, though full E2E click test failed because the inline toolbar dismisses on selection loss between clicks.
+
+### B-1435 — Inline toolbar inserts `<b>` (legacy HTML) not `<strong>` (P3, open)
+- Steps: select text → click `ib-bold` → block.innerHTML becomes `<b>Welcome</b>! …`
+- Expected: prefer `<strong>` (semantic HTML), or store formatting as a structured rich-text array (recommended). Currently relies on raw `<b>/<i>/<s>/<u>` which is the legacy `document.execCommand` style.
+
+### B-1436 — Emoji picker search is wired in state but never filters the rendered list (P2, fixed)
+- Steps: open page-icon → emoji picker dialog → type "rocket" in `emoji-search`.
+- Observed: same 96 emojis rendered.
+- Root cause: `src/components/page/EmojiOrCoverPicker.tsx` line 20 declares `const [search, setSearch] = useState("");` but line 36 `{EMOJIS.map((e) => …)}` ignores `search`. There is no `.filter()`.
+- Expected: build an alias map (e.g. `🚀 -> ["rocket", "launch", "ship"]`) and filter EMOJIS by alias.includes(search) || emoji.includes(search).
+
+### B-1437 — Clicking a board card does NOT open a row detail drawer / overlay (P2, fixed)
+- Steps: /app/db/db_a → Board view → click any `board-card-<rowId>`.
+- Observed: nothing happens (no drawer, no overlay).
+- Expected: Notion opens the row as a side drawer that lists ALL property cells + the row's own block-content area. Today the only way to edit row props is via the table view. There is no row-detail screen at all in this app (also no row-icon, no row-cover, no row-blocks UI).
+
+### B-1438 — Board view "+ New" inside a column correctly seeds the new row with the column's option (P3, info)
+- Steps: Board view grouped by Group → click `board-add-g_a` → new row created with `p_grp = "g_a"`. Confirmed.
+
+### B-1439 — Formula `length(prop("Title"))` returns expected integer (P3, info)
+- Confirmed in B-1426.
+
+## 2026-05-12 22:55 — Test agent batch 20
+
+### B-1440 — Subpage creation works via sidebar (P3, info)
+- Steps: sidebar `[data-testid="page-new-pg_mp33cd7d01u4huok"]` (visible only when sidebar is expanded) → new page created with `parentId = pg_mp33cd7d01u4huok` and navigated to. Confirmed working.
+
+### B-1441 — Breadcrumbs in TopBar are rendered as `<span>`, not clickable to navigate (P2, fixed)
+- Steps: open a subpage → TopBar shows `🧭 Getting Started › 📄 Untitled`. Clicking the parent link does nothing.
+- Expected: each breadcrumb segment (except the last) should be a `<button>`/`<Link>` that navigates to that page.
+- File: `src/components/layout/TopBar.tsx` lines 42-47 — `<span>` should be `<Link to="/app/p/$pageId" params={{ pageId: b.id }}>`.
+
+### B-1442 — Columns block keeps the raw "/col" slash command in its `content` field (P3, open)
+- Steps: type `/col` in a new block → click `slash-columns-2`.
+- Observed: store has `blocks[id] = { type: "columns", content: "/col", columns: 2, columnIds: [...] }`. Other slash conversions correctly clear `content` to "".
+- Expected: when converting to "columns", set `content = ""` (or omit it entirely since columns blocks don't render content).
+- Visual effect: none in the UI today, but if a later renderer ever reads `content` on a columns block, it would leak the literal `/col` text.
+
+### B-1443 — Verification field on Page model has no UI (P3, info)
+- Page model exposes `verifiedAt`, `verifiedBy`, `verificationExpiresAt`, but there is no UI action anywhere (TopBar / page menu / settings) to verify a page or surface the verification badge. Same applies to `isWiki`. Both feature surfaces are missing.
+
+### B-1444 — Wiki toggle on page has no UI surface (P3, info)
+- See B-1443. `isWiki` is in the schema but no toggle anywhere; wiki-specific affordances (verification policy, owner listing as wiki contributors) are not implemented.
+
+### B-1445 — Inbox stays empty when comments are posted (P3, info)
+- See B-1422. Confirmed: posting a comment on a page does not enqueue any inbox notification. `s.notifications` slice does not exist.
+
+### B-1446 — TopBar history dialog (`history-btn`) is mounted but not E2E-tested in this run (P3, info)
+- Component exists; the manual snapshot flow was tested in earlier batches. Mentioned here for inventory.
+
+### Verification summary for this batch run
+- Implementer fixes verified: B-1304 (date filter coerce), B-1305 (multi-select contains array branch), B-1312 (synced-block cycle detector), B-1318 (relation target swap clears links). All 4 pass.
+- Implementer fixes confirmed still open / unaddressed: B-1308 (select sort by option order), B-1313 (block-level commenting UI), B-1314 (timeline bar width), B-1315 (chart X-axis labels), B-1319 (delete-forever from sidebar trashed-pages section), B-1320 (Cmd+K dispatched programmatically), B-1323 (formula unknown-prop silent).

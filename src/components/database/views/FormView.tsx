@@ -151,6 +151,44 @@ function FormField({ database, property, value, onChange }: { database: ReturnTy
       </select>
     );
   }
+  if (property.type === "multi-select") {
+    // Render chip-style toggles; store the value as an array (B-1406).
+    const selected = Array.isArray(value) ? (value as string[]) : [];
+    return (
+      <div className="flex flex-wrap gap-1">
+        {(property.options ?? []).map((o) => {
+          const active = selected.includes(o.id);
+          return (
+            <button
+              type="button"
+              key={o.id}
+              onClick={() => {
+                const next = active ? selected.filter((id) => id !== o.id) : [...selected, o.id];
+                onChange(next);
+              }}
+              className={`text-xs rounded px-2 py-1 border ${active ? "bg-primary text-primary-foreground border-primary" : "bg-background border-input hover:bg-accent"}`}
+              data-testid={`form-multiselect-${property.id}-${o.id}`}
+            >
+              {o.name}
+            </button>
+          );
+        })}
+        {(property.options ?? []).length === 0 && (
+          <div className="text-xs text-muted-foreground italic">No options yet</div>
+        )}
+      </div>
+    );
+  }
+  if (property.type === "url" || property.type === "email" || property.type === "phone") {
+    return (
+      <input
+        type={property.type === "email" ? "email" : property.type === "phone" ? "tel" : "url"}
+        value={(value as string) ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full bg-background border border-input rounded px-2 py-1 text-sm"
+      />
+    );
+  }
   return (
     <input
       value={(value as string) ?? ""}

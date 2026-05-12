@@ -108,7 +108,7 @@ Priority: high / medium / low.
 
 ## 2026-05-12 15:30 — Test agent batch 3
 
-### I-300 — Database row title cells should open a row-page on click (high, open)
+### I-300 — Database row title cells should open a row-page on click (high, done)
 - Right now the row title is just an `<input>` for editing. Notion lets you click the title cell to open the row as a full page where you can add long-form notes / blocks under the row.
 - File: src/components/database/views/TableView.tsx around the `cell-title-…` input.
 - Add an "open" affordance (a small expand icon on hover, or double-click) that navigates to `/app/row/:rowId` and renders a PageView-like editor for that row.
@@ -667,3 +667,78 @@ Priority: high / medium / low.
 
 ### I-1314 — Surface `#ERR: Unknown property` when a formula references a non-existent property name (low, open)
 - See B-1323. Today `prop("Nonexistent")` returns null/empty silently. Throwing a `FormulaError("Unknown property \"Nonexistent\"")` would make typos discoverable.
+
+
+## 2026-05-12 21:00 — Test agent batch 16
+
+### I-1400 — Use TanStack Router's navigate() in button-block `open-page` action instead of hard window.location (low, open)
+- See B-1404. Currently `window.location.href = …` forces a full reload, throwing away in-memory state. Replace with `useRouter().navigate({ to: "/app/p/$pageId", params: { pageId } })` for an SPA-style transition.
+
+### I-1401 — Add KaTeX (or MathJax) rendering to /equation block (medium, open)
+- See B-1400. Today the block stores LaTeX content but renders the raw string. Bundle `katex` (~140KB gz) and call `katex.renderToString(content, { throwOnError: false })` into a sibling div. Show an error chip ("Invalid LaTeX: <msg>") on parse failure.
+
+### I-1402 — Code block textarea should swallow Tab and insert a tab character (low, open)
+- See B-1401. On `onKeyDown` for Tab: prevent default, insert `\t` (or N spaces from a setting) at the caret. Shift+Tab should outdent the current line (remove leading whitespace).
+
+### I-1403 — Use strict numeric regex in compareValues to avoid mixing partial-numeric strings with pure numbers in sort (low, open)
+- See B-1402. Currently `Number("3 items")` returns NaN so it lexically compares to a true numeric. Add `const isPureNumeric = (v) => /^-?\d+(\.\d+)?$/.test(String(v).trim())` and only attempt numeric compare when BOTH sides match.
+
+### I-1404 — Show count of "discarded N links" toast when changing relation targetDatabaseId (low, open)
+- See B-1318 verification. Current fix silently clears `row.values[relPropId] = []`. Notion shows a toast: "3 links removed" so users notice. Even a debug log would help users / E2E.
+
+### I-1405 — Build a proper multi-select chip picker in form view (medium, open)
+- See B-1406. The form should reuse the same chip-picker UI as the table cell. Until that lands, the form should at minimum coerce comma-separated input to an array on submit: `value.split(",").map(s => s.trim()).filter(Boolean)`.
+
+### I-1406 — Add per-field conditional logic to form view (low, open)
+- See B-1407. Add a `condition` block to form-view config: `{ ifPropertyId, op: "is"|"is-not"|"is-empty", value }`. On submit/preview, hide fields whose condition fails.
+
+### I-1407 — Confirm dialog on page duplicate when the page contains an inline database (medium, open)
+- See B-1408. Show two options: "Duplicate with linked database (default)" / "Duplicate with new copy of database". Linked is fast and matches today's behavior; deep-copy maps every row + property and remaps the inline block's `databaseId`.
+
+### I-1408 — Implement @mention parsing in comments + populate Inbox (medium, open)
+- See B-1409. On comment post, scan `content` for `@<user-id-or-name>` tokens. For each match, push a Notification with `kind: "mention"`, `recipientId`, `commentId`, `pageId`, `read: false` into a `notifications` slice. Inbox renders unread first, with a Mark-all-read action.
+
+
+## 2026-05-12 21:30 — Test agent batch 17
+
+### I-1409 — Slash menu should render "No results" item rather than disappear (low, open)
+- See B-1414. Keep `[data-testid="slash-menu"]` mounted even when filteredItems.length === 0; render `<div className="text-xs text-muted-foreground px-3 py-2">No matches</div>` inside.
+
+### I-1410 — Hydrate chart-view dropdowns from view.xProperty / view.yProperty on mount (low, open)
+- See B-1415. The `<select value={view.xProperty ?? ""}>` works once the value exists, but seeded `xProperty` from older code paths used `xPropertyId`. Standardize the field name across types.ts, views[].push call sites, and ChartView.tsx.
+
+### I-1411 — Implement reply / forward / archive / label-edit on Mail detail pane (medium, open)
+- See B-1419. Even with no backend, the in-memory mail object can support these: Reply opens Compose with `to`, `subject: "Re: …"`, threaded body; Archive sets `mail.archived = true`; Label picker lets user add/remove labels from `mail.labels[]`.
+
+### I-1412 — Add testids to Mail Compose button + label chips + main mail toolbar (low, open)
+- See B-1420. Aids future E2E.
+
+### I-1413 — URL cell should render as a clickable anchor when blurred (low, open)
+- See B-1423. Common pattern: a "view/edit" toggle so the cell shows the link in display mode, switches to an `<input>` on focus/double-click.
+
+### I-1414 — Files cell deserves a `data-testid` on the container (low, open)
+- See B-1424.
+
+### I-1415 — Implement undo/redo with Cmd+Z / Cmd+Shift+Z (medium, open)
+- See B-1429. The Zustand store can record patches via `immer/produce` and feed them into an undo stack of inverse operations. Bind document keydown listeners for Cmd+Z (undo) / Cmd+Shift+Z (redo). Notion users absolutely expect this — its absence is a P2-ish gap on a Notion clone.
+
+
+## 2026-05-12 22:30 — Test agent batch 19
+
+### I-1416 — Replace legacy `<b>/<i>/<u>/<s>` markup with semantic `<strong>/<em>` (low, open)
+- See B-1435. Notion stores rich text as a structured array. Even keeping HTML markup, prefer semantic tags. Long-term, model formatting as `{ text, marks: ["bold","italic", ...], link?, color? }[]` and render via a renderer.
+
+### I-1417 — Wire emoji-picker search to a real alias index (medium, open)
+- See B-1436. Bundle a small alias map (1k common emojis) — e.g. `unicode-emoji-json` (~25KB gz) — and filter by name/keyword/category. Until then, even a simple substring match on hardcoded names would beat the current no-op.
+
+### I-1418 — Row-detail drawer for board / gallery / list / calendar views (high, open)
+- See B-1437. Add a `RowDetailDrawer` component: opens when a card / list-item / calendar-event is clicked. Renders the title, each property (using `PropertyCell`), plus a Block-tree area driven by `row.blocks`. Without this, the app is missing one of the core Notion DB features.
+
+### I-1419 — Make breadcrumb segments clickable links (medium, open)
+- See B-1441. Use TanStack `Link` instead of `<span>` for ancestors.
+
+### I-1420 — Clear block.content on slash-conversion to a non-content block (low, open)
+- See B-1442. Standardize the slash-conversion path to set `content = ""` (or strip the `content` key) for block types that don't render content (columns, divider, table, etc.).
+
+### I-1421 — Build a row-detail drawer for board / gallery / list / calendar views (high, open)
+- See B-1437. Required for parity with Notion's database UX (clicking a row in any view should open a side drawer with all properties + the row's child blocks).

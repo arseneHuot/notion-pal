@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useStore, setUI, toggleDarkMode, toggleFavorite, updatePage } from "@/lib/store";
 import { PanelLeftOpen, MoreHorizontal, Star, Share, MessageCircle, Clock, Sun, Moon, ChevronRight, Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -38,11 +38,25 @@ export function TopBar() {
         </button>
       )}
 
-      <div className="flex items-center gap-1 text-sm text-muted-foreground min-w-0">
+      <div className="flex items-center gap-1 text-sm text-muted-foreground min-w-0" data-testid="breadcrumbs">
         {breadcrumbs.map((b, i) => (
           <span key={b.id} className="flex items-center gap-1 min-w-0">
             {i > 0 && <ChevronRight className="size-3" />}
-            <span className="truncate">{b.icon ?? "📄"} {b.title}</span>
+            {/* The last crumb is the current page — render as plain text. */}
+            {i === breadcrumbs.length - 1 ? (
+              <span className="truncate text-foreground" data-testid={`breadcrumb-${b.id}`}>
+                {b.icon ?? "📄"} {b.title}
+              </span>
+            ) : (
+              <Link
+                to="/app/p/$pageId"
+                params={{ pageId: b.id }}
+                className="truncate hover:text-foreground hover:underline"
+                data-testid={`breadcrumb-${b.id}`}
+              >
+                {b.icon ?? "📄"} {b.title}
+              </Link>
+            )}
           </span>
         ))}
       </div>

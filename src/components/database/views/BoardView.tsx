@@ -68,7 +68,8 @@ export function BoardView({ databaseId, viewId }: { databaseId: string; viewId: 
                 key={r.id}
                 draggable
                 onDragStart={(e) => e.dataTransfer.setData("text/x-row-id", r.id)}
-                className="bg-card border border-border rounded p-2 text-sm shadow-sm"
+                onClick={() => window.dispatchEvent(new CustomEvent("open-row-detail", { detail: { rowId: r.id } }))}
+                className="bg-card border border-border rounded p-2 text-sm shadow-sm cursor-pointer hover:bg-accent/40"
                 data-testid={`board-card-${r.id}`}
               >
                 {visibleProps.map((p) => (
