@@ -9,38 +9,201 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as PSlugRouteImport } from './routes/p.$slug'
+import { Route as AppTrashRouteImport } from './routes/app.trash'
+import { Route as AppTemplatesRouteImport } from './routes/app.templates'
+import { Route as AppSettingsRouteImport } from './routes/app.settings'
+import { Route as AppMailRouteImport } from './routes/app.mail'
+import { Route as AppInboxRouteImport } from './routes/app.inbox'
+import { Route as AppCalendarRouteImport } from './routes/app.calendar'
+import { Route as AppPPageIdRouteImport } from './routes/app.p.$pageId'
+import { Route as AppDbDatabaseIdRouteImport } from './routes/app.db.$databaseId'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const PSlugRoute = PSlugRouteImport.update({
+  id: '/p/$slug',
+  path: '/p/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppTrashRoute = AppTrashRouteImport.update({
+  id: '/trash',
+  path: '/trash',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTemplatesRoute = AppTemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppMailRoute = AppMailRouteImport.update({
+  id: '/mail',
+  path: '/mail',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppInboxRoute = AppInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCalendarRoute = AppCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPPageIdRoute = AppPPageIdRouteImport.update({
+  id: '/p/$pageId',
+  path: '/p/$pageId',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDbDatabaseIdRoute = AppDbDatabaseIdRouteImport.update({
+  id: '/db/$databaseId',
+  path: '/db/$databaseId',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/app/calendar': typeof AppCalendarRoute
+  '/app/inbox': typeof AppInboxRoute
+  '/app/mail': typeof AppMailRoute
+  '/app/settings': typeof AppSettingsRoute
+  '/app/templates': typeof AppTemplatesRoute
+  '/app/trash': typeof AppTrashRoute
+  '/p/$slug': typeof PSlugRoute
+  '/app/': typeof AppIndexRoute
+  '/app/db/$databaseId': typeof AppDbDatabaseIdRoute
+  '/app/p/$pageId': typeof AppPPageIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/app/calendar': typeof AppCalendarRoute
+  '/app/inbox': typeof AppInboxRoute
+  '/app/mail': typeof AppMailRoute
+  '/app/settings': typeof AppSettingsRoute
+  '/app/templates': typeof AppTemplatesRoute
+  '/app/trash': typeof AppTrashRoute
+  '/p/$slug': typeof PSlugRoute
+  '/app': typeof AppIndexRoute
+  '/app/db/$databaseId': typeof AppDbDatabaseIdRoute
+  '/app/p/$pageId': typeof AppPPageIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/app/calendar': typeof AppCalendarRoute
+  '/app/inbox': typeof AppInboxRoute
+  '/app/mail': typeof AppMailRoute
+  '/app/settings': typeof AppSettingsRoute
+  '/app/templates': typeof AppTemplatesRoute
+  '/app/trash': typeof AppTrashRoute
+  '/p/$slug': typeof PSlugRoute
+  '/app/': typeof AppIndexRoute
+  '/app/db/$databaseId': typeof AppDbDatabaseIdRoute
+  '/app/p/$pageId': typeof AppPPageIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/auth'
+    | '/app/calendar'
+    | '/app/inbox'
+    | '/app/mail'
+    | '/app/settings'
+    | '/app/templates'
+    | '/app/trash'
+    | '/p/$slug'
+    | '/app/'
+    | '/app/db/$databaseId'
+    | '/app/p/$pageId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/app/calendar'
+    | '/app/inbox'
+    | '/app/mail'
+    | '/app/settings'
+    | '/app/templates'
+    | '/app/trash'
+    | '/p/$slug'
+    | '/app'
+    | '/app/db/$databaseId'
+    | '/app/p/$pageId'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/auth'
+    | '/app/calendar'
+    | '/app/inbox'
+    | '/app/mail'
+    | '/app/settings'
+    | '/app/templates'
+    | '/app/trash'
+    | '/p/$slug'
+    | '/app/'
+    | '/app/db/$databaseId'
+    | '/app/p/$pageId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  AuthRoute: typeof AuthRoute
+  PSlugRoute: typeof PSlugRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,12 +211,121 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/p/$slug': {
+      id: '/p/$slug'
+      path: '/p/$slug'
+      fullPath: '/p/$slug'
+      preLoaderRoute: typeof PSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app/trash': {
+      id: '/app/trash'
+      path: '/trash'
+      fullPath: '/app/trash'
+      preLoaderRoute: typeof AppTrashRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/templates': {
+      id: '/app/templates'
+      path: '/templates'
+      fullPath: '/app/templates'
+      preLoaderRoute: typeof AppTemplatesRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/settings': {
+      id: '/app/settings'
+      path: '/settings'
+      fullPath: '/app/settings'
+      preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/mail': {
+      id: '/app/mail'
+      path: '/mail'
+      fullPath: '/app/mail'
+      preLoaderRoute: typeof AppMailRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/inbox': {
+      id: '/app/inbox'
+      path: '/inbox'
+      fullPath: '/app/inbox'
+      preLoaderRoute: typeof AppInboxRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/calendar': {
+      id: '/app/calendar'
+      path: '/calendar'
+      fullPath: '/app/calendar'
+      preLoaderRoute: typeof AppCalendarRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/p/$pageId': {
+      id: '/app/p/$pageId'
+      path: '/p/$pageId'
+      fullPath: '/app/p/$pageId'
+      preLoaderRoute: typeof AppPPageIdRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/db/$databaseId': {
+      id: '/app/db/$databaseId'
+      path: '/db/$databaseId'
+      fullPath: '/app/db/$databaseId'
+      preLoaderRoute: typeof AppDbDatabaseIdRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppCalendarRoute: typeof AppCalendarRoute
+  AppInboxRoute: typeof AppInboxRoute
+  AppMailRoute: typeof AppMailRoute
+  AppSettingsRoute: typeof AppSettingsRoute
+  AppTemplatesRoute: typeof AppTemplatesRoute
+  AppTrashRoute: typeof AppTrashRoute
+  AppIndexRoute: typeof AppIndexRoute
+  AppDbDatabaseIdRoute: typeof AppDbDatabaseIdRoute
+  AppPPageIdRoute: typeof AppPPageIdRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppCalendarRoute: AppCalendarRoute,
+  AppInboxRoute: AppInboxRoute,
+  AppMailRoute: AppMailRoute,
+  AppSettingsRoute: AppSettingsRoute,
+  AppTemplatesRoute: AppTemplatesRoute,
+  AppTrashRoute: AppTrashRoute,
+  AppIndexRoute: AppIndexRoute,
+  AppDbDatabaseIdRoute: AppDbDatabaseIdRoute,
+  AppPPageIdRoute: AppPPageIdRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  AuthRoute: AuthRoute,
+  PSlugRoute: PSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

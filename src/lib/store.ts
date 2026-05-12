@@ -1,0 +1,1167 @@
+import { useSyncExternalStore, useRef } from "react";
+import type {
+  Automation,
+  Block,
+  CalendarEvent,
+  Comment,
+  Mail,
+  NotionDatabase,
+  Page,
+  PageTemplate,
+  Teamspace,
+  UserProfile,
+  Workspace,
+  View,
+  Property,
+  DatabaseRow,
+} from "./types";
+import { uid } from "./id";
+
+export interface AppState {
+  schemaVersion: number;
+  currentUser: UserProfile | null;
+  workspaces: Record<string, Workspace>;
+  currentWorkspaceId: string | null;
+  teamspaces: Record<string, Teamspace>;
+  pages: Record<string, Page>;
+  blocks: Record<string, Block>;
+  databases: Record<string, NotionDatabase>;
+  rows: Record<string, DatabaseRow>;
+  comments: Record<string, Comment>;
+  templates: Record<string, PageTemplate>;
+  automations: Record<string, Automation>;
+  calendarEvents: Record<string, CalendarEvent>;
+  mails: Record<string, Mail>;
+  ui: {
+    sidebarOpen: boolean;
+    darkMode: boolean;
+    expandedPages: Record<string, boolean>;
+    favoritesExpanded: boolean;
+    teamspacesExpanded: Record<string, boolean>;
+    privateExpanded: boolean;
+    sharedExpanded: boolean;
+  };
+}
+
+function emptyState(): AppState {
+  return {
+    schemaVersion: 1,
+    currentUser: null,
+    workspaces: {},
+    currentWorkspaceId: null,
+    teamspaces: {},
+    pages: {},
+    blocks: {},
+    databases: {},
+    rows: {},
+    comments: {},
+    templates: {},
+    automations: {},
+    calendarEvents: {},
+    mails: {},
+    ui: {
+      sidebarOpen: true,
+      darkMode: false,
+      expandedPages: {},
+      favoritesExpanded: true,
+      teamspacesExpanded: {},
+      privateExpanded: true,
+      sharedExpanded: false,
+    },
+  };
+}
+
+const GLOBAL_KEY = "notion-clone:global";
+
+function userKey(userId: string) {
+  return `notion-clone:user:${userId}`;
+}
+
+function loadFromStorage(userId: string | null): AppState {
+  if (typeof window === "undefined") return emptyState();
+  try {
+    const raw = userId
+      ? window.localStorage.getItem(userKey(userId))
+      : window.localStorage.getItem(GLOBAL_KEY);
+    if (!raw) return emptyState();
+    const parsed = JSON.parse(raw) as AppState;
+    // simple migration
+    if (!parsed.ui) parsed.ui = emptyState().ui;
+    if (!parsed.calendarEvents) parsed.calendarEvents = {};
+    if (!parsed.mails) parsed.mails = {};
+    return parsed;
+  } catch {
+    return emptyState();
+  }
+}
+
+function persist(state: AppState) {
+  if (typeof window === "undefined") return;
+  try {
+    const uid = state.currentUser?.id;
+    if (uid) {
+      window.localStorage.setItem(userKey(uid), JSON.stringify(state));
+    }
+    // keep a global with just session user reference
+    window.localStorage.setItem(
+      GLOBAL_KEY,
+      JSON.stringify({
+        currentUserId: uid ?? null,
+        darkMode: state.ui.darkMode,
+      }),
+    );
+  } catch (e) {
+    console.error("Failed to persist state", e);
+  }
+}
+
+let _state: AppState = emptyState();
+const listeners = new Set<() => void>();
+
+function setState(next: AppState | ((prev: AppState) => AppState)) {
+  const updated = typeof next === "function" ? (next as (p: AppState) => AppState)(_state) : next;
+  _state = updated;
+  persist(updated);
+  for (const l of listeners) l();
+}
+
+export function getState() {
+  return _state;
+}
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+function shallowEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== "object" || typeof b !== "object") return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!Object.is(a[i], b[i])) return false;
+    return true;
+  }
+  const ka = Object.keys(a as Record<string, unknown>);
+  const kb = Object.keys(b as Record<string, unknown>);
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if (!Object.is((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) return false;
+  }
+  return true;
+}
+
+export function useStore<T>(selector: (s: AppState) => T): T {
+  const cacheRef = useRef<{ value: T; init: boolean }>({ value: undefined as T, init: false });
+  const getSnapshot = () => {
+    const next = selector(_state);
+    if (cacheRef.current.init && shallowEqual(cacheRef.current.value, next)) {
+      return cacheRef.current.value;
+    }
+    cacheRef.current = { value: next, init: true };
+    return next;
+  };
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+}
+
+// expose a getState helper for non-component usage
+export function useStoreGetState(): AppState {
+  return _state;
+}
+
+// =========== Initialization ============
+
+export function initializeForUser(user: UserProfile) {
+  const loaded = loadFromStorage(user.id);
+  if (loaded.currentUser?.id === user.id && loaded.currentWorkspaceId) {
+    // already initialized; update currentUser
+    setState({ ...loaded, currentUser: user });
+    return;
+  }
+  // Fresh user: create a default workspace, default teamspaces, and a starter page
+  const workspaceId = uid("ws");
+  const personalTs = uid("ts");
+  const teamTs = uid("ts");
+  const sharedTs = uid("ts");
+  const welcomePageId = uid("pg");
+  const gettingStartedId = uid("pg");
+  const roadmapId = uid("pg");
+  const meetingNotesId = uid("pg");
+
+  const now = Date.now();
+
+  const workspace: Workspace = {
+    id: workspaceId,
+    name: user.name ? `${user.name}'s Workspace` : "My Workspace",
+    icon: "📓",
+    ownerId: user.id,
+    memberIds: [user.id],
+    groups: [],
+    plan: "free",
+    aiCredits: 1000,
+    guests: [],
+    createdAt: now,
+  };
+
+  const teamspaces: Record<string, Teamspace> = {
+    [personalTs]: {
+      id: personalTs,
+      workspaceId,
+      name: "Private",
+      icon: "🔒",
+      description: "Just for you",
+      mode: "private",
+      memberIds: [user.id],
+      ownerIds: [user.id],
+      createdAt: now,
+    },
+    [teamTs]: {
+      id: teamTs,
+      workspaceId,
+      name: "Engineering",
+      icon: "⚙️",
+      description: "Team workspace",
+      mode: "closed",
+      memberIds: [user.id],
+      ownerIds: [user.id],
+      createdAt: now,
+    },
+    [sharedTs]: {
+      id: sharedTs,
+      workspaceId,
+      name: "Shared",
+      icon: "🤝",
+      description: "Pages shared with you",
+      mode: "open",
+      memberIds: [user.id],
+      ownerIds: [user.id],
+      createdAt: now,
+    },
+  };
+
+  const makePage = (id: string, title: string, icon: string, teamspaceId: string, blocks: Block[]): Page => {
+    return {
+      id,
+      workspaceId,
+      teamspaceId,
+      parentId: null,
+      title,
+      icon,
+      cover: null,
+      blocks: blocks.map((b) => b.id),
+      isFavorite: false,
+      isInTrash: false,
+      trashedAt: null,
+      isPublished: false,
+      publishSlug: null,
+      isWiki: false,
+      pageOwners: [user.id],
+      verifiedAt: null,
+      verifiedBy: null,
+      verificationExpiresAt: null,
+      createdAt: now,
+      updatedAt: now,
+      createdBy: user.id,
+      lastEditedBy: user.id,
+      permissions: [],
+      history: [],
+    };
+  };
+
+  const heading = (parentId: string, order: number, content: string): Block => ({
+    id: uid("blk"),
+    type: "heading-1",
+    parentId,
+    order,
+    content,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const h2 = (parentId: string, order: number, content: string): Block => ({
+    id: uid("blk"),
+    type: "heading-2",
+    parentId,
+    order,
+    content,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const text = (parentId: string, order: number, content: string): Block => ({
+    id: uid("blk"),
+    type: "text",
+    parentId,
+    order,
+    content,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const bullet = (parentId: string, order: number, content: string): Block => ({
+    id: uid("blk"),
+    type: "bullet-list",
+    parentId,
+    order,
+    content,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const todo = (parentId: string, order: number, content: string, checked = false): Block => ({
+    id: uid("blk"),
+    type: "todo",
+    parentId,
+    order,
+    content,
+    checked,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const callout = (parentId: string, order: number, content: string, emoji: string): Block => ({
+    id: uid("blk"),
+    type: "callout",
+    parentId,
+    order,
+    content,
+    emoji,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const divider = (parentId: string, order: number): Block => ({
+    id: uid("blk"),
+    type: "divider",
+    parentId,
+    order,
+    createdAt: now,
+    updatedAt: now,
+  });
+  const quote = (parentId: string, order: number, content: string): Block => ({
+    id: uid("blk"),
+    type: "quote",
+    parentId,
+    order,
+    content,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  const welcomeBlocks: Block[] = [
+    heading(welcomePageId, 0, "👋 Welcome to your workspace!"),
+    text(
+      welcomePageId,
+      1,
+      "This is your second brain — a place to think, plan, and ship. Press / on a new line to insert any kind of block.",
+    ),
+    callout(
+      welcomePageId,
+      2,
+      "Tip: try slash commands like /heading, /todo, /code, /callout, /database, /table, /toggle, /image, /quote, /divider.",
+      "💡",
+    ),
+    h2(welcomePageId, 3, "What can you do here?"),
+    bullet(welcomePageId, 4, "Write rich documents with markdown shortcuts"),
+    bullet(welcomePageId, 5, "Create databases with table, board, calendar and gallery views"),
+    bullet(welcomePageId, 6, "Organise pages in nested hierarchies"),
+    bullet(welcomePageId, 7, "Publish pages as public sites"),
+    bullet(welcomePageId, 8, "Ask the AI assistant to help draft, summarise, or search"),
+    h2(welcomePageId, 9, "Get started"),
+    todo(welcomePageId, 10, "Click 'New page' in the sidebar to create your first page"),
+    todo(welcomePageId, 11, "Try the slash menu by pressing / on an empty line"),
+    todo(welcomePageId, 12, "Drag blocks around using the handle on the left"),
+    todo(welcomePageId, 13, "Open the AI chat in the top right to ask anything"),
+    divider(welcomePageId, 14),
+    quote(welcomePageId, 15, "Notion is a workspace where you can write, plan, and organize."),
+  ];
+
+  const startedBlocks: Block[] = [
+    text(gettingStartedId, 0, "Welcome! Here's a quick orientation."),
+    h2(gettingStartedId, 1, "Sidebar"),
+    text(gettingStartedId, 2, "Your workspace is organised by teamspaces (Private, Engineering, Shared)."),
+    h2(gettingStartedId, 3, "Editor"),
+    text(gettingStartedId, 4, "Each line is a block. Drag them, nest them, or transform them with /."),
+  ];
+
+  const roadmapBlocks: Block[] = [
+    heading(roadmapId, 0, "Roadmap Q3"),
+    text(roadmapId, 1, "Plan the next quarter's work below. Add tasks via the database."),
+  ];
+
+  const meetingBlocks: Block[] = [
+    heading(meetingNotesId, 0, "Meeting Notes"),
+    text(meetingNotesId, 1, "Use this page as an index for your meeting notes."),
+  ];
+
+  const allBlocks = [...welcomeBlocks, ...startedBlocks, ...roadmapBlocks, ...meetingBlocks];
+
+  const pages: Record<string, Page> = {
+    [welcomePageId]: makePage(welcomePageId, "Welcome", "👋", personalTs, welcomeBlocks),
+    [gettingStartedId]: makePage(gettingStartedId, "Getting Started", "🧭", personalTs, startedBlocks),
+    [roadmapId]: makePage(roadmapId, "Roadmap Q3", "🗺️", teamTs, roadmapBlocks),
+    [meetingNotesId]: makePage(meetingNotesId, "Meeting Notes", "📝", teamTs, meetingBlocks),
+  };
+
+  const blocks: Record<string, Block> = {};
+  for (const b of allBlocks) blocks[b.id] = b;
+
+  setState({
+    ...emptyState(),
+    currentUser: user,
+    workspaces: { [workspaceId]: workspace },
+    currentWorkspaceId: workspaceId,
+    teamspaces,
+    pages,
+    blocks,
+    databases: {},
+    rows: {},
+    comments: {},
+    templates: {},
+    automations: {},
+    calendarEvents: {},
+    mails: {},
+    ui: {
+      ...emptyState().ui,
+      darkMode: _state.ui.darkMode,
+      expandedPages: { [welcomePageId]: true },
+    },
+  });
+}
+
+export function signOutState() {
+  setState({ ..._state, currentUser: null });
+}
+
+// =========== Pages ============
+
+export function createPage(input: {
+  title?: string;
+  icon?: string | null;
+  parentId?: string | null;
+  teamspaceId?: string | null;
+}): string {
+  const user = _state.currentUser;
+  if (!user) throw new Error("not signed in");
+  const workspaceId = _state.currentWorkspaceId!;
+  const id = uid("pg");
+  const now = Date.now();
+  const page: Page = {
+    id,
+    workspaceId,
+    teamspaceId: input.teamspaceId ?? null,
+    parentId: input.parentId ?? null,
+    title: input.title ?? "",
+    icon: input.icon ?? null,
+    cover: null,
+    blocks: [],
+    isFavorite: false,
+    isInTrash: false,
+    trashedAt: null,
+    isPublished: false,
+    publishSlug: null,
+    isWiki: false,
+    pageOwners: [user.id],
+    verifiedAt: null,
+    verifiedBy: null,
+    verificationExpiresAt: null,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: user.id,
+    lastEditedBy: user.id,
+    permissions: [],
+    history: [],
+  };
+  setState((s) => ({
+    ...s,
+    pages: { ...s.pages, [id]: page },
+    ui: {
+      ...s.ui,
+      expandedPages: input.parentId
+        ? { ...s.ui.expandedPages, [input.parentId]: true }
+        : s.ui.expandedPages,
+    },
+  }));
+  return id;
+}
+
+export function updatePage(id: string, patch: Partial<Page>) {
+  setState((s) => {
+    const page = s.pages[id];
+    if (!page) return s;
+    return {
+      ...s,
+      pages: {
+        ...s.pages,
+        [id]: { ...page, ...patch, updatedAt: Date.now() },
+      },
+    };
+  });
+}
+
+export function deletePage(id: string) {
+  // Soft delete to trash
+  setState((s) => {
+    const page = s.pages[id];
+    if (!page) return s;
+    return {
+      ...s,
+      pages: {
+        ...s.pages,
+        [id]: { ...page, isInTrash: true, trashedAt: Date.now() },
+      },
+    };
+  });
+}
+
+export function restorePage(id: string) {
+  setState((s) => {
+    const page = s.pages[id];
+    if (!page) return s;
+    return {
+      ...s,
+      pages: {
+        ...s.pages,
+        [id]: { ...page, isInTrash: false, trashedAt: null },
+      },
+    };
+  });
+}
+
+export function permanentlyDeletePage(id: string) {
+  setState((s) => {
+    const newPages = { ...s.pages };
+    const newBlocks = { ...s.blocks };
+    const page = newPages[id];
+    if (!page) return s;
+    for (const blockId of page.blocks) delete newBlocks[blockId];
+    delete newPages[id];
+    return { ...s, pages: newPages, blocks: newBlocks };
+  });
+}
+
+export function duplicatePage(id: string): string | null {
+  const page = _state.pages[id];
+  if (!page) return null;
+  const newId = uid("pg");
+  const now = Date.now();
+  const newBlockIds: string[] = [];
+  const newBlocks: Record<string, Block> = {};
+  for (const blockId of page.blocks) {
+    const b = _state.blocks[blockId];
+    if (!b) continue;
+    const nb = { ...b, id: uid("blk"), parentId: newId, createdAt: now, updatedAt: now };
+    newBlocks[nb.id] = nb as Block;
+    newBlockIds.push(nb.id);
+  }
+  const newPage: Page = {
+    ...page,
+    id: newId,
+    title: page.title ? `${page.title} (Copy)` : "Untitled",
+    blocks: newBlockIds,
+    createdAt: now,
+    updatedAt: now,
+    history: [],
+  };
+  setState((s) => ({
+    ...s,
+    pages: { ...s.pages, [newId]: newPage },
+    blocks: { ...s.blocks, ...newBlocks },
+  }));
+  return newId;
+}
+
+export function toggleFavorite(id: string) {
+  setState((s) => {
+    const page = s.pages[id];
+    if (!page) return s;
+    return {
+      ...s,
+      pages: {
+        ...s.pages,
+        [id]: { ...page, isFavorite: !page.isFavorite },
+      },
+    };
+  });
+}
+
+// =========== Blocks ============
+
+export function createBlock(pageId: string, block: Omit<Block, "id" | "createdAt" | "updatedAt">, insertAfterBlockId?: string): string {
+  const id = uid("blk");
+  const now = Date.now();
+  setState((s) => {
+    const page = s.pages[pageId];
+    if (!page) return s;
+    const newBlock = { ...block, id, createdAt: now, updatedAt: now } as Block;
+    let newBlockIds: string[];
+    if (insertAfterBlockId) {
+      const idx = page.blocks.indexOf(insertAfterBlockId);
+      if (idx === -1) {
+        newBlockIds = [...page.blocks, id];
+      } else {
+        newBlockIds = [...page.blocks.slice(0, idx + 1), id, ...page.blocks.slice(idx + 1)];
+      }
+    } else {
+      newBlockIds = [...page.blocks, id];
+    }
+    return {
+      ...s,
+      pages: {
+        ...s.pages,
+        [pageId]: { ...page, blocks: newBlockIds, updatedAt: now },
+      },
+      blocks: { ...s.blocks, [id]: newBlock },
+    };
+  });
+  return id;
+}
+
+export function updateBlock(id: string, patch: Partial<Block>) {
+  setState((s) => {
+    const block = s.blocks[id];
+    if (!block) return s;
+    return {
+      ...s,
+      blocks: {
+        ...s.blocks,
+        [id]: { ...block, ...patch, updatedAt: Date.now() } as Block,
+      },
+    };
+  });
+}
+
+export function deleteBlock(blockId: string, pageId: string) {
+  setState((s) => {
+    const page = s.pages[pageId];
+    if (!page) return s;
+    const newBlocks = { ...s.blocks };
+    delete newBlocks[blockId];
+    return {
+      ...s,
+      pages: {
+        ...s.pages,
+        [pageId]: { ...page, blocks: page.blocks.filter((b) => b !== blockId), updatedAt: Date.now() },
+      },
+      blocks: newBlocks,
+    };
+  });
+}
+
+export function moveBlock(pageId: string, blockId: string, toIndex: number) {
+  setState((s) => {
+    const page = s.pages[pageId];
+    if (!page) return s;
+    const cur = page.blocks.filter((b) => b !== blockId);
+    cur.splice(toIndex, 0, blockId);
+    return {
+      ...s,
+      pages: {
+        ...s.pages,
+        [pageId]: { ...page, blocks: cur, updatedAt: Date.now() },
+      },
+    };
+  });
+}
+
+export function reorderBlocks(pageId: string, order: string[]) {
+  setState((s) => {
+    const page = s.pages[pageId];
+    if (!page) return s;
+    return {
+      ...s,
+      pages: { ...s.pages, [pageId]: { ...page, blocks: order, updatedAt: Date.now() } },
+    };
+  });
+}
+
+// =========== UI ============
+
+export function setUI(patch: Partial<AppState["ui"]>) {
+  setState((s) => ({ ...s, ui: { ...s.ui, ...patch } }));
+}
+
+export function toggleDarkMode() {
+  setState((s) => {
+    const next = !s.ui.darkMode;
+    if (typeof document !== "undefined") {
+      document.documentElement.classList.toggle("dark", next);
+    }
+    return { ...s, ui: { ...s.ui, darkMode: next } };
+  });
+}
+
+export function togglePageExpanded(pageId: string) {
+  setState((s) => ({
+    ...s,
+    ui: {
+      ...s.ui,
+      expandedPages: { ...s.ui.expandedPages, [pageId]: !s.ui.expandedPages[pageId] },
+    },
+  }));
+}
+
+// =========== Teamspaces ============
+
+export function createTeamspace(input: { name: string; icon?: string; mode?: "open" | "closed" | "private" }): string {
+  const user = _state.currentUser;
+  if (!user) throw new Error("not signed in");
+  const id = uid("ts");
+  const ts: Teamspace = {
+    id,
+    workspaceId: _state.currentWorkspaceId!,
+    name: input.name,
+    icon: input.icon ?? "🌐",
+    description: "",
+    mode: input.mode ?? "closed",
+    memberIds: [user.id],
+    ownerIds: [user.id],
+    createdAt: Date.now(),
+  };
+  setState((s) => ({ ...s, teamspaces: { ...s.teamspaces, [id]: ts } }));
+  return id;
+}
+
+export function updateTeamspace(id: string, patch: Partial<Teamspace>) {
+  setState((s) => {
+    const ts = s.teamspaces[id];
+    if (!ts) return s;
+    return { ...s, teamspaces: { ...s.teamspaces, [id]: { ...ts, ...patch } } };
+  });
+}
+
+export function deleteTeamspace(id: string) {
+  setState((s) => {
+    const newTs = { ...s.teamspaces };
+    delete newTs[id];
+    // also move pages of that teamspace to null teamspace
+    const newPages = { ...s.pages };
+    for (const p of Object.values(newPages)) {
+      if (p.teamspaceId === id) newPages[p.id] = { ...p, teamspaceId: null };
+    }
+    return { ...s, teamspaces: newTs, pages: newPages };
+  });
+}
+
+// =========== Databases ============
+
+export function createDatabase(input: {
+  parentId: string | null;
+  name?: string;
+  isInline?: boolean;
+  icon?: string | null;
+}): string {
+  const user = _state.currentUser!;
+  const id = uid("db");
+  const now = Date.now();
+  const titlePropertyId = uid("prop");
+  const statusPropertyId = uid("prop");
+  const datePropertyId = uid("prop");
+  const tagsPropertyId = uid("prop");
+
+  const todoOptionId = uid("opt");
+  const inProgressOptionId = uid("opt");
+  const doneOptionId = uid("opt");
+
+  const properties: Property[] = [
+    { id: titlePropertyId, name: "Name", type: "title" },
+    {
+      id: statusPropertyId,
+      name: "Status",
+      type: "status",
+      options: [
+        { id: todoOptionId, name: "Not started", color: "gray" },
+        { id: inProgressOptionId, name: "In progress", color: "blue" },
+        { id: doneOptionId, name: "Done", color: "green" },
+      ],
+      groups: [
+        { id: uid("g"), name: "To-do", optionIds: [todoOptionId] },
+        { id: uid("g"), name: "In progress", optionIds: [inProgressOptionId] },
+        { id: uid("g"), name: "Done", optionIds: [doneOptionId] },
+      ],
+    },
+    {
+      id: tagsPropertyId,
+      name: "Tags",
+      type: "multi-select",
+      options: [
+        { id: uid("opt"), name: "Important", color: "red" },
+        { id: uid("opt"), name: "Idea", color: "blue" },
+      ],
+    },
+    { id: datePropertyId, name: "Date", type: "date", includeTime: false },
+  ];
+  const tableViewId = uid("view");
+  const boardViewId = uid("view");
+  const calendarViewId = uid("view");
+  const galleryViewId = uid("view");
+
+  const views: View[] = [
+    {
+      id: tableViewId,
+      name: "All",
+      type: "table",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      propertyOrder: properties.map((p) => p.id),
+      wrapCells: false,
+    },
+    {
+      id: boardViewId,
+      name: "By status",
+      type: "board",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      propertyOrder: properties.map((p) => p.id),
+      groupBy: statusPropertyId,
+      hiddenGroups: [],
+    },
+    {
+      id: calendarViewId,
+      name: "Calendar",
+      type: "calendar",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      propertyOrder: properties.map((p) => p.id),
+      dateProperty: datePropertyId,
+    },
+    {
+      id: galleryViewId,
+      name: "Gallery",
+      type: "gallery",
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      propertyOrder: properties.map((p) => p.id),
+      cardSize: "medium",
+      fitImage: true,
+    },
+  ];
+
+  const db: NotionDatabase = {
+    id,
+    workspaceId: _state.currentWorkspaceId!,
+    parentId: input.parentId,
+    name: input.name ?? "Untitled database",
+    description: "",
+    icon: input.icon ?? "🗄️",
+    cover: null,
+    isInline: input.isInline ?? false,
+    properties,
+    views,
+    rows: [],
+    templates: [],
+    createdAt: now,
+    updatedAt: now,
+    createdBy: user.id,
+    isInTrash: false,
+  };
+  setState((s) => ({ ...s, databases: { ...s.databases, [id]: db } }));
+  return id;
+}
+
+export function updateDatabase(id: string, patch: Partial<NotionDatabase>) {
+  setState((s) => {
+    const db = s.databases[id];
+    if (!db) return s;
+    return { ...s, databases: { ...s.databases, [id]: { ...db, ...patch, updatedAt: Date.now() } } };
+  });
+}
+
+export function deleteDatabase(id: string) {
+  setState((s) => {
+    const newDbs = { ...s.databases };
+    delete newDbs[id];
+    return { ...s, databases: newDbs };
+  });
+}
+
+export function addDatabaseRow(databaseId: string, values: Record<string, unknown> = {}, options?: { title?: string }): string {
+  const user = _state.currentUser!;
+  const id = uid("row");
+  const now = Date.now();
+  const db = _state.databases[databaseId];
+  if (!db) return id;
+  const titleProp = db.properties.find((p) => p.type === "title");
+  const v = { ...values };
+  if (titleProp && !(titleProp.id in v)) {
+    v[titleProp.id] = options?.title ?? "";
+  }
+  const row: DatabaseRow = {
+    id,
+    databaseId,
+    values: v,
+    blocks: [],
+    icon: null,
+    cover: null,
+    createdAt: now,
+    updatedAt: now,
+    createdBy: user.id,
+    lastEditedBy: user.id,
+    isInTrash: false,
+  };
+  setState((s) => ({
+    ...s,
+    rows: { ...s.rows, [id]: row },
+    databases: {
+      ...s.databases,
+      [databaseId]: { ...s.databases[databaseId], rows: [...s.databases[databaseId].rows, id], updatedAt: now },
+    },
+  }));
+  return id;
+}
+
+export function updateRow(id: string, patch: Partial<DatabaseRow> & { values?: Record<string, unknown> }) {
+  setState((s) => {
+    const row = s.rows[id];
+    if (!row) return s;
+    const merged: DatabaseRow = {
+      ...row,
+      ...patch,
+      values: patch.values ? { ...row.values, ...patch.values } : row.values,
+      updatedAt: Date.now(),
+      lastEditedBy: s.currentUser?.id ?? row.lastEditedBy,
+    };
+    return { ...s, rows: { ...s.rows, [id]: merged } };
+  });
+}
+
+export function deleteRow(id: string) {
+  setState((s) => {
+    const row = s.rows[id];
+    if (!row) return s;
+    const db = s.databases[row.databaseId];
+    return {
+      ...s,
+      rows: { ...s.rows, [id]: { ...row, isInTrash: true, updatedAt: Date.now() } },
+      databases: db
+        ? {
+            ...s.databases,
+            [row.databaseId]: { ...db, rows: db.rows.filter((r) => r !== id) },
+          }
+        : s.databases,
+    };
+  });
+}
+
+export function addDatabaseProperty(databaseId: string, prop: Property) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db) return s;
+    const newProps = [...db.properties, prop];
+    const newViews = db.views.map((v) => ({ ...v, propertyOrder: [...v.propertyOrder, prop.id] }));
+    return {
+      ...s,
+      databases: { ...s.databases, [databaseId]: { ...db, properties: newProps, views: newViews, updatedAt: Date.now() } },
+    };
+  });
+}
+
+export function updateDatabaseProperty(databaseId: string, propertyId: string, patch: Partial<Property>) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db) return s;
+    return {
+      ...s,
+      databases: {
+        ...s.databases,
+        [databaseId]: {
+          ...db,
+          properties: db.properties.map((p) => (p.id === propertyId ? ({ ...p, ...patch } as Property) : p)),
+          updatedAt: Date.now(),
+        },
+      },
+    };
+  });
+}
+
+export function removeDatabaseProperty(databaseId: string, propertyId: string) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db) return s;
+    return {
+      ...s,
+      databases: {
+        ...s.databases,
+        [databaseId]: {
+          ...db,
+          properties: db.properties.filter((p) => p.id !== propertyId),
+          views: db.views.map((v) => ({
+            ...v,
+            propertyOrder: v.propertyOrder.filter((p) => p !== propertyId),
+            hiddenProperties: v.hiddenProperties.filter((p) => p !== propertyId),
+          })),
+          updatedAt: Date.now(),
+        },
+      },
+    };
+  });
+}
+
+export function addView(databaseId: string, view: View) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db) return s;
+    return {
+      ...s,
+      databases: { ...s.databases, [databaseId]: { ...db, views: [...db.views, view], updatedAt: Date.now() } },
+    };
+  });
+}
+
+export function updateView(databaseId: string, viewId: string, patch: Partial<View>) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db) return s;
+    return {
+      ...s,
+      databases: {
+        ...s.databases,
+        [databaseId]: {
+          ...db,
+          views: db.views.map((v) => (v.id === viewId ? ({ ...v, ...patch } as View) : v)),
+          updatedAt: Date.now(),
+        },
+      },
+    };
+  });
+}
+
+export function removeView(databaseId: string, viewId: string) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db) return s;
+    return {
+      ...s,
+      databases: {
+        ...s.databases,
+        [databaseId]: { ...db, views: db.views.filter((v) => v.id !== viewId), updatedAt: Date.now() },
+      },
+    };
+  });
+}
+
+// =========== Comments ============
+
+export function addComment(input: { pageId: string; blockId?: string; content: string; parentId?: string }): string {
+  const user = _state.currentUser!;
+  const id = uid("cmt");
+  const now = Date.now();
+  const c: Comment = {
+    id,
+    pageId: input.pageId,
+    blockId: input.blockId ?? null,
+    parentId: input.parentId ?? null,
+    authorId: user.id,
+    content: input.content,
+    resolved: false,
+    createdAt: now,
+    updatedAt: now,
+  };
+  setState((s) => ({ ...s, comments: { ...s.comments, [id]: c } }));
+  return id;
+}
+
+export function resolveComment(id: string) {
+  setState((s) => {
+    const c = s.comments[id];
+    if (!c) return s;
+    return { ...s, comments: { ...s.comments, [id]: { ...c, resolved: true, updatedAt: Date.now() } } };
+  });
+}
+
+export function deleteComment(id: string) {
+  setState((s) => {
+    const newC = { ...s.comments };
+    delete newC[id];
+    return { ...s, comments: newC };
+  });
+}
+
+// =========== History / versions ============
+
+export function saveSnapshot(pageId: string) {
+  const user = _state.currentUser;
+  if (!user) return;
+  setState((s) => {
+    const page = s.pages[pageId];
+    if (!page) return s;
+    const snapshotBlocks: Record<string, Block> = {};
+    for (const id of page.blocks) {
+      if (s.blocks[id]) snapshotBlocks[id] = s.blocks[id];
+    }
+    const version = {
+      id: uid("ver"),
+      savedAt: Date.now(),
+      savedBy: user.id,
+      snapshot: { title: page.title, blocks: snapshotBlocks },
+    };
+    const history = [version, ...page.history].slice(0, 50);
+    return { ...s, pages: { ...s.pages, [pageId]: { ...page, history } } };
+  });
+}
+
+export function restoreVersion(pageId: string, versionId: string) {
+  setState((s) => {
+    const page = s.pages[pageId];
+    if (!page) return s;
+    const version = page.history.find((v) => v.id === versionId);
+    if (!version) return s;
+    const newBlocks = { ...s.blocks };
+    for (const oldBlockId of page.blocks) {
+      delete newBlocks[oldBlockId];
+    }
+    for (const [bid, b] of Object.entries(version.snapshot.blocks)) {
+      newBlocks[bid] = b;
+    }
+    return {
+      ...s,
+      blocks: newBlocks,
+      pages: {
+        ...s.pages,
+        [pageId]: {
+          ...page,
+          title: version.snapshot.title,
+          blocks: Object.keys(version.snapshot.blocks),
+          updatedAt: Date.now(),
+        },
+      },
+    };
+  });
+}
+
+// =========== Calendar / Mail (small helpers) ============
+
+export function upsertCalendarEvent(event: CalendarEvent) {
+  setState((s) => ({ ...s, calendarEvents: { ...s.calendarEvents, [event.id]: event } }));
+}
+
+export function deleteCalendarEvent(id: string) {
+  setState((s) => {
+    const c = { ...s.calendarEvents };
+    delete c[id];
+    return { ...s, calendarEvents: c };
+  });
+}
+
+export function upsertMail(mail: Mail) {
+  setState((s) => ({ ...s, mails: { ...s.mails, [mail.id]: mail } }));
+}
+
+// =========== AI credits ============
+
+export function consumeAICredits(amount: number) {
+  setState((s) => {
+    const wid = s.currentWorkspaceId;
+    if (!wid) return s;
+    const w = s.workspaces[wid];
+    if (!w) return s;
+    return {
+      ...s,
+      workspaces: { ...s.workspaces, [wid]: { ...w, aiCredits: Math.max(0, w.aiCredits - amount) } },
+    };
+  });
+}
+
+// =========== Templates ============
+
+export function saveTemplate(t: PageTemplate) {
+  setState((s) => ({ ...s, templates: { ...s.templates, [t.id]: t } }));
+}

@@ -8,10 +8,25 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// SSR-safe storage shim. On the server we have no localStorage; supabase
+// would otherwise try to read it eagerly and throw a ReferenceError.
+const memoryStorage = (() => {
+  const m = new Map<string, string>();
+  return {
+    getItem: (k: string) => m.get(k) ?? null,
+    setItem: (k: string, v: string) => { m.set(k, v); },
+    removeItem: (k: string) => { m.delete(k); },
+  };
+})();
+
+const isBrowser = typeof globalThis !== "undefined" && typeof (globalThis as { localStorage?: Storage }).localStorage !== "undefined";
+
+const storage = isBrowser ? (globalThis as { localStorage: Storage }).localStorage : memoryStorage;
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
-    storage: localStorage,
-    persistSession: true,
-    autoRefreshToken: true,
-  }
+    storage,
+    persistSession: isBrowser,
+    autoRefreshToken: isBrowser,
+  },
 });

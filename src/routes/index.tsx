@@ -1,63 +1,101 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { FileText, Plus, Search, Star, Hash, ChevronRight } from "lucide-react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "NotionClone — Your workspace, reimagined" },
-      { name: "description", content: "A minimal, fast Notion-style workspace for notes, docs and ideas." },
+      { name: "description", content: "A clean canvas for thoughts, plans, and projects." },
     ],
   }),
-  component: Index,
+  component: Landing,
 });
 
-function Index() {
-  const pages = [
-    { icon: FileText, title: "Getting Started", subtitle: "Welcome to your workspace" },
-    { icon: Hash, title: "Roadmap Q3", subtitle: "Planning · 12 blocks" },
-    { icon: Star, title: "Ideas", subtitle: "Captured thoughts" },
-    { icon: FileText, title: "Meeting Notes", subtitle: "Updated 2h ago" },
-  ];
+function Landing() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && user) {
+      navigate({ to: "/app" });
+    }
+  }, [loading, user, navigate]);
 
   return (
-    <div className="min-h-screen bg-background flex">
-      <aside className="w-64 border-r border-border bg-sidebar p-4 hidden md:flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-2 py-3 text-sm font-semibold">
-          <div className="size-6 rounded bg-primary text-primary-foreground grid place-items-center text-xs">N</div>
-          <span>NotionClone</span>
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="border-b border-border h-14 flex items-center justify-between px-4">
+        <Link to="/" className="flex items-center gap-2 font-semibold">
+          <span className="size-7 rounded bg-primary text-primary-foreground grid place-items-center font-bold">N</span>
+          NotionClone
+        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            to="/auth"
+            className="text-sm px-3 py-1.5 rounded hover:bg-accent"
+            data-testid="header-signin"
+          >
+            Sign in
+          </Link>
+          <Link
+            to="/auth"
+            className="text-sm px-3 py-1.5 rounded bg-primary text-primary-foreground"
+            data-testid="header-signup"
+          >
+            Get started
+          </Link>
         </div>
-        <button className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent text-muted-foreground">
-          <Search className="size-4" /> Search
-        </button>
-        <button className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent text-muted-foreground">
-          <Plus className="size-4" /> New page
-        </button>
-        <div className="mt-4 px-2 text-xs uppercase tracking-wider text-muted-foreground">Workspace</div>
-        {pages.map((p) => (
-          <button key={p.title} className="flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-accent text-foreground">
-            <ChevronRight className="size-3 text-muted-foreground" />
-            <p.icon className="size-4 text-muted-foreground" />
-            <span className="truncate">{p.title}</span>
-          </button>
-        ))}
-      </aside>
-
-      <main className="flex-1 max-w-3xl mx-auto px-8 py-16">
-        <div className="text-6xl mb-4">📝</div>
-        <h1 className="text-5xl font-bold tracking-tight mb-4">Untitled</h1>
-        <p className="text-muted-foreground mb-10">
-          Press <kbd className="px-1.5 py-0.5 rounded border border-border text-xs">/</kbd> for commands, or just start writing.
-        </p>
-
-        <div className="space-y-3 text-foreground">
-          <p className="text-lg leading-relaxed">
-            Welcome to <strong>NotionClone</strong> — a clean canvas for your thoughts, notes, and projects.
+      </header>
+      <main className="max-w-4xl mx-auto px-6 pt-20 pb-32">
+        <div className="text-center">
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight">
+            Your second brain.
+          </h1>
+          <p className="mt-3 text-2xl md:text-3xl font-semibold text-muted-foreground">
+            Docs, databases, calendar & AI — all in one workspace.
           </p>
-          <p className="text-muted-foreground leading-relaxed">
-            Tell me what you'd like to build next: blocks editor, databases, sharing, dark mode… I'm ready when you are.
+          <p className="mt-6 text-base text-muted-foreground max-w-2xl mx-auto">
+            An open-source Notion alternative. Write, plan, and ship in a fast block-based editor with rich databases, real-time collaboration-ready, and ask-AI everywhere.
           </p>
+          <div className="mt-8 flex items-center justify-center gap-3">
+            <Link
+              to="/auth"
+              className="bg-primary text-primary-foreground rounded-md px-5 py-2.5 font-medium hover:opacity-90"
+              data-testid="hero-cta"
+            >
+              Start for free
+            </Link>
+            <a
+              href="https://github.com"
+              className="border border-border rounded-md px-5 py-2.5 hover:bg-accent"
+            >
+              Star on GitHub
+            </a>
+          </div>
         </div>
+
+        <section className="mt-24 grid md:grid-cols-3 gap-4">
+          <FeatureCard icon="📝" title="Block-based editor" desc="Slash menu, drag-and-drop, headings, todos, callouts, code, embeds." />
+          <FeatureCard icon="🗄️" title="Powerful databases" desc="Table, board, calendar, timeline, gallery, chart and form views." />
+          <FeatureCard icon="✨" title="AI everywhere" desc="Ask Notion, AI blocks, Plan Mode and search across your workspace." />
+          <FeatureCard icon="📅" title="Calendar & Mail" desc="Two-way sync with date properties and basic Mail experience." />
+          <FeatureCard icon="🤝" title="Comments & history" desc="Inline comments, mentions, page versions, and trash." />
+          <FeatureCard icon="🌍" title="Publish to the web" desc="Share any page as a public site with a custom slug." />
+        </section>
       </main>
+      <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
+        Built as a 24h demo. Inspired by Notion.
+      </footer>
+    </div>
+  );
+}
+
+function FeatureCard({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+  return (
+    <div className="rounded-lg border border-border p-4 bg-card">
+      <div className="text-2xl">{icon}</div>
+      <div className="mt-2 font-semibold">{title}</div>
+      <div className="mt-1 text-sm text-muted-foreground">{desc}</div>
     </div>
   );
 }
