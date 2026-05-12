@@ -57,10 +57,33 @@ export function InlineToolbar() {
     }
   }
 
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
+  const savedRangeRef = useRef<Range | null>(null);
+
   function applyLink() {
-    const url = prompt("URL:");
-    if (!url) return;
+    // Save the selection so the popover input doesn't lose it on focus change.
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+    setLinkUrl("");
+    setLinkOpen(true);
+  }
+
+  function commitLink(url: string) {
+    if (!url) {
+      setLinkOpen(false);
+      return;
+    }
+    // Restore selection
+    if (savedRangeRef.current) {
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(savedRangeRef.current);
+    }
     exec("createLink", url);
+    setLinkOpen(false);
   }
 
   function applyColor(color: string) {
@@ -154,6 +177,33 @@ export function InlineToolbar() {
       >
         <Sparkles className="size-3.5" />
       </button>
+      {linkOpen && (
+        <div
+          className="absolute left-0 top-full mt-1 bg-popover border border-border rounded-md shadow-lg p-2 flex gap-1"
+          onMouseDown={(e) => e.preventDefault()}
+          data-testid="ib-link-popover"
+        >
+          <input
+            autoFocus
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitLink(linkUrl.trim());
+              if (e.key === "Escape") setLinkOpen(false);
+            }}
+            placeholder="https://…"
+            className="bg-background border border-input rounded text-xs px-2 py-1 w-48"
+            data-testid="ib-link-input"
+          />
+          <button
+            onMouseDown={(e) => { e.preventDefault(); commitLink(linkUrl.trim()); }}
+            className="text-xs bg-primary text-primary-foreground rounded px-2"
+            data-testid="ib-link-apply"
+          >
+            Apply
+          </button>
+        </div>
+      )}
     </div>
   );
 }

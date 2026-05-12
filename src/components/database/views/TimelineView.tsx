@@ -14,8 +14,8 @@ export function TimelineView({ databaseId, viewId }: { databaseId: string; viewI
   const endProp = view.endProperty ? db.properties.find((p) => p.id === view.endProperty) : null;
   const titleProp = db.properties.find((p) => p.type === "title");
   const rows = db.rows.map((r) => rowsMap[r]).filter((r) => r && !r.isInTrash);
-  const filtered = applyFilters(rows, view.filters, db);
-  const sorted = applySorts(filtered, view.sorts, db);
+  const filtered = applyFilters(rows, (view.filters ?? []), db);
+  const sorted = applySorts(filtered, (view.sorts ?? []), db);
 
   const dates = sorted.map((r) => (r.values[startProp.id] as string | undefined)).filter(Boolean) as string[];
   const minDate = dates.length > 0 ? new Date(dates.reduce((a, b) => (a < b ? a : b))) : new Date();

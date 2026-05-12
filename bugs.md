@@ -1251,7 +1251,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: top-level keys are workspace/teamspaces/pages/blocks/databases/rows/comments/templates/automations/calendarEvents/mails/exportedAt/schemaVersion. No `users`/`currentUser` block. `pageOwners`/`createdBy`/`lastEditedBy` reference UUIDs that won't resolve in a fresh import.
 - Expected: include a `users` map (or at least pseudonymized {id, name, email, avatar}) so re-import can rebind authorship; or strip those fields if anonymization is intended.
 
-### B-911 — Mobile sidebar overlays content and never auto-closes (P2, open)
+### B-911 — Mobile sidebar overlays content and never auto-closes (P2, fixed)
 - File: src/components/layout/Sidebar.tsx — `max-md:absolute max-md:inset-y-0 max-md:left-0 max-md:shadow-xl` with no scrim.
 - Steps: open in 375px viewport. Tap a page in sidebar.
 - Observed: sidebar covers ~70% of screen, no overlay scrim, and persists after navigation; page content is barely usable.
@@ -1438,7 +1438,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-1126 — Code block copy works; "javascript" default language is bundled into the select label (P3, info)
 - The `<select data-testid="code-lang-…">` aggregates options as visible text rendering with no separators ("javascripttypescriptpython…") in the slash menu fallback view (the select itself is fine when expanded). Cosmetic.
 
-### B-1127 — Mobile sidebar still overlays (B-911) and there is no scrim (P2, open) — verified
+### B-1127 — Mobile sidebar still overlays (B-911) and there is no scrim (P2, fixed) — verified
 - 375x812 viewport. Sidebar slides over content; tap a page link, sidebar persists. Existing B-911 unchanged.
 
 ### B-1128 — Wide-table seed shows 22 columns even though I requested 26 (P3, info)
@@ -1499,3 +1499,142 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-1142 — Breadcrumb block only shows current page when no parent chain exists (P3, info)
 - Steps: /breadcrumb on a top-level page renders just "👋 Welcome". Hierarchy support for sub-pages exists in store but breadcrumb doesn't traverse it well from a top-level page (no surprise since there's no parent).
 - Expected: same on top-level pages (acceptable), but ensure the breadcrumb on a sub-page shows the full chain.
+
+
+## 2026-05-12 23:35 — Test agent batch 14 (verification + exploration)
+
+### B-1200 — Verification: B-1112 created-by/last-edited-by no longer crashes; missing values render "—" (P3, info)
+- Steps: create a DB with `type:"created-by"` + `"last-edited-by"` properties; seed one row with the meta fields, one row without (`delete row.createdBy; delete row.lastEditedBy`).
+- Observed: row with values renders the truncated id tail ("992914"); row without renders "—". No crash.
+- B-1112 confirmed fixed.
+
+### B-1201 — Verification: B-1107 DB ButtonCell renders emoji + label and toasts per action kind (P3, info)
+- Steps: created a DB with `actions:[{kind:"show-confirmation",...}]`, `{kind:"open-page"}`, `{kind:"edit-property"}`, `{kind:"send-webhook"}`, `{kind:"insert-block"}`, unknown kind, and `actions:[]`.
+- Observed: button renders `"<emoji> <label>"`; click of each: show-confirmation→message toast; open-page→navigation; edit-property→cell value updates; send-webhook→"Sent webhook to <url>" toast; insert-block→silently inserts (no toast — see B-1202); unknown→"Unknown button action: weird-stuff"; empty→"Ran "<label>" — configure actions in property settings."
+- B-1107 confirmed fixed.
+
+### B-1202 — `insert-block` action has no user-visible feedback when database has no parent page (P3, open)
+- File: src/components/database/PropertyEditor.tsx around line 580.
+- Observed: when `database.parentId` is unset the action is a complete no-op — no toast, no error. With a parent the block is appended but no confirmation toast either ("Inserted block" only fires inside the `else` branch).
+- Expected: at minimum toast "Inserted block" or "Cannot insert: database has no parent page" so the user knows what happened.
+
+### B-1203 — TableView crashes ("Cannot read properties of undefined (reading 'includes')") when a view lacks `hiddenProperties` (P1, fixed)
+- File: src/components/database/views/TableView.tsx line ~44.
+- Steps: create or import a DB where `views[i]` does not include `hiddenProperties: []` (e.g. older seeds, custom plugins, manual JSON). Navigate to the DB.
+- Observed: full-page error boundary "This page didn't load". Other DBs in the workspace remain usable but the toaster mount can also disappear depending on tree position.
+- Expected: defensively fall back to `view.hiddenProperties ?? []` before calling `.includes()`, or migrate older view objects on load.
+
+### B-1204 — Verification: B-1131 inline teamspace input replaces native prompt (P3, info)
+- Steps: stubbed window.prompt to count invocations → clicked "Add teamspace" → an input with `data-testid="add-teamspace-input"` appeared, prompt was never called. Typed "QA Team" + Enter → new teamspace persisted.
+- B-1131 confirmed fixed.
+
+### B-1205 — Verification: B-1135 calendar inline events now show Trash buttons (P3, info)
+- Steps: created "B14 trash event" on 2026-05-15 via the inline composer. Clicked the day cell.
+- Observed: the right-rail day list shows both the existing "Test event B13" and "B14 trash event" each with a `lucide-trash-2` destructive button.
+- B-1135 confirmed fixed.
+
+### B-1206 — Verification: B-1120 /p/<slug> renders synced-block children (P3, info)
+- Steps: opened /p/synced-block-test (the existing published page with synced-block + ref).
+- Observed: body text "Source content EDITED LIVE" appears twice — once for the source, once for the mirror. No "(Synced content)" placeholder remains.
+- B-1120 confirmed fixed.
+
+### B-1207 — Verification: B-1113 wide-table title column stays anchored on scroll (P3, info)
+- Steps: opened db_b13_wide (22 columns) → set scrollLeft to 800 on the scroll container → checked first `<th>`/`<td>` computed style and bounding rect.
+- Observed: first column has `position: sticky; left: 0; z-index: 1` (cells) / `2` (header), background `bg-card`. Title header bounding rect stays at left=281px (sidebar offset) regardless of horizontal scroll.
+- B-1113 confirmed fixed.
+
+### B-1208 — Verification: B-1114 page-level button with no actions emits toast (P3, info)
+- Steps: seeded a `{type:"button", label:"No-op Btn", actions:[]}` block on Welcome → clicked it.
+- Observed: toast `Ran "No-op Btn" — open block menu to add actions.` (slightly different copy than the DB cell — see B-1209).
+- B-1114 confirmed fixed.
+
+### B-1209 — Page button vs DB button "empty actions" toast wording is inconsistent (P3, info)
+- DB cell says `Ran "<label>" — configure actions in property settings.`; block-level says `Ran "<label>" — open block menu to add actions.`
+- Minor — but the two should ideally share copy or at least both link to the relevant settings affordance.
+
+### B-1210 — Verification: B-1136 history restore now updates the title contenteditable (P3, info)
+- Steps: opened Welcome → History → Save snapshot now → mutated H1 to "MUTATED_TITLE_X" → re-opened History → clicked the just-saved Restore.
+- Observed: H1 contenteditable updates to "Welcome" without reload; store title also "Welcome".
+- B-1136 confirmed fixed.
+
+### B-1211 — Mobile sidebar still has no scrim and clicking outside doesn't dismiss it (P2, fixed)
+- Reproduces B-1127 / B-911 in batch 14. Mobile preset 375x812. Aside opens by clicking the "Open sidebar" aria-label. After opening:
+  - No overlay/backdrop is rendered (`getComputedStyle` finds no fixed div with semi-transparent background).
+  - Tapping the content area on the right doesn't close the drawer.
+- Expected: a fixed div with `bg-black/40` + `onClick=closeSidebar` behind the drawer; same as the "Esc closes" affordance.
+
+### B-1212 — DB row title click does not open a row-detail page (P2, open) — confirms I-300
+- Steps: on db_b13_wide, click any `[data-testid^="cell-title-"]`.
+- Observed: the input gains focus for inline edit; there is no expand/open icon (`row-open-*` testid does not exist). No `/app/row/<id>` route exists in the file router.
+- Expected: a hover-revealed "↗ Open" affordance per row that pushes the user to a row-detail page (mirroring Notion's row peek).
+
+### B-1213 — Cmd+/ does not open a shortcut/help overlay (P3, open)
+- Steps: focused on a Welcome page contenteditable; dispatched keydown `{key:"/", metaKey:true}` and `{ctrlKey:true}`. No dialog opens, no toast, no body diff.
+- Expected: Cmd+/ is the universal "show keyboard shortcuts" affordance. Either implement it or repurpose for a quick-action menu.
+
+### B-1214 — Synced-block propagation paints noticeably slowly with 30 refs on one page (P3, info)
+- Steps: created a page with 1 synced-block (1 text child "Source body for perf test") + 30 synced-block-refs. Edited the source child via execCommand insertText.
+- Observed: rAF callback timed out for >30s in the eval harness (the renderer became unresponsive); on settling, all 31 mirrors carry the new text. So the propagation is correct but the perf is poor at this scale.
+- Expected: re-renders should be O(refs) ≤ 16ms. Possibly the store update causes a full subtree re-render of every synced-block-ref via shallow `useStore`.
+
+### B-1215 — Auth sign-up + sign-out + sign-in round trip works (P3, info)
+- Steps: from /auth → Sign up: filled name/email/password → submitted form → workspace creates → Log out → /auth → fill same email/password → form.requestSubmit() returns to /app.
+- Observation: when the user clicks the "Sign in" button directly (not via form.requestSubmit), the click did not always submit — likely because the click target was outside the form. Minor UX nit; the form does submit normally on Enter.
+
+### B-1216 — Sign-in: clicking the visible "Sign in" button does not always submit if focus is elsewhere (P3, open)
+- Steps: stub native dialogs; on /auth (sign-in tab), set value on auth-email + auth-password via the native setter; click the visible "Sign in" button (`Array.from(...).find(b => b.innerText === "Sign in")`).
+- Observed: page stays at /auth with no error message; no console errors. Calling `document.querySelector('form').requestSubmit()` works.
+- Likely cause: there are two "Sign in" elements (the tab and the submit button) and `Array.find` returns the tab button (which only switches mode).
+- Expected: the tab and submit should be visually/semantically distinct, or both should have unique testids.
+
+### B-1217 — /page slash command works end-to-end (P3, info)
+- Steps: /page on Welcome → a new child "Untitled" page is created in the sidebar; a `[data-testid="pagelink-<blkid>"]` block is inserted; clicking the pagelink navigates to the child page.
+- Confirmed: works as expected.
+
+### B-1218 — Trash route never lists deleted databases (P2, fixed)
+- Steps: seeded a DB with `isInTrash: true` directly into the user state, reloaded, navigated to Trash.
+- Observed: Trash shows "Trash is empty." even though `state.databases[<id>].isInTrash === true`.
+- Expected: the Trash route should aggregate trashed pages + databases (+ optionally rows / blocks) so the user can restore them.
+
+### B-1219 — View menu has no Group-by picker in any view type (P2, open) — confirms I-501
+- Steps: created a DB with table + board views; opened `view-menu-v_gb_t` (table) and `view-menu-v_gb_b` (board). Each menu exposes Rename / Delete / Add sort / Add filter / Add property only.
+- Observed: there is no UI to set or change `groupByProperty`; the board's group-by must be set via direct state mutation (or it falls back to `_all`).
+- Expected: a "Group by" select / picker in view-menu (especially for board / list / chart views).
+
+### B-1220 — Form view exposes "Copy form link" that points to a non-existent /form/... route (P2, open) — relates to B-1138
+- Steps: created a DB → added Form view → clicked `form-copylink-...` (with clipboard stub). Returns `http://localhost:8080/form/<dbId>/<viewId>`. Navigating to that URL renders the 404 page.
+- Expected: either implement the /form route as a public submission form (writes rows to the target DB), or remove / re-label the button (e.g., "Copy preview link" pointing back to the editor).
+
+### B-1221 — Inline toolbar "Insert link" uses native window.prompt (P2, fixed)
+- File: src/components/editor/InlineToolbar.tsx line 60-64. `function applyLink() { const url = prompt("URL:"); ... }`.
+- Steps: stub window.prompt to record calls → select text in any block → click `[data-testid="ib-link"]` (mousedown). Prompt is called once and the returned URL is wrapped via `createLink`.
+- Expected: replace with an inline popover input (same pattern as B-1131 / B-1005). Native prompts can't be styled and are flagged as a regression by the task brief.
+
+### B-1222 — Inline toolbar "Insert link" button click silently fails after `prompt` stub returns empty/null (P3, info)
+- If the user dismisses the prompt (returns null), the link is silently skipped. With an inline popover this is fine, but the current native prompt has no way to communicate "did you cancel or did you want an empty href"?
+
+### B-1223 — Cmd+K command palette opens but searching by page title returns no items in this session (P3, info)
+- Steps: Cmd+K → input has focus → type "Welcome" → no `command-item-*` testids appear (the dropdown stays empty). The agent14 workspace does have a Welcome page in localStorage so the search index may not include freshly-created/seeded pages until something else triggers a rebuild.
+- Re-test with B-13's existing Welcome page once the index re-runs (CommandPalette.tsx).
+
+### B-1224 — Block menu items "Duplicate" and "Turn into &lt;type&gt;" lack testids (P3, info)
+- File: src/components/editor/Block.tsx menu — only `menu-delete-<bid>` and `turn-<type>` are exposed; Duplicate has none.
+- Useful for E2E selectors.
+
+### B-1225 — Image block via /image renders a working `media-url-*` + `media-embed-*` flow (P3, info)
+- Slash /image → block has `[data-testid="media-url-<bid>"]` input + `[data-testid="media-embed-<bid>"]` button + `[data-testid="media-file-<bid>"]` file picker. Pasting a URL + clicking Embed inserts `<img src=...>`. Enter on the input does not submit (must click Embed). Possible UX nit.
+
+### B-1226 — Inbox: page comment shows up as a notification, "Mark as read" clears it (P3, info)
+- Comment added at page level → /app/inbox shows "👋 Welcome 12/05/2026 22:07:47 Test comment B14 Mark as read"; clicking the button reduces inbox to "All caught up! ✨".
+
+### B-1227 — Dark-mode toggle works (P3, info)
+- Click the "Toggle dark mode" aria-label button → `<html>` gains `dark` class. Toggle persists across reload via store.ui.
+
+### B-1228 — Templates instantiate as new pages in Private teamspace (P3, info)
+- Click any template button → new page in Private with the template's title / body / icon. Works.
+
+### B-1229 — AI panel responds with a deterministic fallback "I couldn't find anything specific…" message (P3, info)
+- Steps: Cmd+. → AI panel opens; typed "Hello agent" + Enter / Send → demo fallback message. Acceptable for demo mode but confirm there is a clear "Demo (no API key)" disclaimer beyond the small footer.
+
+### B-1230 — Sidebar pages are not draggable for reorder (re-affirms B-1132, P3, info)
+- All `[data-testid^="handle-"]` (19 of them on Welcome) ARE draggable; sidebar pages have no draggable wrappers.

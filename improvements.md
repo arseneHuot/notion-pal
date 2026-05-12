@@ -571,3 +571,51 @@ Priority: high / medium / low.
 
 ### I-1116 — Toggle the visibility of `created-by` / `last-edited-by` columns when row metadata is missing (medium, open)
 - See B-1112. Either default-hide them when rows lack the field, or render them with a "—" placeholder so a single bad row doesn't tank the page.
+
+
+## 2026-05-12 23:35 — Test agent batch 14
+
+### I-1200 — Toast after `insert-block` DB button action (low, open)
+- See B-1202. Either always toast ("Inserted block") or warn ("Database has no parent page — block was not inserted") so the user knows the click did something.
+
+### I-1201 — Defensively coerce `view.hiddenProperties`/`filters`/`sorts`/`propertyOrder` to arrays before use (high, open)
+- See B-1203. Crashes from old seeds blow up the whole DB route. Pattern: `(view.hiddenProperties ?? []).includes(p.id)`. Apply uniformly across TableView/BoardView/etc.
+
+### I-1202 — Share copy between page-button-empty-actions and DB-button-empty-actions toasts (low, open)
+- See B-1209. Either link both to a "Configure actions →" affordance or use the same string. Minor consistency win.
+
+### I-1203 — Render a mobile drawer scrim with click-to-dismiss (high, open)
+- See B-1211 / B-1127 / B-911. Pattern: a `fixed inset-0 bg-black/40 z-40` overlay sibling of the drawer, with `onClick={closeSidebar}` and `aria-hidden`. Animate `opacity`. The Sidebar component already tracks a collapsed/open state in store.ui — wire it through.
+
+### I-1204 — Row-detail / row-peek experience for DB rows (high, open)
+- See B-1212 / I-300. Add a hover-revealed `↗` icon to each row that pushes `/app/row/<rowId>` (or a side-panel peek). Each row should have a route that renders the title as the page H1 + the cell values as a vertical PropertyEditor + a child Page body (rows can have a `blockIds` array per Notion spec).
+
+### I-1205 — Implement Cmd+/ shortcut palette / help overlay (medium, open)
+- See B-1213. Either a "show all shortcuts" Cheatsheet modal or a quick-action picker. Should be discoverable from the Help menu too.
+
+### I-1206 — Investigate synced-block-ref render perf with many mirrors (medium, open)
+- See B-1214. Memoise the SyncedBlockRef component on `(sourceId, blockIds, blockContents)` so unaffected refs don't re-render. Or hoist the source's children into a shared component that the refs reference, so an edit to the source triggers a single component render that fans out via portal.
+
+### I-1207 — Disambiguate auth "Sign in" tab vs submit button (low, open)
+- See B-1216. Give the tab a `data-testid="auth-tab-signin"` and the submit `data-testid="auth-submit"`. Or render the tab as a `nav` element instead of a `<button>`.
+
+### I-1208 — Trash route should list trashed databases (and ideally rows / blocks) (high, open)
+- See B-1218. Walk `state.databases` for `isInTrash === true` in TrashRoute, render with restore + permanent-delete actions; same UI as trashed pages.
+
+### I-1209 — Group-by picker in view-menu for board / list / chart / etc. (high, open)
+- See B-1219 / I-501. A simple select in the view-menu popover bound to `view.groupByProperty` (board) / `view.xAxis` (chart) / etc.
+
+### I-1210 — Implement /form/&lt;dbId&gt;/&lt;viewId&gt; public submission route (high, open)
+- See B-1220 / B-1138. Render each property as a form field (title→text input, status/select→native select with options, date→date input, checkbox→checkbox, etc.), persist on submit via `addDatabaseRow`. Probably anonymous or behind a token.
+
+### I-1211 — Replace native prompt for inline-link with an inline popover (high, open)
+- See B-1221. The same popover pattern used by teamspace-rename / +Add property fits perfectly: an absolutely-positioned input that anchors to the link button, supports Enter to commit + Esc to dismiss, prefills with current href when editing an existing link, and offers a "Remove link" affordance.
+
+### I-1212 — Allow Enter in image-URL input to commit (low, open)
+- See B-1225. Pasting a URL + Enter should call the same handler as the Embed button. Common Notion pattern.
+
+### I-1213 — Add testids for Duplicate / Turn-into options in block menu (low, open)
+- See B-1224. Aids E2E + a11y.
+
+### I-1214 — Add a clearer "Demo mode" badge to the AI panel (low, open)
+- See B-1229. The footer "Models: GPT-5.2 · ... (demo)" is easy to miss. A subtle pill in the header would prevent false expectations.

@@ -12,7 +12,7 @@ export function ChartView({ databaseId, viewId }: { databaseId: string; viewId: 
   const view = db?.views.find((v) => v.id === viewId);
   if (!db || !view || view.type !== "chart") return null;
   const rows = db.rows.map((r) => rowsMap[r]).filter((r) => r && !r.isInTrash);
-  const filtered = applyFilters(rows, view.filters, db);
+  const filtered = applyFilters(rows, (view.filters ?? []), db);
 
   // Group by the xProperty (default first non-title prop)
   const xProp = db.properties.find((p) => p.id === view.xProperty) ?? db.properties.find((p) => p.type !== "title");

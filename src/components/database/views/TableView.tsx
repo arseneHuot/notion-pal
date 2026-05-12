@@ -23,9 +23,9 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
   if (!db || !view || view.type !== "table") return null;
 
   const rows = db.rows.map((r) => rowsMap[r]).filter((r) => r && !r.isInTrash);
-  const filtered = applyFilters(rows, view.filters, db);
-  const sorted = applySorts(filtered, view.sorts, db);
-  const visibleProps = db.properties.filter((p) => !view.hiddenProperties.includes(p.id));
+  const filtered = applyFilters(rows, view.filters ?? [], db);
+  const sorted = applySorts(filtered, view.sorts ?? [], db);
+  const visibleProps = db.properties.filter((p) => !(view.hiddenProperties ?? []).includes(p.id));
 
   return (
     <div className="overflow-x-auto rounded border border-border">

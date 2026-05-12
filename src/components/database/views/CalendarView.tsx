@@ -16,7 +16,7 @@ export function CalendarView({ databaseId, viewId }: { databaseId: string; viewI
   const titleProp = db.properties.find((p) => p.type === "title");
 
   const rows = db.rows.map((r) => rowsMap[r]).filter((r) => r && !r.isInTrash);
-  const filtered = applyFilters(rows, view.filters, db);
+  const filtered = applyFilters(rows, (view.filters ?? []), db);
 
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const last = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);

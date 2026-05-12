@@ -52,8 +52,17 @@ function AppLayout() {
   if (!user) return null;
 
   return (
-    <div className="h-screen flex bg-background text-foreground overflow-hidden">
+    <div className="h-screen flex bg-background text-foreground overflow-hidden relative">
       {sidebarOpen && <Sidebar />}
+      {/* Scrim — only visible on small screens when the sidebar is overlaid */}
+      {sidebarOpen && (
+        <button
+          onClick={() => setUI({ sidebarOpen: false })}
+          className="md:hidden fixed inset-0 z-20 bg-black/40 cursor-default"
+          aria-label="Close sidebar"
+          data-testid="sidebar-scrim"
+        />
+      )}
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar />
         <main className="flex-1 overflow-auto">

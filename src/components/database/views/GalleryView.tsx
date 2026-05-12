@@ -8,10 +8,10 @@ export function GalleryView({ databaseId, viewId }: { databaseId: string; viewId
   const view = db?.views.find((v) => v.id === viewId);
   if (!db || !view || view.type !== "gallery") return null;
   const titleProp = db.properties.find((p) => p.type === "title");
-  const visibleProps = db.properties.filter((p) => !view.hiddenProperties.includes(p.id) && p.type !== "title").slice(0, 4);
+  const visibleProps = db.properties.filter((p) => !(view.hiddenProperties ?? []).includes(p.id) && p.type !== "title").slice(0, 4);
   const rows = db.rows.map((r) => rowsMap[r]).filter((r) => r && !r.isInTrash);
-  const filtered = applyFilters(rows, view.filters, db);
-  const sorted = applySorts(filtered, view.sorts, db);
+  const filtered = applyFilters(rows, (view.filters ?? []), db);
+  const sorted = applySorts(filtered, (view.sorts ?? []), db);
   const sizeClass = view.cardSize === "small" ? "w-40" : view.cardSize === "large" ? "w-72" : "w-56";
 
   return (

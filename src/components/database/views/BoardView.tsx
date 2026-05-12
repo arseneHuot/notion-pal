@@ -11,11 +11,11 @@ export function BoardView({ databaseId, viewId }: { databaseId: string; viewId: 
   const view = db?.views.find((v) => v.id === viewId);
   if (!db || !view || view.type !== "board") return null;
   const groupBy = db.properties.find((p) => p.id === view.groupBy);
-  const visibleProps = db.properties.filter((p) => !view.hiddenProperties.includes(p.id) && p.id !== view.groupBy);
+  const visibleProps = db.properties.filter((p) => !(view.hiddenProperties ?? []).includes(p.id) && p.id !== view.groupBy);
 
   const rows = db.rows.map((r) => rowsMap[r]).filter((r) => r && !r.isInTrash);
-  const filtered = applyFilters(rows, view.filters, db);
-  const sorted = applySorts(filtered, view.sorts, db);
+  const filtered = applyFilters(rows, (view.filters ?? []), db);
+  const sorted = applySorts(filtered, (view.sorts ?? []), db);
 
   const groups = useMemo(() => {
     if (!groupBy || (groupBy.type !== "select" && groupBy.type !== "status" && groupBy.type !== "multi-select")) {

@@ -25,6 +25,14 @@ export function Sidebar() {
   function handleNewPage(teamspaceId: string | null = null) {
     const pageId = createPage({ title: "", teamspaceId });
     navigate({ to: "/app/p/$pageId", params: { pageId } });
+    closeOnMobile();
+  }
+
+  // Auto-dismiss the drawer after navigation on small screens.
+  function closeOnMobile() {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches) {
+      setUI({ sidebarOpen: false });
+    }
   }
 
   return (
@@ -48,11 +56,11 @@ export function Sidebar() {
       <div className="px-2 space-y-0.5">
         <SidebarButton icon={<Search className="size-4" />} label="Search" testid="sidebar-search" onClick={() => window.dispatchEvent(new CustomEvent("open-command-palette"))} shortcut="⌘K" />
         <SidebarButton icon={<Sparkles className="size-4" />} label="Ask AI" testid="sidebar-ai" onClick={() => window.dispatchEvent(new CustomEvent("open-ai-chat"))} />
-        <SidebarButton icon={<Home className="size-4" />} label="Home" testid="sidebar-home" onClick={() => navigate({ to: "/app" })} />
-        <SidebarButton icon={<Inbox className="size-4" />} label="Inbox" testid="sidebar-inbox" onClick={() => navigate({ to: "/app/inbox" })} />
-        <SidebarButton icon={<CalIcon className="size-4" />} label="Calendar" testid="sidebar-calendar" onClick={() => navigate({ to: "/app/calendar" })} />
-        <SidebarButton icon={<MailIcon className="size-4" />} label="Mail" testid="sidebar-mail" onClick={() => navigate({ to: "/app/mail" })} />
-        <SidebarButton icon={<FileBox className="size-4" />} label="Templates" testid="sidebar-templates" onClick={() => navigate({ to: "/app/templates" })} />
+        <SidebarButton icon={<Home className="size-4" />} label="Home" testid="sidebar-home" onClick={() => { navigate({ to: "/app" }); closeOnMobile(); }} />
+        <SidebarButton icon={<Inbox className="size-4" />} label="Inbox" testid="sidebar-inbox" onClick={() => { navigate({ to: "/app/inbox" }); closeOnMobile(); }} />
+        <SidebarButton icon={<CalIcon className="size-4" />} label="Calendar" testid="sidebar-calendar" onClick={() => { navigate({ to: "/app/calendar" }); closeOnMobile(); }} />
+        <SidebarButton icon={<MailIcon className="size-4" />} label="Mail" testid="sidebar-mail" onClick={() => { navigate({ to: "/app/mail" }); closeOnMobile(); }} />
+        <SidebarButton icon={<FileBox className="size-4" />} label="Templates" testid="sidebar-templates" onClick={() => { navigate({ to: "/app/templates" }); closeOnMobile(); }} />
       </div>
 
       {favorites.length > 0 && (
@@ -86,8 +94,8 @@ export function Sidebar() {
       </div>
 
       <div className="mt-2 px-2 pb-3 border-t border-sidebar-border pt-3 space-y-0.5">
-        <SidebarButton icon={<Trash className="size-4" />} label="Trash" testid="sidebar-trash" onClick={() => navigate({ to: "/app/trash" })} />
-        <SidebarButton icon={<Settings className="size-4" />} label="Settings" testid="sidebar-settings" onClick={() => navigate({ to: "/app/settings" })} />
+        <SidebarButton icon={<Trash className="size-4" />} label="Trash" testid="sidebar-trash" onClick={() => { navigate({ to: "/app/trash" }); closeOnMobile(); }} />
+        <SidebarButton icon={<Settings className="size-4" />} label="Settings" testid="sidebar-settings" onClick={() => { navigate({ to: "/app/settings" }); closeOnMobile(); }} />
         <div className="flex items-center gap-2 px-2 py-1.5 rounded text-sm">
           <div className="size-6 rounded-full bg-primary/10 grid place-items-center text-xs">
             {user?.avatar ?? "🧑"}
