@@ -4697,3 +4697,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Repro: with no active sort on prop-header-title, the title menu shows only rename / asc / desc — no clear. Once a different prop is sorted, only THAT prop's menu shows the clear option. This is correct UX (don't expose clear when there's nothing to clear) but worth noting for QA — `prop-sort-clear-<id>` testid presence is conditional.
 - Severity: P3 doc.
 
+
+### B-3815 — Public form silently drops row — fixed (commit 51aba2c) — P0 regression
+- Fix: after `localStorage.setItem(data.storageKey, newValue)`, the form route now `window.dispatchEvent(new StorageEvent("storage", { key: data.storageKey, newValue, oldValue: null, storageArea: localStorage, url: location.href }))`. The cross-tab listener in src/lib/store.ts picks this up and rehydrates _state with the new row. Same-tab writes don't normally fire `storage` events, so without this dispatch the host's app rendered stale rows after the user navigated back. Verified live: row count went 5 → 6 after a submit and the row's title field contained the test marker.
+
+### B-3817 — Submit button outside <form> — fixed (commit 51aba2c) — P1
+- Fix: wrapped the form body in `<form data-testid="public-form" onSubmit={(e) => { e.preventDefault(); submit(); }}>`. The submit button is now `type="submit"` AND inside the form, so Enter on the title field submits properly and `submitInsideForm: true`.
+
+### B-3803 — Show-resolved toggle missing testid — fixed (commit 51aba2c)
+- Fix: the existing "Show resolved" checkbox in PageComments now has `data-testid="show-resolved-toggle"`. E2E can flip it to reach resolved comments for editing.
