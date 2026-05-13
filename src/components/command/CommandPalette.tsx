@@ -41,6 +41,11 @@ export function CommandPalette() {
 
   const items = useMemo(() => {
     const q = query.toLowerCase().trim();
+    // Word-order-insensitive matching (B-4204). Split the query into tokens
+    // and require all tokens to appear (in any order) in the haystack.
+    const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
+    const allMatch = (hay: string) => tokens.every((t) => hay.includes(t));
+
     const matchingPages = Object.values(pages)
       .filter((p) => !p.isInTrash)
       .filter((p) => {
@@ -48,17 +53,17 @@ export function CommandPalette() {
         // Defensive: malformed / partially-hydrated pages can have a missing
         // title or blocks array. Coalesce to safe defaults so the palette
         // never throws on a single keystroke (B-3206).
-        if ((p.title ?? "").toLowerCase().includes(q)) return true;
+        if (allMatch((p.title ?? "").toLowerCase())) return true;
         for (const bid of p.blocks ?? []) {
           const b = blocks[bid];
-          if (b && "content" in b && typeof b.content === "string" && stripHtml(b.content).toLowerCase().includes(q)) return true;
+          if (b && "content" in b && typeof b.content === "string" && allMatch(stripHtml(b.content).toLowerCase())) return true;
         }
         return false;
       })
       .slice(0, 10);
 
     const matchingDbs = Object.values(databases)
-      .filter((d) => !d.isInTrash && (!q || (d.name ?? "").toLowerCase().includes(q)))
+      .filter((d) => !d.isInTrash && (!q || allMatch((d.name ?? "").toLowerCase())))
       .slice(0, 5);
 
     const actions: { id: string; label: string; icon: React.ReactNode; action: () => void; group: string }[] = [
@@ -146,14 +151,21 @@ export function CommandPalette() {
     // into view via a hash-anchor query.
     const blockMatches: { id: string; label: string; icon: React.ReactNode; action: () => void; group: string }[] = [];
     if (q.length >= 2) {
+      // Surface up to 10 block-snippet matches (raised from 5, B-4214). One
+      // per page so a single chatty page can't crowd out other matches.
+      const BLOCK_MATCH_CAP = 10;
       for (const p of Object.values(pages)) {
         if (p.isInTrash) continue;
-        if (blockMatches.length >= 5) break;
+        if (blockMatches.length >= BLOCK_MATCH_CAP) break;
         for (const bid of p.blocks ?? []) {
           const b = blocks[bid];
           if (!b || !("content" in b) || typeof b.content !== "string") continue;
           const plain = stripHtml(b.content);
-          const idx = plain.toLowerCase().indexOf(q);
+          const plainLower = plain.toLowerCase();
+          if (!allMatch(plainLower)) continue;
+          // Excerpt anchored on the FIRST matching token so the user sees
+          // context for why this block matched.
+          const idx = plainLower.indexOf(tokens[0] ?? q);
           if (idx === -1) continue;
           const start = Math.max(0, idx - 20);
           const snippet = (start > 0 ? "…" : "") + plain.slice(start, idx + q.length + 30) + (plain.length > idx + q.length + 30 ? "…" : "");

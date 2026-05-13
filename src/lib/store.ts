@@ -40,6 +40,8 @@ export interface AppState {
     teamspacesExpanded: Record<string, boolean>;
     privateExpanded: boolean;
     sharedExpanded: boolean;
+    // B-4206: Whether the Comments pane should show resolved entries.
+    showResolvedComments?: boolean;
   };
 }
 

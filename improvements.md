@@ -1540,3 +1540,43 @@ Priority: high / medium / low.
 
 ### I-4106 — Palette empty-state testid (low, open)
 - See B-4117. The "No results" message renders but has no `data-testid`. Add `data-testid="cmd-empty"` so automation can assert the empty branch without scraping innerText.
+
+
+## 2026-05-13 — QA agent iteration I-4200
+
+### I-4200 — Cmd+K block-match should be token-based (medium, open)
+- See B-4204. Today the palette runs `block.content.toLowerCase().includes(query.toLowerCase())`, so "next plan" misses the same block "plan the next quarter…" that "plan next" doesn't even try. Switch to a word-bag matcher: split query on whitespace, require all tokens present (any order, any position) in the lowercased content. Boost score if tokens appear in order or adjacent. Keeps single-word UX, fixes multi-word UX, matches Notion's behaviour.
+
+### I-4201 — Persist `showResolvedComments` toggle (medium, open)
+- See B-4206. The toggle state is local component state and dies on reload. Lift it into the `ui` slice of the zustand store (alongside `sidebarOpen`, `darkMode`) and include it in the persist whitelist so the comment panel remembers its mode per user. Two-line change in the slice + one in the toggle's onChange.
+
+### I-4202 — Markdown export: render column children under each column marker (medium, open)
+- See B-4207. The column block currently emits `<!-- column -->` markers with no child content. Update the markdown serializer to:
+  - For each column container, iterate its child blocks and emit them sequentially under that column's marker.
+  - Optionally use a real Markdown construct (e.g. tables, or a horizontal rule between columns) so the export is readable.
+- Lossy export today; users lose all in-column content when sharing.
+
+### I-4203 — Day-add cell should not double as drop target (low, open)
+- See B-4202. The `[data-testid="day-add-<date>"]` "+" sub-cell currently inherits its parent day-cell's dragover/drop handlers, so it transparently accepts event drops *and* shows a "+ add event" affordance. Decide on one role per cell: either stopPropagation on the day-add cell so drops bubble to the day cell only when not on the +, or stop accepting drops on day-add entirely. Cleaner UX.
+
+### I-4204 — Database view-tab right-click → options menu (low, open)
+- See B-4211. Right-click on a `view-menu-<viewId>` tab opens the browser native menu today. Notion convention: right-click is a synonym for clicking the ⋯ icon. Bind `onContextMenu` on view tabs to `preventDefault()` + open the same Rename / Duplicate / Delete popover. Cheap discoverability win.
+
+### I-4205 — Cmd+/ shortcut to open block-action menu (medium, open — dup of B-3405)
+- See B-4212. Notion's Cmd+/ ("turn into / color / comment") is still unimplemented. Bind a global keydown for `(meta||ctrl)+/` that, when caret is in a contenteditable inside the editor, opens the block-options popover for the focused block. Lowest-cost path: re-use the existing block ⋯ menu wired to the hover handle.
+
+### I-4206 — Comment row buttons should be `type="button"` (low, open)
+- See B-4213. All four comment-row buttons (Edit / Delete / Reply / Resolve) default to `type=submit`. Harmless today (no form ancestor), but a refactor that puts these in a form would silently fire `formdata`/submit. Add explicit `type="button"`. One-line per button.
+
+### I-4207 — Cmd+K palette: show "View more" or raise cap (low, open)
+- See B-4214. Today the palette caps block-match results at ~5 even when 10+ match. Either expose a constant + add a "View more results" expander, or paginate / virtualize the result list and remove the cap. Performance for 100+ matches isn't a concern (~11ms paint).
+
+### I-4208 — Comment composer keyboard submit (medium, open)
+- See B-4216. Add `onKeyDown` to `[data-testid="comment-input"]`:
+  - On Enter without Shift: `e.preventDefault()` + call `postComment(value)`.
+  - On Shift+Enter: allow native newline.
+  - Optionally Cmd+Enter as an alternative submit (matches Slack thread replies).
+- Update placeholder copy to "Add a comment… (Enter to post, Shift+Enter for newline)" so users discover the shortcut.
+
+### I-4209 — Sub-page route should expose page-actions menu (low, open)
+- See B-4217. `pg_qa_b4002_child_95kg` (and likely other sub-page-routed pages) render a layout without `[data-testid="page-actions"]`, so export / favorite / move / trash are unreachable from inside the sub-page. Either render the same page-actions ⋯ in the sub-page header, or document that sub-pages must be acted on from the parent.

@@ -4951,3 +4951,75 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4112 — Sidebar pages lack cursor-grab — fixed (commit 15b089d) — closes part of I-4103
 - Fix: PageItem row gets `cursor-grab active:cursor-grabbing` so the drag affordance is discoverable. The hover-only ⋮⋮ row-handle on DB rows is still hover-only (touch-device gap noted as I-4104).
+
+## 2026-05-13 — QA agent iteration I-4200
+
+### B-4200 — Fix verification batch (B-4108 / B-4016 / B-4119 / B-4112)
+- B-4108 (DB trash trashedAt): clicked db-actions then db-trash on `db_mp3jj2jnavmaxi0e`. Result: `isInTrash=true`, `trashedAt=1778654117001` (number, ~507ms before observation). Restore via `restore-db-<id>` flips back to `isInTrash=false, trashedAt=null`. Closed.
+- B-4016 (View duplicate): on `db_mp2qmu4d1va6knov`, clicked `view-menu-view_mp2qmu4djdr3pyti` then `view-duplicate-...`. New view `v_mp3orghmt838z3jb` named "All (Copy)", same type/filters/sorts/hiddenProperties as source. views.length 6→7. Closed.
+- B-4119 (Cmd+J AI toggle): dispatched `KeyboardEvent('keydown', {key:'j', metaKey:true})` at `document` level. `[data-testid="ai-input"]` appears; second dispatch closes it. Toggle works both directions. Closed.
+- B-4112 (sidebar cursor-grab): `sidebar-page-<id>` has classes including `cursor-grab active:cursor-grabbing`. Computed `cursor: grab` confirmed. 109 sidebar page rows all carry the affordance. Closed.
+
+### B-4201 — Calendar same-day drop is correctly a no-op (acceptance)
+- Repro: `evt_mp3jrjay0hmfabnk` at 2026-05-20. Dispatched dragstart on the chip, then dragover+drop on `[data-testid="day-2026-05-20"]`. Result: `event.start` unchanged (1779235200000 → 1779235200000). Same-day reschedule does not bump or alter the start timestamp. Confirms drop handler short-circuits when source-day == target-day.
+
+### B-4202 — Calendar `day-add-<date>` cell accepts event drops (P3, open)
+- Repro: dragged `evt_mp3jrjay0hmfabnk` onto `[data-testid="day-add-2026-05-25"]` (the small "+" sub-cell). Event moved to 2026-05-25 (beforeISO 2026-05-20 → afterISO 2026-05-25). The day-add cell is meant to *create* a new event, not reschedule an existing one — yet it shares the parent's drop target and quietly accepts reschedule drops too. UX-wise the user can't tell whether their drop landed on "add" or "reschedule"; today both produce the reschedule effect. Either stop propagation on day-add or make it a deliberately distinct drop target.
+
+### B-4203 — Public form: synthetic Enter from text input does not submit (low, P3, open — by design)
+- Repro: on `/form/db_mp3lhvrxwl40mnbf/view_qa_form_mp3ljwhb`, filled all 5 fields (text/select/date/number/text) and dispatched `KeyboardEvent('keydown',{key:'Enter'})` on the title input. Row count 18→18 — no submit. Calling `form.requestSubmit()` programmatically does submit (18→19) and the success page renders. HTML-spec-correct: synthetic keydown bypasses implicit-submission. Confirms B-3817 still relies on real browser keydown for implicit submit. Recommendation in I-4100 still applies.
+
+### B-4204 — Cmd+K multi-word block search: substring only, word-order-sensitive (P2, open)
+- Repro: opened palette, typed multi-word queries against block "Plan the next quarter's work below. Add tasks via the database."
+  - "the next" → 1 block match ✓
+  - "plan the" → 1 block match ✓
+  - "  Plan THE  " (trim + case) → 1 block match ✓
+  - "quarter's work" (apostrophe) → 1 block match ✓
+  - "next plan" (words swapped) → 0 block matches ✗
+- Expected: token-based AND search so "next plan" finds the same block as "plan next". Today it's a single `String.includes(query)` so any reordering breaks match. Notion supports word-bag matching.
+
+### B-4205 — Comment chain delete-parent cascades to reply (acceptance)
+- Repro: on `pg_mp2pz5zwikifg7r3`, posted "B-4205 PARENT comment" → `cmt_mp3ovaretw944ed0`. Clicked `reply-...` → typed in `reply-input-...` → submitted via `reply-submit-...`. Reply `cmt_mp3ovj3xe8kdyiav` created with `parentId = cmt_mp3ovaretw944ed0`. Clicked `comment-edit-<reply>`, edited to "B-4205 REPLY child EDITED" (content updated). Then clicked `comment-delete-<parent>`. Result: BOTH parent and reply deleted from `comments` map — cascade-delete works. No orphan reply left. Good.
+
+### B-4206 — Show-resolved-toggle state not persisted across reload (P2, open)
+- Repro: opened comments panel on `pg_mp2pz5zwikifg7r3`, ticked `[data-testid="show-resolved-toggle"]` (checkbox.checked=true). LS dump of `notion-clone:user:<uid>` `ui` keys: `[sidebarOpen, darkMode, expandedPages, favoritesExpanded, teamspacesExpanded, privateExpanded, sharedExpanded]` — no `showResolvedComments`. Did `location.reload()`; after re-opening comments, the checkbox is back to `checked=false`. The toggle is in-memory only, lost on reload. Expected: persist in `ui` slice of zustand store (mirrors `sidebarOpen`/`darkMode`). Touch-points: comments slice or ui slice, and the persist whitelist.
+
+### B-4207 — Markdown export of columns block emits placeholder comments only (P2, open)
+- Repro: exported `pg_mp2s7o6wejgdfvj2` via `page-opt-export-md`. Output contains:
+  ```
+  <!-- multi-column layout: -->
+  <!-- column -->
+  <!-- column -->
+  <!-- column -->
+  ```
+  Children inside each column are not emitted under the marker. The 3-column layout shows up as comments + an unrelated empty table. Expected: emit each column's child blocks (sequentially under each `<!-- column -->`) or fall through to a flat list. Today the export is lossy for column blocks.
+
+### B-4208 — AI textarea Shift+Enter not preventDefault'd; Enter is (acceptance)
+- Repro: on `[data-testid="ai-input"]` (textarea), dispatched `KeyboardEvent('keydown', {key:'Enter', shiftKey:true, cancelable:true})`. `defaultPrevented=false`, dispatchEvent returns true → newline insertion allowed. Plain Enter (no shift): `defaultPrevented=true`, returns false → submit branch intercepts. Confirms Shift+Enter is a real newline path and plain Enter is "send".
+
+### B-4209 — DB row drag: source==target is a no-op (acceptance)
+- Repro: on `db_mp2qmu4d1va6knov` (7 rows), invoked row react-props `onDragStart` + `onDragOver` + `onDrop` all on `row-row_mp3kreceq8nz` (same element). Row order before/after: identical 7-id list. The drop handler short-circuits self-drop. Good.
+
+### B-4210 — Cross-teamspace sidebar drop still rejected (acceptance)
+- Repro: source `pg_mp2qf91273xzixoe` (`ts_mp2pz5zwqdkgmzis`) dropped onto target `pg_mp2pz5zws2l1z775` (`ts_mp2pz5zwvod19q0j`). Source `teamspaceId` unchanged. Same-teamspace constraint from B-2908 fix still honoured even after recent threading/draggable updates.
+
+### B-4211 — Database view-tab right-click: no context menu (P3, open)
+- Repro: dispatched `contextmenu` MouseEvent on `view-menu-view_mp2qmu4djdr3pyti`. `defaultPrevented=false`; `[role="menu"]` count stays at 0. Right-click on view tabs (Notion convention: open the view options menu) is unhandled — browser's native menu would appear. Expected: route right-click to the same ⋯ menu (rename/duplicate/delete) for discoverability.
+
+### B-4212 — Cmd+/ does not open block menu (P2, open — re-confirms B-3405)
+- Repro: focused a `[contenteditable="true"]` on `pg_mp2pz5zwikifg7r3`, dispatched `KeyboardEvent('keydown', {key:'/', metaKey:true})`. No `[role="menu"]` opens; no `slash-menu` / `block-menu` testid renders. Notion uses Cmd+/ to open block actions (turn into, color, etc.) on the focused block. Today the shortcut is unhandled. B-3405 remains open.
+
+### B-4213 — Comment action buttons default to type="submit" (P3, open)
+- Repro: inspected `comment-edit-*`, `comment-delete-*`, `resolve-*`, `reply-*` buttons — all have `type=submit`. They are NOT inside a `<form>` so the form-submission side-effect doesn't fire, but it's semantically wrong; if these buttons are ever moved inside a form (e.g. comment composer), a stray Enter would invoke the wrong action. Add `type="button"` to the four `<button>`s in the comment row. Easy fix.
+
+### B-4214 — Cmd+K block-match results are capped at ~5 (P2, open)
+- Repro: query "is" matches 11 blocks in the store (`Object.values(state.blocks).filter(b => b.content.includes('is')).length === 11`), but `cmd-block-*` testids in the palette = 5. Same for "the" (3 of 8 raw matches). Palette is hard-capping the result list. First-paint after typing was 10.6–22.7ms (acceptable). The cap is a UX choice; expose it as a tunable or add a "View more" overflow row so users find the missing matches via "is" but not via "isabella" etc. Performance: ~11ms is fine, cap is the friction.
+
+### B-4215 — Public form text input lacks `name` / `id` / `htmlFor` association (P2, open — dup of I-3901)
+- Confirmed during B-4203 audit: all 5 form inputs have `name=null` and the visible `<label>` is a sibling element without `htmlFor`. Screen reader will not associate "Name" / "Status" / "Date" / "Score" / "TestNote" with their inputs. Wrap each input in its `<label>` or pair via `htmlFor` + `id`. Carry over from I-3901.
+
+### B-4216 — Comment composer has no keyboard submit shortcut (P2, open)
+- Repro: `[data-testid="comment-input"]` is a `<textarea>`. Pressing Enter (no shift) does NOT post — `defaultPrevented=false`, comment count unchanged. Pressing Cmd+Enter also does NOT post — comments map unchanged. Only clicking `post-comment` submits. UX issue: most chat-like comment composers in the app support Enter or Cmd+Enter to send. Today users *must* mouse to the button. Pick one: Enter = post + Shift+Enter = newline (matches the AI panel), OR Cmd+Enter = post (matches Slack thread reply convention). Either is fine, status-quo is the worst option.
+
+### B-4217 — db-actions menu unavailable on certain test pages (P3, info)
+- Repro: navigated to `/app/p/pg_qa_b4002_child_95kg`. `[data-testid="page-actions"]` does not render — the test page presumably uses a different layout (likely `SubPageView` instead of `PageView`). Means the markdown export pipeline for sub-page-style routes cannot be tested via this menu, only via the parent page's export. Re-export from the parent shows the same lossy result documented in B-4110. Tracking as info — confirms I-3903 / I-4102 are still the right path.

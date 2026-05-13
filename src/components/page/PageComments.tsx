@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useStore, addComment, resolveComment, deleteComment, updateComment } from "@/lib/store";
+import { useStore, addComment, resolveComment, deleteComment, updateComment, setUI } from "@/lib/store";
 import { useAuth } from "@/hooks/use-auth";
 import { X, Send, Check, MessageSquare, Pencil } from "lucide-react";
 import type { Comment } from "@/lib/types";
@@ -8,7 +8,10 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
   const comments = useStore((s) => s.comments);
   const { user } = useAuth();
   const [text, setText] = useState("");
-  const [showResolved, setShowResolved] = useState(false);
+  // Persist the show-resolved toggle in the UI slice so the choice survives
+  // reload + cross-tab sync (B-4206).
+  const showResolved = useStore((s) => !!s.ui.showResolvedComments);
+  const setShowResolved = (v: boolean) => setUI({ showResolvedComments: v });
   // Track which top-level comment we're currently replying to.
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
@@ -164,11 +167,24 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="Add a comment..."
+          onKeyDown={(e) => {
+            // Cmd/Ctrl+Enter posts. Plain Enter still inserts a newline so
+            // multi-line comments stay easy (B-4216). The Post button is
+            // always available as a click fallback.
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              if (text.trim()) {
+                addComment({ pageId, content: text });
+                setText("");
+              }
+            }
+          }}
+          placeholder="Add a comment... (Cmd+Enter to post)"
           className="w-full bg-background border border-input rounded px-2 py-1 text-sm min-h-[60px] resize-none"
           data-testid="comment-input"
         />
         <button
+          type="button"
           onClick={() => {
             if (text.trim()) {
               addComment({ pageId, content: text });
