@@ -5649,3 +5649,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-5510 — Comment resolve toggle persists across reload (acceptance, ok)
 - Steps: seeded `cmt_b5510_resolve` on /app/p/pg_mp2pz5zwikifg7r3 (Welcome). Opened comments panel via `comments-btn`, clicked `resolve-cmt_b5510_resolve` (false → true). Hard-reloaded the tab.
 - Observed: post-reload `state.comments.cmt_b5510_resolve.resolved === true`. With the default panel filter (showResolved off), the comment is hidden — clicking `show-resolved-toggle` reveals it, button label reads "Resolved" (not "Resolve"). `resolveComment` (store.ts:1671-1678) writes through to the persisted store correctly.
+
+### B-5506 — Public form multi-select drops options on rapid clicks — fixed (commit 6714131)
+- Fix: multi-select onClick now passes a functional updater. Host `setValues` detects the function and applies it against the LATEST per-prop value. Rapid synchronous clicks no longer collapse to the last click. PublicFormField onChange signature widened to accept `v | (prev) => v`.
