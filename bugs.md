@@ -5023,3 +5023,15 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4217 — db-actions menu unavailable on certain test pages (P3, info)
 - Repro: navigated to `/app/p/pg_qa_b4002_child_95kg`. `[data-testid="page-actions"]` does not render — the test page presumably uses a different layout (likely `SubPageView` instead of `PageView`). Means the markdown export pipeline for sub-page-style routes cannot be tested via this menu, only via the parent page's export. Re-export from the parent shows the same lossy result documented in B-4110. Tracking as info — confirms I-3903 / I-4102 are still the right path.
+
+### B-4216 — Comment composer no keyboard submit — fixed (commit 2f408a9) — closes I-4209
+- Fix: Cmd/Ctrl+Enter on the comment textarea now posts. Plain Enter still inserts a newline. Placeholder hint updated. Post button explicitly typed `type="button"` (related B-4213 cleanup).
+
+### B-4206 — show-resolved-toggle in-memory only — fixed (commit 2f408a9) — closes I-4206
+- Fix: read/write through `ui.showResolvedComments` instead of local useState. Survives reload + cross-tab.
+
+### B-4204 — Cmd+K word-order-sensitive search — fixed (commit 2f408a9) — closes I-4204
+- Fix: query split on whitespace; every token must appear (in any order) in title/block-content/db-name. "the next" now matches "plan the next quarter" and vice versa.
+
+### B-4214 — Cmd+K block-match capped at 5 — fixed (commit 2f408a9) — closes I-4205
+- Fix: cap raised to 10 (one snippet per page).
