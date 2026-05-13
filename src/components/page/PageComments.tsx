@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useStore, addComment, resolveComment, deleteComment, updateComment, setUI } from "@/lib/store";
 import { useAuth } from "@/hooks/use-auth";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -18,6 +18,9 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
   const [replyText, setReplyText] = useState("");
   // Track which comment (top-level OR reply) is being edited.
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Synchronous in-flight gate for the top-level Post button (B-7903).
+  // The per-thread reply gate lives inside each CommentNode.
+  const postingRef = useRef(false);
 
   // Top-level page comments + their nested replies. Includes block-scoped
   // comments (Comment.blockId != null) so they're not stuck in the store
@@ -99,9 +102,14 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
             // always available as a click fallback.
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
               e.preventDefault();
-              if (text.trim()) {
+              if (text.trim() && !postingRef.current) {
+                postingRef.current = true;
                 addComment({ pageId, content: text });
                 setText("");
+                // Defer reset so any other clicks queued in the same tick
+                // still see `true`. The handler is sync; setTimeout(0)
+                // pushes the reset to the next macrotask.
+                setTimeout(() => { postingRef.current = false; }, 0);
               }
             }
           }}
@@ -112,9 +120,13 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
         <button
           type="button"
           onClick={() => {
+            // B-7903 — synchronous gate against rapid-click duplicates.
+            if (postingRef.current) return;
             if (text.trim()) {
+              postingRef.current = true;
               addComment({ pageId, content: text });
               setText("");
+              setTimeout(() => { postingRef.current = false; }, 0);
             }
           }}
           disabled={!text.trim()}
@@ -161,6 +173,10 @@ function CommentNode({
   const MAX_VISIBLE_DEPTH = 6;
   const replies = repliesByParent[c.id] ?? [];
   const isReplying = replyTo === c.id;
+  // Synchronous gate against rapid-click duplicate replies (B-7902). One
+  // ref per CommentNode instance so each thread's submit is gated
+  // independently.
+  const replyingRef = useRef(false);
   const containerClass = topLevel
     ? `rounded border border-border p-2 ${c.resolved ? "opacity-50" : ""}`
     : "text-sm";
@@ -216,10 +232,12 @@ function CommentNode({
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
                 e.preventDefault();
-                if (replyText.trim()) {
+                if (replyText.trim() && !replyingRef.current) {
+                  replyingRef.current = true;
                   addComment({ pageId, content: replyText, parentId: c.id });
                   setReplyText("");
                   setReplyTo(null);
+                  setTimeout(() => { replyingRef.current = false; }, 0);
                 }
               }
               if (e.key === "Escape") setReplyTo(null);
@@ -231,10 +249,14 @@ function CommentNode({
           <button
             type="button"
             onClick={() => {
+              // B-7902 — synchronous gate against rapid-click duplicates.
+              if (replyingRef.current) return;
               if (!replyText.trim()) return;
+              replyingRef.current = true;
               addComment({ pageId, content: replyText, parentId: c.id });
               setReplyText("");
               setReplyTo(null);
+              setTimeout(() => { replyingRef.current = false; }, 0);
             }}
             disabled={!replyText.trim()}
             className="mt-1 text-xs bg-primary text-primary-foreground rounded px-2 py-1 disabled:opacity-50"

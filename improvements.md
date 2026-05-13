@@ -2320,3 +2320,36 @@ Priority: high / medium / low.
 
 ### I-7808 — Calendar: keyboard navigation (←/→ days, ↑/↓ weeks, Enter to add) — P3 — open
 - Calendar grid currently has `cal-prev` / `cal-next` for month and `day-add-*` for new events, but no keyboard shortcuts. Adding focus + arrow keys would meaningfully help power users and a11y compliance.
+
+
+## 2026-05-13 — I-7900 filter/comments/sidebar sweep
+
+### I-7900 — Filter UI should auto-coerce value to property type — P3 — open
+- Companion to B-7900. The FilterControls (`InlineDatabase.tsx:597-676`) renders the same `<input>` for every operator. Number / checkbox / date properties should have type-specific inputs (or at least submit values coerced to the right JS type) so that strict `===` works.
+- Suggestion: in `updateFilter`, when the operator is `is`/`is-not` and `propertyType` is `number`, coerce to `Number(value)`. For `date`, validate `YYYY-MM-DD` format (re-use the form date regex from I-7603). For `checkbox`, render a true/false dropdown instead of a free-text input.
+- Bonus: when a `multi-select` property is selected, show a multi-select dropdown of existing options rather than a free-text field; right now users have to know the exact option id/name spelling.
+
+### I-7901 — Public published page should render every block type or fall back to a "(unsupported block)" placeholder — P3 — open
+- Companion to B-7901. Currently `src/routes/p.$slug.tsx` ReadonlyBlock returns `null` for any type not in the switch (paragraph, future types, unhandled media). Suggestion: route unknown types with a `content` field through a generic `<p dangerouslySetInnerHTML={safeHtml(content)} />` fallback. For types without content, render a muted "(unsupported block: <type>)" hint so authors notice and can fix.
+- Also good defense-in-depth for the markdown export (I-7604) — same alias map.
+
+### I-7902 — Add a shared `useSubmitting()` hook + apply to all primary CTAs — P2 — open
+- Companion to I-7805 / B-7800/B-7801/B-7802/B-7902/B-7903. Every primary action (Send mail, Post comment, Post reply, Create from template, AI send, Form submit) suffers from the same rapid-click duplication class. A single `useSubmitting()` hook (`const [pending, run] = useSubmitting()`) used as:
+```
+<button disabled={pending} onClick={() => run(() => addComment(...))}>Post</button>
+```
+…centralizes the gate (sync ref + state + auto-reset on resolve/reject) and removes per-component re-implementations. Each new CTA in the app would default to safe.
+
+### I-7903 — Database filter UI lacks AND/OR grouping — P3 — open
+- The current `applyFilters` is implicit AND (`filters.every`). Multi-clause queries like "Status=Done OR Priority=High" can't be expressed. Most table-database competitors (Notion, Airtable) support nested groups. Suggestion: extend `View.filters` from a flat list to a tree of `{ op: "AND"|"OR", children: Filter[] }` and expose a simple "Match all / Match any" toggle at the top of the FilterControls popover. Keep the flat-list shape working as default (single-level AND).
+
+### I-7904 — Sidebar drag-drop should support cross-parent move + drop-onto-page-to-nest — P3 — open
+- `Sidebar.tsx:238` blocks any drop where `sourcePage.parentId !== page.parentId || sourcePage.teamspaceId !== page.teamspaceId` ("Only same-parent reorder for now"). Users have no in-app way to nest a top-level page under another (must rely on Move-to in the More menu), and can't drag between teamspaces.
+- Suggestion: detect a drop within ±N px of the target's vertical middle as a "make-child" intent (call `movePage(sourceId, page.id)`) and a drop outside that band as a "reorder-sibling" intent. Add cross-teamspace move via the same handler.
+
+### I-7905 — Settings page is essentially read-only — P3 — open
+- `/app/settings` exposes Account (sign out), Workspace (read-only name/plan/credits), Language (read-only locale), Notifications (placeholder), Connections (placeholder), Appearance (dark mode toggle), Data (Export). Missing: edit workspace name, edit user name, change avatar, change email, manage teamspaces, manage members, manage workspace billing, danger-zone delete account/workspace.
+- Suggestion: at minimum, make Workspace.name editable inline. The Notifications and Connections sections currently mislead the user into thinking the app supports both — either gray them out with a "Coming soon" label or remove until implemented.
+
+### I-7906 — Filter values UI should allow clearing via × or null — P3 — open
+- Once a filter is set (e.g. `pName is "Alpha"`), the only way to "ignore" it is to click the × remove button entirely. Setting the value to empty string changes semantics (no rows match because no name === "" in the db). Suggestion: empty value should behave as "this filter is inactive" for `is`/`is-not`/`contains`/etc. and skip the row check.

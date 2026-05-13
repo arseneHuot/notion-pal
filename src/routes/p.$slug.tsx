@@ -95,6 +95,32 @@ function ReadonlyBlock({
   blocks?: Record<string, Block>;
   pages?: Record<string, Page>;
 }) {
+  // B-7901 — alias foreign / legacy block types to their canonical form so
+  // imports from Notion's API and Markdown sources don't silently disappear
+  // off the public page. Mirrors the editor + markdown-export alias maps so
+  // every renderer agrees on what each type means.
+  const ALIASES: Record<string, string> = {
+    paragraph: "text",
+    p: "text",
+    body: "text",
+    richtext: "text",
+    "bulleted-list": "bullet-list",
+    bullet: "bullet-list",
+    "numbered-list-item": "numbered-list",
+    "header-1": "heading-1",
+    "header-2": "heading-2",
+    "header-3": "heading-3",
+  };
+  const rawType = (block as { type: string }).type;
+  if (rawType in ALIASES) {
+    return (
+      <ReadonlyBlock
+        block={{ ...(block as object), type: ALIASES[rawType] } as Block}
+        blocks={blocks}
+        pages={pages}
+      />
+    );
+  }
   if (block.type === "heading-1") return <h1 className="text-3xl font-bold mt-4 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
   if (block.type === "heading-2") return <h2 className="text-2xl font-semibold mt-3 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
   if (block.type === "heading-3") return <h3 className="text-xl font-semibold mt-2 mb-1" dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
@@ -283,5 +309,13 @@ function ReadonlyBlock({
     return <a href={f.url} target="_blank" rel="noreferrer noopener" className="text-sm underline">📎 {f.fileName ?? f.url}</a>;
   }
   if (block.type === "text") return <p dangerouslySetInnerHTML={safeHtml((block as { content?: string }).content)} />;
+  // Graceful fallback for unknown block types that nonetheless carry a
+  // `content` field (B-7901). Render the content as plain text rather than
+  // dropping the user's data on the floor. Output still goes through
+  // `sanitizeHtml` so script-injection isn't an escape hatch.
+  const maybeContent = (block as { content?: string }).content;
+  if (typeof maybeContent === "string" && maybeContent.length > 0) {
+    return <p dangerouslySetInnerHTML={safeHtml(maybeContent)} />;
+  }
   return null;
 }

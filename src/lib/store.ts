@@ -1406,6 +1406,20 @@ export function reorderSiblingPages(sourcePageId: string, targetPageId: string |
     const tgtOrd = tgtIdx >= siblings.length ? Date.now() + 1 : ord(siblings[tgtIdx]);
     const prevOrd = tgtIdx > 0 ? ord(siblings[tgtIdx - 1]) : tgtOrd - 1000;
     const newOrder = (tgtOrd + prevOrd) / 2;
+    // B-7904 — when ~53 successive midpoint inserts collapse the gap to a
+    // tie (`newOrder === tgtOrd` or `newOrder === prevOrd`), repacking on
+    // uniform 1000-unit gaps gives every subsequent insert headroom again.
+    // O(siblings) — only fires at the failure point, not every reorder.
+    if (newOrder === tgtOrd || newOrder === prevOrd || !isFinite(newOrder)) {
+      const finalList = [...siblings];
+      finalList.splice(tgtIdx, 0, src);
+      const repacked: Record<string, typeof src> = {};
+      const baseTs = Date.now();
+      finalList.forEach((p, i) => {
+        repacked[p.id] = { ...p, sortOrder: (i + 1) * 1000, updatedAt: p.id === sourcePageId ? baseTs : p.updatedAt };
+      });
+      return { ...s, pages: { ...s.pages, ...repacked } };
+    }
     return {
       ...s,
       pages: { ...s.pages, [sourcePageId]: { ...src, sortOrder: newOrder, updatedAt: Date.now() } },

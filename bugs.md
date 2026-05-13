@@ -6846,3 +6846,57 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7809 — AI sources chips shown even when model says "not mentioned" — fixed — P3
 - After receiving the Gemini response, the client tests the answer against a hedging regex (`not mentioned in`, `no relevant`, `outside the workspace`, etc.) and zeroes out the sources list before render. Stops the misleading "Sources: Welcome" chip when the model already disclaimed Welcome doesn't mention the answer.
+
+
+## 2026-05-13 — B-7900 filter/comments/public-page/sidebar sweep
+
+### B-7900 — Database filter "is"/"is-not" on number property never matches because input value is string — P2 — open
+- Repro: inject `db_v7900_filter` with a number prop `pNum` (values include `10`). Add a filter via the UI: `{ propertyId:"pNum", operator:"is", value:"10" }`. UI emits the value as a string because `<input>` always outputs strings. `evalFilter` uses strict `=== f.value` → `10 === "10"` is false → 0 rows match.
+- Verified live: applied `is "10"` filter → 0 rows rendered (expected 1 row). Same hazard for `is-not` (returns ALL rows including the matching one).
+- Root cause: `src/components/database/filter.ts:48-58` does strict `===`. Other operators (`greater-than`, etc.) route through `toComparable` which coerces strings → numbers, so they work. `is`/`is-not` are the only escape hatches that skip coercion.
+- Severity P2: silent zero-result is misleading and a core UX expectation breaks (most users will try "is" before "contains" for an exact-match number).
+- Fix sketch: in `evalFilter`'s `is`/`is-not` branches, when the property type is `number`, coerce `f.value` via `Number(f.value)` before strict-comparing. Same treatment for `checkbox` (string "true"/"false" → boolean). Belt-and-suspenders: also normalize `f.value` to the right type when the operator+propertyType pair is set in the FilterControls UI.
+
+### B-7901 — Public Published page silently drops blocks whose type isn't in the renderer switch — P2 — open
+- Repro: inject a published page `pg_v7902_pub` with blocks of types `heading-1`, `paragraph`, `text`, `future-block-type`, `image` (with javascript: URL). Visit `/p/v7902-public-test`.
+- Result: only `heading-1` and `text` render. `paragraph`, `future-block-type`, and the javascript:-URL image all return `null` from `ReadonlyBlock` in `src/routes/p.$slug.tsx:286`. Visible block count: 2 of 5.
+- The javascript: filter is correct behavior, but `paragraph` is a common Notion-API / Markdown-import block type and the user's content silently disappears. Same root issue as B-7601 (markdown export) — paragraph aliasing missing in another surface.
+- Severity P2: published-page is the user-facing public surface; missing content here is more visible than the export issue.
+- Fix sketch: in `ReadonlyBlock`, add `paragraph` (and `p`, `body`, `richtext`) as aliases for `text`. Better: route any block with `content` field through the text fallback before returning null, so future / unknown types degrade gracefully instead of vanishing.
+
+### B-7902 — Rapid clicks on Post Reply create N duplicate replies — P2 — open
+- Repro: open `/app/p/pg_v7901_threads`, comments panel. Click `reply-c_v7901_lvl0`. Type "Rapid spam reply". Click `reply-submit-c_v7901_lvl0` 5× in quick succession.
+- Result: 5 duplicate reply comments persisted with identical content under `c_v7901_lvl0`. Same class as B-7800 (mail send) and B-7802 (AI send) — synchronous click handler isn't gated.
+- `PageComments.tsx:235` calls `addComment({...})` without a ref-based busy gate. The textarea is cleared and `setReplyTo(null)` runs but those state changes are batched; clicks queued in the same tick all fire `addComment`.
+- Severity P2: ubiquitous double-tap behaviour; comment threads on touch devices will accumulate accidental triples constantly.
+- Fix sketch: identical to the B-7800/B-7801/B-7802 family — add `sendingRef` synchronously set in the onClick before the addComment call, reset after. Or extract the `useSubmitting()` hook suggested in I-7805.
+
+### B-7903 — Rapid clicks on top-level Post Comment create N duplicates — P2 — open
+- Repro: same `/app/p/pg_v7901_threads`, focus the "Add a comment..." textarea, type "Rapid top-level spam", click `post-comment` 5× rapidly.
+- Result: 5 identical top-level comments persisted in the page's comment list. Same root cause as B-7902 — `PageComments` Post button has no in-flight gate.
+- Severity P2: same as B-7902. Pair-fix.
+- Fix sketch: same as B-7902. The Post-comment handler in PageComments needs the same sendingRef gate.
+
+### B-7904 — Sidebar sortOrder degrades to ties after ~53 successive midpoint insertions into the same gap — P3 — open
+- Repro: pure math: starting from siblings at [1000, 2000], inserting a new page just-before the rightmost 60 times (each time bisecting the gap to the right neighbor) produces sortOrders that converge to 2000 after 53 iterations. The last 8 inserted siblings all share `sortOrder === 2000`. Direct simulation matches the algorithm in `reorderSiblingPages` (store.ts:1391-1413).
+- Result: identical sortOrders → display order becomes undefined (falls back to `Object.values(s.pages)` insertion order). User can't reliably "pin" pages to a specific slot once the gap collapses.
+- Severity P3: requires a degenerate usage pattern (53 consecutive inserts into the same neighbour gap). Real-world risk is low but the failure is silent and irreversible without manual sortOrder rewrite.
+- Fix sketch: detect collapse (`tgtOrd === prevOrd` or `newOrder === tgtOrd`) and re-spread all sibling sortOrders to uniform integer gaps (e.g. multiples of 1000) before computing the new midpoint. Cheap O(siblings) pass when triggered.
+
+
+## 2026-05-13 — B-7900 batch fixes
+
+### B-7900 — Number/checkbox `is` filter coerces from string — fixed — P2
+- `evalFilter`'s `is` / `is-not` branches now route the filter value through `coerceForCompare(f.value, pType)` which turns `"10"` into `10` for `number` props and `"true"/"false"` into booleans for `checkbox` props. Other operators already coerced via `toComparable`; this closes the gap on strict equality. Verified live: `db_v7900_numfilter` with filter `pNum is "10"` → exactly row A (pNum=10) renders, row B (pNum=20) excluded.
+
+### B-7901 — Public Published page block aliases — fixed — P2
+- `ReadonlyBlock` now mirrors the editor + Markdown-export alias map (`paragraph→text`, `bulleted-list→bullet-list`, `header-1→heading-1`, etc.). Unknown block types with a `content` field also fall through to a sanitized `<p>` instead of returning null. Verified live: published page with `paragraph` + `future-block-xyz` (unknown) + `text` blocks → all three rendered with their content.
+
+### B-7902 — Reply submit rapid clicks — fixed — P2
+- `CommentNode` gains a per-instance `replyingRef` (synchronous) wired to both Cmd+Enter and Reply-submit click. Reset deferred to `setTimeout(…, 0)` so same-tick clicks all observe `true`. Each thread has its own gate so independent replies aren't serialized.
+
+### B-7903 — Top-level Post Comment rapid clicks — fixed — P2
+- `PageComments` parent gains `postingRef` (synchronous) for the global Post button + Cmd+Enter shortcut. Verified live: 5 rapid clicks on `post-comment` → 1 comment persisted (was 5).
+
+### B-7904 — Sidebar sortOrder collapse self-heals — fixed — P3
+- `reorderSiblingPages` detects collapse (`newOrder === tgtOrd || newOrder === prevOrd || !isFinite(newOrder)`) and repacks the entire sibling list at uniform 1000-unit gaps, with the source inserted at the requested index. Single O(siblings) pass, only triggers at the failure point. Future midpoint inserts then have full headroom again.

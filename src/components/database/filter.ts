@@ -9,6 +9,25 @@ function propertyType(db: NotionDatabase, propertyId: string): string | undefine
   return db.properties.find((p) => p.id === propertyId)?.type;
 }
 
+/** Coerce a filter-input value (always a string from `<input>`) to match the
+ *  property's native runtime type so `is`/`is-not` comparisons stop returning
+ *  zero rows for number/checkbox props (B-7900). Leaves the value untouched
+ *  for string-shaped types so locale comparison still works. */
+function coerceForCompare(v: unknown, pType: string | undefined): unknown {
+  if (v == null) return v;
+  if (pType === "number") {
+    if (typeof v === "number") return v;
+    const n = Number(v);
+    return isNaN(n) ? v : n;
+  }
+  if (pType === "checkbox") {
+    if (typeof v === "boolean") return v;
+    if (v === "true") return true;
+    if (v === "false") return false;
+  }
+  return v;
+}
+
 /** Coerce a value to a number if it looks like one, including ISO dates → ms. */
 function toComparable(v: unknown, asDate: boolean): number {
   if (v == null) return NaN;
@@ -49,13 +68,17 @@ function evalFilter(r: DatabaseRow, f: Filter, db: NotionDatabase): boolean {
       // Accept both spellings — older seeds / imports use `equals` instead
       // of `is` and used to silently leak past the `default: return true`
       // (B-6700).
-      if (Array.isArray(v)) return v.includes(f.value as never);
-      return v === f.value;
+      if (Array.isArray(v)) return v.includes(coerceForCompare(f.value, pType) as never);
+      // Coerce the filter input to the property's native type so a number
+      // prop comparing against a string `"10"` matches `10` (B-7900). The
+      // UI's `<input>` always emits strings; this used to silently return
+      // zero rows.
+      return v === coerceForCompare(f.value, pType);
     }
     case "is-not":
     case "not-equals": {
-      if (Array.isArray(v)) return !v.includes(f.value as never);
-      return v !== f.value;
+      if (Array.isArray(v)) return !v.includes(coerceForCompare(f.value, pType) as never);
+      return v !== coerceForCompare(f.value, pType);
     }
     case "is-empty":
       return v == null || (Array.isArray(v) && v.length === 0) || v === "";
