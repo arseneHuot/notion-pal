@@ -1503,43 +1503,53 @@ function ColumnsEl({ block, pageId }: { block: Block; pageId: string }) {
   const blocksRef = useRef(allBlocks);
   blocksRef.current = allBlocks;
 
-  // Lazily materialise column children the first time we render this columns block.
+  // Lazily materialise column children the first time we render this columns
+  // block. Guards (B-7002, P1):
+  // - Treat `c.columns` of 0 / undefined as "already materialised" — without
+  //   this, the if-body fired every render because `c.columnIds.length !==
+  //   undefined` is always true; updateBlock kept creating new array
+  //   references; React re-rendered; React eventually threw
+  //   "Maximum update depth exceeded".
+  // - The dependency list only watches `block.id` + the count. We don't
+  //   need to re-run when `columnIds` array identity changes (e.g. a
+  //   different block in the store updated).
   useEffect(() => {
-    if (!c.columnIds || c.columnIds.length !== c.columns) {
-      // Compute new ids: keep existing columns when possible, append/trim.
-      const existing = c.columnIds ?? [];
-      const now = Date.now();
-      const newColumnIds = existing.slice(0, c.columns);
-      const newColumnBlocks: Block[] = [];
-      while (newColumnIds.length < c.columns) {
-        const colId = "blk_" + Math.random().toString(36).slice(2, 10);
-        const txtId = "blk_" + Math.random().toString(36).slice(2, 10);
-        const txt: Block = {
-          id: txtId,
-          type: "text",
-          parentId: colId,
-          order: 0,
-          content: "",
-          createdAt: now,
-          updatedAt: now,
-        };
-        const col: Block = {
-          id: colId,
-          type: "column",
-          parentId: block.id,
-          order: newColumnIds.length,
-          blockIds: [txtId],
-          createdAt: now,
-          updatedAt: now,
-        };
-        newColumnBlocks.push(col, txt);
-        newColumnIds.push(colId);
-      }
-      // Insert new column + initial text blocks (they don't live in page.blocks).
-      for (const b of newColumnBlocks) insertBlock(b);
-      updateBlock(block.id, { columnIds: newColumnIds } as Partial<Block>);
+    const targetCount = c.columns;
+    if (!targetCount || targetCount <= 0) return;
+    const existing = c.columnIds ?? [];
+    if (existing.length === targetCount) return; // already materialised
+    const now = Date.now();
+    const newColumnIds = existing.slice(0, targetCount);
+    const newColumnBlocks: Block[] = [];
+    while (newColumnIds.length < targetCount) {
+      const colId = "blk_" + Math.random().toString(36).slice(2, 10);
+      const txtId = "blk_" + Math.random().toString(36).slice(2, 10);
+      const txt: Block = {
+        id: txtId,
+        type: "text",
+        parentId: colId,
+        order: 0,
+        content: "",
+        createdAt: now,
+        updatedAt: now,
+      };
+      const col: Block = {
+        id: colId,
+        type: "column",
+        parentId: block.id,
+        order: newColumnIds.length,
+        blockIds: [txtId],
+        createdAt: now,
+        updatedAt: now,
+      };
+      newColumnBlocks.push(col, txt);
+      newColumnIds.push(colId);
     }
-  }, [block.id, c.columns, c.columnIds]);
+    // Insert new column + initial text blocks (they don't live in page.blocks).
+    for (const b of newColumnBlocks) insertBlock(b);
+    updateBlock(block.id, { columnIds: newColumnIds } as Partial<Block>);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [block.id, c.columns]);
 
   const columnIds = c.columnIds ?? [];
 

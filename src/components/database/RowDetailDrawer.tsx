@@ -32,7 +32,7 @@ export function RowDetailDrawer() {
   if (!rowId || !row || !db) return null;
 
   const titleProp = db.properties.find((p) => p.type === "title");
-  const titleValue = titleProp ? (row.values[titleProp.id] as string) || "" : "";
+  const titleValue = titleProp ? ((row.values?.[titleProp.id] as string | undefined) ?? "") : "";
 
   return (
     <div

@@ -33,7 +33,10 @@ export function PropertyCell({
   row: DatabaseRow;
   className?: string;
 }) {
-  const v = row.values[property.id];
+  // Defensive: malformed / imported rows may lack a `values` map entirely.
+  // Without this, `row.values[id]` throws and trips the route ErrorBoundary
+  // for the whole DB (B-7004, P1).
+  const v = row.values ? row.values[property.id] : undefined;
   if (property.type === "title") {
     return <TitleCell row={row} value={(v as string) ?? ""} property={property} className={className} />;
   }
@@ -418,7 +421,7 @@ function RollupCell({ row, property, database }: { row: DatabaseRow; property: P
     );
   }
   const fn = rp.function ?? "count";
-  const linkedIds = (row.values[rp.relationPropertyId] as string[]) ?? [];
+  const linkedIds = (row.values?.[rp.relationPropertyId] as string[] | undefined) ?? [];
   const linked = linkedIds.map((id) => allRows[id]).filter(Boolean) as DatabaseRow[];
   const wrap = (children: React.ReactNode) => (
     <span className="text-xs" data-testid={`cell-rollup-${row.id}-${property.id}`}>{children}</span>

@@ -228,7 +228,7 @@ function evaluate(node: AstNode, ctx: Context): FormulaValue {
           const name = args[0];
           const prop = ctx.database.properties.find((p) => p.name === name);
           if (!prop) return null;
-          const v = ctx.row.values[prop.id];
+          const v = ctx.row.values?.[prop.id];
           return (v as FormulaValue) ?? null;
         }
         case "if": {

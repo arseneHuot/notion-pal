@@ -6454,3 +6454,78 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6802 — View-count badge over-counted on equals filter — fixed (commit 4edc358) — P1
 - Fix: InlineDatabase's per-view filter evaluator now delegates to the shared `applyFilters` instead of an inline switch. Operator aliases (`equals`/`not-equals`) and date-aware ops now behave identically across the rendering path and the badge. Verified: `equals` filter with 0 matches → badge "0/11".
+
+## 2026-05-13 — B-6900 series (badge ops, restore, cascade, Cmd+K, AI codeblock, export)
+
+### B-6900 — View-count badge `equals` / `not-equals` aliases match rendered rows (verified, fixed) — P1
+- Repro: `db_mp2qmu4d1va6knov`, view `view_mp2qmu4djdr3pyti`, status In Progress matches 3/11.
+- Injected `operator:"equals"` → badge "3/11", rendered rows = 3. Injected `operator:"not-equals"` → badge "8/11", rendered rows = 8.
+- `is`/`is-not` regression check: same dataset → badge "3/11" and "8/11" respectively, matching rendered counts.
+- Confirms B-6802 fix: shared `applyFilters` is the single source of truth for both pipelines.
+
+### B-6901 — Date-aware ops `before` / `after` / `greater-than-equal` badge matches view (verified, fixed) — P1
+- `db_mp2qmu4d1va6knov` has 4 dated rows (2024-02-29, 2026-04-27, 2026-05-20, 2026-12-31), 7 nulls.
+- `before 2026-05-01` → badge "2/11", 2 rendered (2024-02-29 + 2026-04-27). `after 2026-05-01` → "2/11", 2 rendered.
+- `greater-than-equal 2026-04-27` → "3/11", 3 rendered (inclusive boundary verified).
+- Null dates correctly excluded by all three ops.
+
+### B-6902 — Multiple filters AND-combine correctly in badge (verified, fixed) — P2
+- Two filters on `view_mp2qmu4djdr3pyti`: status `is` In Progress AND date `greater-than-equal` 2026-01-01. Of 3 In-Progress rows, only 2 have dates ≥ 2026-01-01 (one row has null date).
+- Badge: "2/11", rendered: 2 (`row_mp2qn5xjhtzcu2ak`, `row_mp3johr8ojll`). AND semantics confirmed; null-date row correctly excluded by the date predicate.
+
+### B-6903 — Capitalized operator `"Greater Than"` keeps row + warns once (verified, fixed) — P2
+- Injected `operator:"Greater Than"` filter on date column → badge "11" (all rows kept). Toggling views fires `console.warn('[filter] unknown operator "Greater Than" — treated as no-op (row kept).')` per re-render until the dedup `__filterOpsSeen` set catches up.
+- Note: warn is gated by a per-session Set, so on a fresh page-load it fires once then stays silent. Acceptable default; see I-6900.
+
+### B-6904 — Restore-DB clears both `trashedAt` and `isInTrash` (verified, fixed) — P1
+- Set `db_4800_trashed_h5r47.isInTrash=true, trashedAt=Date.now()`. Navigated to `/app/trash` and clicked `restore-db-db_4800_trashed_h5r47`.
+- After: `isInTrash=false`, `trashedAt=null`. Both fields cleared atomically. No orphan timestamp left.
+
+### B-6905 — Deeply-nested cascade trash clears `isFavorite` on all 4+ descendants (verified, fixed) — P1
+- Built L1→L2→L3→L4→L5 chain (5 levels), each with `isFavorite:true`. Clicked `pmenu-trash-pg_b6900_L1`.
+- All 5 pages: `isInTrash:true`, `isFavorite:false`, identical `trashedAt`. Cascade is breadth-unlimited and applies the fav-clear at every depth.
+
+### B-6906 — Cmd+K toggle preserves selection inside contenteditable (verified, fixed) — B-5608 regression — P1
+- On an H1 contenteditable with text "Hello world b6900 test", selected chars 2..7 ("llo w"). First Cmd+K → palette opens (`role=dialog` present, sel string "llo w" preserved). Second Cmd+K → palette closes (`role=dialog` gone). After close, `window.getSelection().toString() === "llo w"` and `document.activeElement.tagName === "H1"`.
+- B-5608 regression risk closed: the toggle reset path no longer clobbers the editor selection.
+
+### B-6907 — AI panel renders triple-backtick code block as `<pre><code>` (verified, fixed) — P2
+- Sent prompt: `Show me a python \`\`\`\nprint("hello")\nx=1\n\`\`\` snippet` via `ai-input` + `ai-send`.
+- Last `ai-msg-N`: contains `<pre class="bg-card border border-border rounded p-2 my-1 overflow-x-auto text-xs"><code class="font-mono">print("hello")\nx=1\n</code></pre>`. Code body preserved (incl. quotes), no HTML-escaping artifacts, surrounding prose continues after `</pre>`.
+
+### B-6908 — Sub-page export with depth 3 inside a `columns` block (verified, fixed) — P1
+- Built `pg_b6900_root` → columns → column → sub-page → D1 → sub-page → D2 → sub-page → D3 → text "Leaf text inside D3".
+- Dispatched `export-page-markdown` with `{noDownload:true}`. Output (`window.__lastExportedMarkdown`):
+  `# Root\n\n<!-- multi-column layout: -->\n<!-- column -->\n## 1 D1\n\n### 2 D2\n\n#### 3 D3\n\nLeaf text inside D3\n`
+- Heading depth progresses #/##/###/#### exactly through 3 sub-page levels; column markers wrap correctly; leaf text emitted at the deepest level. Depth cap (`depth < 3`) measured from the root sub-page, so D3 is the deepest and any further nesting would be linked, not inlined.
+
+## 2026-05-13 — B-7000 series (stress / edge-case sweep)
+
+### B-7000 — Stale cross-tab `storage` event clobbers newer in-tab writes — P1 — open
+- Repro in active tab: write `pages['pg_b7000_marker']` to `localStorage` directly, then `dispatchEvent(new StorageEvent('storage', { key, newValue: <OLD snapshot without marker> }))`. After 300ms, `localStorage[key]` no longer contains `pg_b7000_marker` (verified `before:true → after:false`).
+- Handler at `src/lib/store.ts:143` replaces `_state` wholesale on any storage event. A subsequent component subscription persists the stale `_state`, rolling back the newer write.
+- Severity P1: real cross-tab races (Tab A typing + Tab B saving concurrently) can silently delete recent edits. No `updatedAt`/version guard before replace.
+- Fix sketch: compare `next.updatedAt`/per-record `updatedAt` and merge instead of replacing, OR drop the event if `next.<root>.updatedAt < _state.<root>.updatedAt`.
+
+### B-7001 — 300 synced-block-refs render eagerly with no virtualization (verified, observation) — P3
+- Built `pg_b7000_synced`: 1 synced-block + 300 synced-block-refs. All 300 render in the DOM on first paint (`querySelectorAll('[data-block-type="synced-block-ref"]').length === 300`).
+- Keystroke flood (50 inserts) on source: avg 1.14ms/key, max 6ms — no jank. Good.
+- Note: each ref re-evaluates source on every render. At 300 it's fine; at 3000 it could blow up. Filed as I-7001 for virtualization.
+
+### B-7002 — `ColumnsEl` lazy-materialize useEffect fires `Maximum update depth exceeded` storm on any store write while a columns block is mounted — P1 — open
+- Repro: open `/app/p/pg_b6900_root` (has a columns block from B-6908). Open AI panel, send ANY text (even `"hi"`). Console shows 14-18 React errors `Maximum update depth exceeded. ... setState inside useEffect`. Same exact bug reproduces on ANY action that calls `setState` (not just AI send) — verified by switching to a page WITHOUT a columns block (`/app/p/pg_mp2pz5zws2l1z775`): `errs = 0`.
+- Stack origin via console-error hook: `setState → updateBlock @ store.ts:711 → Block.tsx:2356 → react_stack_bottom_frame`. Maps to `ColumnsEl` useEffect at `src/components/editor/Block.tsx:1507-1542` whose deps include `c.columnIds` (the new array it just wrote), creating: store write → `useStore(s => s.blocks)` selector re-fires → ColumnsEl re-renders → `c.columnIds` array reference changes → useEffect re-runs → `updateBlock` again → loop until React's depth guard fires.
+- Severity P1: silent (only console noise) but ~15 reconciler passes per user action means real CPU waste, especially on pages with multiple columns blocks. Also masks legitimate update-depth errors during debugging.
+- Fix sketch: replace `c.columnIds` in the dep array with `c.columnIds?.length` + `JSON.stringify(c.columnIds)`, OR gate the work behind `if (c.columnIds && c.columnIds.length === c.columns) return;` so the effect short-circuits before scheduling a new `setState`.
+
+### B-7003 — Cascade restore does not re-apply `isFavorite` cleared by cascade trash — P2 — open
+- Built `pg_b7003_root` + 50 children, 10 of which were `isFavorite:true`. Clicked `pmenu-trash-pg_b7003_root` → all 50 cascade-trashed in 519ms, all favorites cleared (verified B-6905 pattern).
+- Then clicked `restore-pg_b7003_root` in `/app/trash` → all 50 children cascade-restored (`isInTrash:false`) but `isFavorite` remained `false` on all of them (`favRestored: 0`).
+- Asymmetry: trash side-effects are not journaled, so restore can't undo them. User loses their favorite list silently after a misclick + restore.
+- Fix sketch: on trash, store `prevIsFavorite` alongside `trashedAt`; on restore, re-apply when present.
+
+### B-7004 — DB route crashes hard (full-page error) when a row is missing `values` — P1 — open
+- Repro: inject a row into `state.rows` with shape `{ id, databaseId, properties: {...}, blocks: [] }` (missing `values`), then navigate to `/app/db/<dbId>`. Page shows the global error boundary: `"This page didn't load — Cannot read properties of undefined (reading 'p_title')"`.
+- Origin: `src/components/database/PropertyEditor.tsx:36` and similar `row.values[property.id]` access patterns (no `?.` and no default `{}`). One malformed row poisons the whole view.
+- Severity P1: any storage corruption / version mismatch / partial migration that leaves rows without `values` crashes the entire DB route, not just the bad row.
+- Fix sketch: default to `row.values ?? {}` at the read sites; ideally in the store getter so all callers benefit.

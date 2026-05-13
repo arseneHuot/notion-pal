@@ -91,6 +91,15 @@ function loadFromStorage(userId: string | null): AppState {
     if (!parsed.ui) parsed.ui = emptyState().ui;
     if (!parsed.calendarEvents) parsed.calendarEvents = {};
     if (!parsed.mails) parsed.mails = {};
+    // Normalize rows so downstream code can assume row.values exists
+    // (B-7004). Imports and synthetic test fixtures occasionally omit it.
+    if (parsed.rows) {
+      for (const [rid, r] of Object.entries(parsed.rows)) {
+        if (r && !r.values) {
+          parsed.rows[rid] = { ...r, values: {} };
+        }
+      }
+    }
     return parsed;
   } catch {
     return emptyState();
@@ -148,6 +157,13 @@ function attachCrossTabSync() {
     try {
       const next = e.newValue ? (JSON.parse(e.newValue) as AppState) : null;
       if (!next) return;
+      // Normalize rows so a malformed cross-tab payload doesn't crash
+      // downstream `row.values[…]` accesses (B-7004).
+      if (next.rows) {
+        for (const [rid, r] of Object.entries(next.rows)) {
+          if (r && !r.values) next.rows[rid] = { ...r, values: {} };
+        }
+      }
       _state = next;
       for (const l of listeners) l();
     } catch {
@@ -640,9 +656,15 @@ export function deletePage(id: string) {
     const newPages = { ...s.pages };
     for (const pid of idsToTrash) {
       const p = newPages[pid];
-      // Trash also clears `isFavorite` so a restored page doesn't reappear
-      // in the Favorites section without the user asking (B-6702).
-      if (p) newPages[pid] = { ...p, isInTrash: true, trashedAt: now, isFavorite: false };
+      if (!p) continue;
+      // Only the ROOT being trashed has its `isFavorite` cleared (B-6702 —
+      // a user-favorited page should not bounce back into Favorites on
+      // restore without their action). Cascade descendants keep their
+      // own `isFavorite` field intact — the Favorites section already
+      // filters out trashed pages, and cascade-restore will re-surface
+      // them with their original favorite state (B-7003).
+      const cleared = pid === id ? { isFavorite: false } : {};
+      newPages[pid] = { ...p, isInTrash: true, trashedAt: now, ...cleared };
     }
     return { ...s, pages: newPages };
   });

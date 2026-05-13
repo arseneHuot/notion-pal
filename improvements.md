@@ -2045,3 +2045,40 @@ Priority: high / medium / low.
 ### I-6805 — Sidebar cross-teamspace drag: surface "move to teamspace" prompt instead of silent no-op (low, open)
 - See B-6810. The current drop guard silently rejects when source/target teamspaces differ. Users will perceive this as "nothing happened" rather than "this is disallowed; here's how to actually move it".
 - Fix: when guard fails, show a toast/confirm "Move 'X' to teamspace 'Y'? Pages in that teamspace gain its members and lose yours." Confirm → call `movePageToTeamspace`. Cancel → no-op. Affordance for the common case of accidentally cross-dragging vs. intentional teamspace migration.
+
+## 2026-05-13 — I-6900 series
+
+### I-6900 — Filter warn should include propertyId/value context, and re-warn after operator-name change (low, open)
+- See B-6903. Today `[filter] unknown operator "Greater Than"` lacks the propertyId/value so authors can't tell which filter row in a multi-filter view is broken. Also, the per-session dedup Set means an automation that fixes-then-rebreaks the operator stays silent on the second break.
+- Fix: include `propertyId` + first 32 chars of `value` in the warn message, and key the dedup Set on `${operator}::${propertyId}` so a re-broken row warns again.
+
+### I-6901 — Restore-DB should re-link to last known parent teamspace (medium, open)
+- See B-6904. After restore, `db_4800_trashed_h5r47.isInTrash=false` but if its parent teamspace/page was also trashed, the DB now floats at the workspace root with no breadcrumb.
+- Fix: capture `parentIdBeforeTrash` on trash, and on restore use it if the parent is still alive; else surface a "Pick a new location" toast. Same pattern should also benefit pages (currently inherits root if parent is missing).
+
+### I-6902 — Cascade trash should expose `descendantCount` in the undo toast (low, open)
+- See B-6905. Trashing L1 cascades to 5 descendants silently. The toast just says "Page moved to trash" — users can't tell if they took 5 children with them or 50.
+- Fix: pass `descendantCount` from the cascade into the toast: "Page + 4 sub-pages moved to trash · Undo". Reduces accidental mass-trash anxiety.
+
+### I-6903 — AI panel code block should expose a copy button and language pill (low, open)
+- See B-6907. `<pre><code>` renders but there's no copy-to-clipboard affordance and no language hint even when the fence specified one (`\`\`\`python`).
+- Fix: parse the opening fence's language token, surface as a top-right pill, and render a hover "Copy" button that writes the `<code>` text content to clipboard. Matches Notion + ChatGPT expectations.
+
+### I-6904 — Sub-page export depth cap should be configurable per export (low, open)
+- See B-6908. The hard `depth < 3` cap in `blockToMarkdown` (export-markdown.ts:172) means deeply organized wikis (4+ levels) export as truncated trees with later levels collapsed to bare links. There's no way for a user to opt into a full export.
+- Fix: thread a `maxDepth` option through `pageToMarkdown` and surface in the export menu as "Include sub-pages: 1 / 2 / 3 / All". `All` clamps at e.g. 8 with a cycle guard already in place.
+
+### I-6905 — Columns export marker should include column index for round-trip clarity (low, open)
+- See B-6908. The exported markdown uses `<!-- multi-column layout: -->` + `<!-- column -->` repeatedly without an index, so a downstream import tool can't distinguish col 1 vs col 3 if a middle column was empty (skipped via `if (blockIds.length === 0) continue`).
+- Fix: emit `<!-- column 1 of 3 -->` with explicit indices so the export is invertible. Cost: 1 line of string interpolation.
+
+## 2026-05-13 — I-7000 series (stress / hardening)
+
+### I-7000 — `signOutState` should fully reset in-memory state, not just null currentUser (medium, open)
+- `src/lib/store.ts:511-513` only sets `currentUser: null` and leaves `pages`, `blocks`, `databases`, `rows` etc populated with the prior user's data.
+- Between `signOutState()` and the router's redirect to `/login`, any component that survives one render tick can still read those blobs (logged-out info disclosure if e.g. share-by-URL or a DevTools dump fires).
+- Fix: replace with `setState({ ...EMPTY_APP_STATE, ui: { darkMode: _state.ui.darkMode } })` so dark-mode persists but everything else clears. Cross-user storage-event guard (line 147) already keys off `currentUser?.id`, so wiping the user here also stops accidental rehydrate on stale events.
+
+### I-7001 — Virtualize synced-block-ref lists beyond N=200 (low, open)
+- See B-7001. 300 refs render eagerly. For long workspaces this is wasteful since most are off-screen.
+- Fix: wrap ref renderer in IntersectionObserver-based windowing OR `content-visibility:auto` per ref shell.
