@@ -112,6 +112,26 @@ function CalendarPage() {
 
   const [composeFor, setComposeFor] = useState<string | null>(null);
   const [composeTitle, setComposeTitle] = useState("");
+  // B-8101 — click an event chip to open an inline editor popover. The
+  // chip was previously click-inert; the only way to edit was via the
+  // backing database. Click → rename / delete (calendar source) or
+  // jump to source (db-row source).
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  function startEditingEvent(id: string) {
+    const ev = events[id];
+    if (!ev) return;
+    setEditingEventId(id);
+    setEditingTitle(ev.title || "");
+  }
+  function commitEditingEvent() {
+    if (!editingEventId) return;
+    const ev = events[editingEventId];
+    if (!ev) { setEditingEventId(null); return; }
+    const next = (editingTitle.trim() || "Untitled event").slice(0, 200);
+    if (next !== ev.title) upsertCalendarEvent({ ...ev, title: next });
+    setEditingEventId(null);
+  }
   function addEvent(day: string) {
     setComposeFor(day);
     setComposeTitle("");
@@ -210,11 +230,22 @@ function CalendarPage() {
                   {list.slice(0, 3).map((e) => (
                     <div
                       key={e.id}
-                      className="text-xs mt-0.5 px-1 py-0.5 rounded truncate cursor-grab"
+                      className="text-xs mt-0.5 px-1 py-0.5 rounded truncate cursor-pointer"
                       style={{ background: e.color ?? "#3b82f6", color: "white" }}
                       draggable={e.source === "calendar"}
                       data-testid={`cal-event-${e.id}`}
-                      title={e.source === "calendar" ? "Drag to reschedule" : `From ${e.source}`}
+                      title={e.source === "calendar" ? "Click to edit, drag to reschedule" : `From ${e.source} — click for details`}
+                      onClick={(ev) => {
+                        ev.stopPropagation();
+                        // B-8101 — open the inline editor for calendar
+                        // events; for db-row events, set selectedDay so
+                        // the bottom panel surfaces an actionable link.
+                        if (e.source === "calendar") {
+                          startEditingEvent(e.id);
+                        } else {
+                          setSelectedDay(e.date);
+                        }
+                      }}
                       onDragStart={(ev) => {
                         if (e.source !== "calendar") { ev.preventDefault(); return; }
                         ev.stopPropagation();
@@ -275,6 +306,67 @@ function CalendarPage() {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+      {editingEventId && events[editingEventId] && (
+        // B-8101 — inline edit popover for a personal calendar event.
+        // Rename + delete inline; click away (overlay) or Esc to dismiss.
+        <div
+          className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center"
+          onClick={() => setEditingEventId(null)}
+          data-testid="cal-event-edit-overlay"
+        >
+          <div
+            className="bg-card border border-border rounded-lg shadow-lg w-[380px] p-4"
+            onClick={(ev) => ev.stopPropagation()}
+            data-testid="cal-event-edit"
+          >
+            <div className="text-xs text-muted-foreground mb-2">
+              Event on {new Date(events[editingEventId].start).toLocaleDateString()}
+            </div>
+            <input
+              autoFocus
+              maxLength={200}
+              value={editingTitle}
+              onChange={(e) => setEditingTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitEditingEvent();
+                if (e.key === "Escape") setEditingEventId(null);
+              }}
+              placeholder="Event title…"
+              className="w-full bg-background border border-input rounded px-2 py-1 text-sm"
+              data-testid="cal-event-edit-title"
+            />
+            <div className="mt-3 flex items-center gap-2">
+              <button
+                onClick={commitEditingEvent}
+                className="bg-primary text-primary-foreground rounded px-3 py-1 text-sm"
+                data-testid="cal-event-edit-save"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  // Confirm via window.confirm — small surface, low-risk;
+                  // mirrors the existing trash-row delete pattern.
+                  if (window.confirm("Delete this event? This can't be undone.")) {
+                    deleteCalendarEvent(editingEventId!);
+                    setEditingEventId(null);
+                  }
+                }}
+                className="text-destructive text-sm hover:underline flex items-center gap-1 ml-auto"
+                data-testid="cal-event-edit-delete"
+              >
+                <Trash2 className="size-3" /> Delete
+              </button>
+              <button
+                onClick={() => setEditingEventId(null)}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

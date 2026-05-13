@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useStore, setUI, toggleDarkMode } from "@/lib/store";
+import { useStore, setUI, toggleDarkMode, updateWorkspace } from "@/lib/store";
 import { useAuth } from "@/hooks/use-auth";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/app/settings")({
   component: SettingsPage,
@@ -42,10 +43,7 @@ function SettingsPage() {
       <section data-testid="settings-workspace">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Workspace</h2>
         <div className="space-y-2 border border-border rounded p-4">
-          <div className="text-sm">
-            <span className="text-muted-foreground">Name: </span>
-            <span className="font-medium">{workspace?.name}</span>
-          </div>
+          <WorkspaceNameRow workspaceId={workspace?.id ?? null} name={workspace?.name ?? ""} />
           <div className="text-sm" data-testid="settings-billing">
             <span className="text-muted-foreground">Plan: </span>
             <span className="font-medium capitalize">{workspace?.plan}</span>
@@ -137,6 +135,65 @@ function SettingsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+// B-8105 — inline rename for the current workspace. Click the row to flip
+// into edit mode; Enter or blur commits, Esc reverts. Trimmed + capped to
+// 80 chars by `updateWorkspace`.
+function WorkspaceNameRow({ workspaceId, name }: { workspaceId: string | null; name: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  useEffect(() => setDraft(name), [name]);
+  if (!workspaceId) {
+    return (
+      <div className="text-sm">
+        <span className="text-muted-foreground">Name: </span>
+        <span className="font-medium">{name}</span>
+      </div>
+    );
+  }
+  if (editing) {
+    return (
+      <div className="text-sm flex items-center gap-2">
+        <span className="text-muted-foreground">Name: </span>
+        <input
+          autoFocus
+          value={draft}
+          maxLength={80}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={() => {
+            if (draft.trim()) updateWorkspace(workspaceId, { name: draft });
+            setEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (draft.trim()) updateWorkspace(workspaceId, { name: draft });
+              setEditing(false);
+            }
+            if (e.key === "Escape") {
+              setDraft(name);
+              setEditing(false);
+            }
+          }}
+          className="flex-1 bg-background border border-input rounded px-2 py-0.5 text-sm font-medium"
+          data-testid="settings-workspace-name-input"
+        />
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => setEditing(true)}
+      className="text-sm w-full text-left hover:bg-accent/40 rounded px-1 -mx-1 py-0.5 group"
+      data-testid="settings-workspace-name"
+      title="Click to rename"
+    >
+      <span className="text-muted-foreground">Name: </span>
+      <span className="font-medium">{name}</span>
+      <span className="text-xs text-muted-foreground ml-2 opacity-0 group-hover:opacity-100">(click to edit)</span>
+    </button>
   );
 }
 

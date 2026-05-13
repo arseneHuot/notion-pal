@@ -2106,6 +2106,23 @@ export function consumeAICredits(amount: number) {
   });
 }
 
+// B-8105 — workspace rename / patch helper. The store had no way to edit
+// a workspace short of full state surgery; the Settings UI was therefore
+// read-only. Keep the patch surface tight (Partial<Workspace>) and validate
+// the name length so a stray paste can't bloat the sidebar header.
+export function updateWorkspace(workspaceId: string, patch: Partial<{ name: string; icon: string }>) {
+  setState((s) => {
+    const w = s.workspaces[workspaceId];
+    if (!w) return s;
+    const next = { ...w };
+    if (typeof patch.name === "string") {
+      next.name = patch.name.trim().slice(0, 80) || w.name;
+    }
+    if (typeof patch.icon === "string") next.icon = patch.icon.slice(0, 4);
+    return { ...s, workspaces: { ...s.workspaces, [workspaceId]: next } };
+  });
+}
+
 // =========== Templates ============
 
 export function saveTemplate(t: PageTemplate) {

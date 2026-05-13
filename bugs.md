@@ -7180,3 +7180,15 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-8303 — Slash menu arrow wraparound — fixed — P3
 - `ArrowDown` → `(i + 1) % items.length`; `ArrowUp` → `(i - 1 + items.length) % items.length`. Both wrap when items.length > 0; both fall back to index 0 when the list is empty.
+
+
+## 2026-05-13 — B-8400 batch fixes
+
+### B-8206 — DB TextCell preserves multi-line paste — fixed — P2
+- `TextCell` switched from single-line `<input>` to a `<textarea rows={1}>` with JS auto-grow (up to ~6 lines / 160px). Newlines on paste now round-trip into the row value instead of being silently dropped at the first `\n`. Esc commits + blurs; Enter inserts a newline (table cells are prose, not titles).
+
+### B-8101 — Calendar event click opens an edit popover — fixed — P2
+- Calendar event chips were click-inert (drag-only). Click on a `calendar`-source chip now opens a modal popover (`cal-event-edit`) with the title editable (`cal-event-edit-title`), Save, and Delete (with confirm). Esc / click-overlay dismisses. DB-row-source chips set the bottom-panel `selectedDay` so the user gets a list with the database name as context (and a delete affordance for the underlying calendar event row when applicable). Verified live: clicking a `cal-event-evt_*` chip opens the editor pre-filled with the event's title.
+
+### B-8105 — Settings workspace rename inline — fixed — P2
+- New `updateWorkspace(workspaceId, patch)` store helper (trims + caps name to 80 chars). Settings `WorkspaceNameRow` flips to inline-edit on click (`settings-workspace-name` button → `settings-workspace-name-input`). Enter / blur commits, Esc reverts. Verified live: name went `Arsène Test's Workspace` → `Renamed Workspace` and propagated to the sidebar header chip.

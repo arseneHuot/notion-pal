@@ -127,13 +127,36 @@ function TitleCell({ row, value, property, className }: { row: DatabaseRow; valu
 
 function TextCell({ row, value, property, className }: { row: DatabaseRow; value: string; property: Property; className?: string }) {
   const [v, setV] = useState(value);
+  // B-8206 — `text` properties used to render a single-line `<input>`,
+  // which silently dropped everything after the first `\n` on paste.
+  // Switch to a `<textarea>` with rows=1 + auto-grow so multi-line paste
+  // round-trips (Enter still inserts a newline; Esc / blur commits).
+  const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => setV(value), [value]);
+  useEffect(() => {
+    // Auto-grow to fit content up to ~6 lines so a long paste isn't
+    // hidden behind a scrollbar in the table cell.
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(160, el.scrollHeight) + "px";
+  }, [v]);
   return (
-    <input
+    <textarea
+      ref={ref}
+      rows={1}
       value={v}
       onChange={(e) => setV(e.target.value)}
       onBlur={() => updateRow(row.id, { values: { [property.id]: v } })}
-      className={`bg-transparent outline-none w-full ${className ?? ""}`}
+      onKeyDown={(e) => {
+        // Commit on Esc so the user can close the cell editor without
+        // having to click away. Enter stays as newline insertion (the
+        // table cell is meant for prose).
+        if (e.key === "Escape") {
+          (e.currentTarget as HTMLTextAreaElement).blur();
+        }
+      }}
+      className={`bg-transparent outline-none w-full resize-none overflow-hidden ${className ?? ""}`}
       data-testid={`cell-text-${row.id}-${property.id}`}
     />
   );
