@@ -3664,3 +3664,14 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-2816 / B-2713 / B-2520 — Cmd+K palette lacked dialog semantics — fixed (commit 14baeb8) — closes I-2707
 - Fix: the inner palette panel now has `role="dialog"`, `aria-modal="true"`, `aria-label="Command palette"`, and a `command-palette` testid. The outer scrim still closes the palette on click. Verified via preview: `[data-testid="command-palette"]` returns matching role/aria attributes.
+
+### B-2913 / B-2918 / B-2919 / B-2920 — Remaining icon-button labels — fixed (commit f62df5c)
+- view-menu-<viewId> → "View options"
+- cal-prev-<dbId> → "Previous month", cal-next-<dbId> → "Next month"
+- toggle-<blockId> → "Expand toggle"/"Collapse toggle" + aria-expanded
+- Down from 4 → 0 unlabeled icon buttons on a typical page render.
+
+### B-2914 — Cross-tab sync — fixed (commit f62df5c) — closes I-2503 / I-2607 / I-2806
+- Fix: `src/lib/store.ts` attaches a `window` `storage` event listener AND a BroadcastChannel("notion-clone") on first `initializeForUser`. When another tab writes to `notion-clone:user:<uid>`, we parse the incoming JSON, replace `_state`, and notify subscribers. `setState` posts a `{type:"rehydrate"}` BroadcastChannel message after every write for lower-latency fan-out within one browser.
+- Verified: synthetic `StorageEvent` with `key: notion-clone:user:<uid>` is received; `BroadcastChannel` is supported in the preview browser.
+- Caveat: last-write-wins. Two tabs concurrently editing the same field will clobber each other's in-flight edits — full CRDT semantics are out of scope. Good enough for the typical "edit in one tab, see in another" use case.
