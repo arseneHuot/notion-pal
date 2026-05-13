@@ -101,10 +101,19 @@ function normalizeState(parsed: AppState): AppState {
     }
   }
   if (parsed.databases) {
+    const rows = parsed.rows ?? {};
     for (const [did, d] of Object.entries(parsed.databases)) {
       if (!d) continue;
       const patch: Partial<typeof d> = {};
       if (!Array.isArray(d.rows)) patch.rows = [];
+      else {
+        // Prune row IDs that no longer exist in `state.rows` (B-7101).
+        // Hard-deletes mid-trash, partial migrations, or import drift can
+        // leave dangling IDs that throw off `db.rows.length` counts and
+        // any read site that doesn't guard `rowsMap[r]`.
+        const pruned = d.rows.filter((rid) => !!rows[rid]);
+        if (pruned.length !== d.rows.length) patch.rows = pruned;
+      }
       if (!Array.isArray(d.properties)) patch.properties = [];
       if (!Array.isArray(d.views)) patch.views = [];
       if (Object.keys(patch).length) parsed.databases[did] = { ...d, ...patch } as typeof d;

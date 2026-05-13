@@ -6598,3 +6598,15 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7201 — `/app/page/<id>` alias — fixed (commit 77fc578)
 - Fix: new route file `app.page.$pageId.tsx` redirects via `<Navigate>` to `/app/p/$pageId`. Verbose verbose-path bookmarks no longer 404.
+
+
+## 2026-05-13 — B-7300 stress + discovery sweep
+
+### I-7201 (re-verified) — DB no-views empty state — fixed
+- Repro: injected `db_v7201_noviews` with `views: []`, navigated to `/app/db/db_v7201_noviews`. Saw `db-no-views-db_v7201_noviews` testid + `db-newview-db_v7201_noviews` button (and 9 view-type sub-buttons in the popover).
+- Clicked `db-newview-db_v7201_noviews-table`. Result: empty state vanished, a Table view (`view_mp44izchywszcpgj`) was created and rendered with header + Add Row. `views.length` went from 0 → 1.
+- Closes the verification ask for I-7201; commit 77fc578 implementation is solid.
+
+### B-7201 (re-verified) — `/app/page/<id>` alias redirect — fixed
+- Repro: navigated to `/app/page/pg_mp43svzu14dmlh94` (Welcome page). After ~700 ms the URL settled at `/app/p/pg_mp43svzu14dmlh94` and the Welcome editor content rendered normally. No 404.
+- Confirms the `<Navigate>` route in `app.page.$pageId.tsx` resolves on first paint without flashing the Not Found body.

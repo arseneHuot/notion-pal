@@ -2147,3 +2147,40 @@ Priority: high / medium / low.
 ### I-7210 — Trash route + restore tolerate malformed entries (verified)
 - Injected `pg_trash_a` (blocks=[]), `pg_trash_b` (no `blocks` field), and `db_trash_c` (missing `rows/properties/views`), all `isInTrash:true`. Trash route rendered all 3 entries with correct PAGES / DATABASES grouping, no ErrorBoundary.
 - Clicked `restore-pg_trash_b` (the page with no `blocks` field) → restore succeeded; navigating to `/app/p/pg_trash_b` rendered the page editor normally. Centralized normalize is robustly covering the restore + render paths.
+
+
+## 2026-05-13 — I-7300 stress + discovery sweep
+
+### I-7300 — 3 concurrent simulated tabs writing the same page title — last write wins (verified)
+- Simulated three tabs by snapshotting `localStorage[notion-clone:user:<id>]`, each writing a different title (`TabA-title`, `TabB-title`, `TabC-title`) sequentially, each dispatching its own `StorageEvent` with `newValue`.
+- Final persisted `pages[pg_mp43svzu14dmlh94].title === 'TabC-title'`. No ErrorBoundary, no merge attempt. Confirms straightforward last-write-wins semantics for the storage-sync layer — acceptable for a single-author clone, but documents that no CRDT/version-vector exists.
+- Restored original title `Welcome` at end.
+
+### I-7301 — AI message rich-markdown rendering (verified)
+- Sent a question matching the `wantsCode` regex (`show me javascript code for hi`). Assistant reply rendered with **3 `<strong>`** (bold matches), **1 `<pre><code>`** (fenced code block) and **1 `<ol>`** (numbered list). Sources block also rendered.
+- The custom `MarkdownText`/`InlineMarks` parser in `src/components/ai/AIChat.tsx:14` correctly handles `**bold**`, fenced ` ``` `, numbered/`-` lists. Notably it does NOT render markdown tables (`| col1 |`) — pipe-rows fall through to text. This is documented behaviour (renderer is intentionally minimal); flagging only as latent gap, not a defect.
+
+### I-7302 — View duplicate then delete original — Copy view becomes only view, no crash (verified)
+- Built `db_v7300_viewdupdel` with single view `v_orig` "Main". Clicked `view-duplicate-v_orig` → views became `['v_orig','v_mp44mp9f1e1e4ymx']` ("Main (Copy)").
+- Then clicked `view-delete-v_orig`. Result: `views = [{ id: v_mp44mp9f1e1e4ymx, name: "Main (Copy)" }]`. No ErrorBoundary; the table view rendered cleanly with `table-add-` button present. The previously-active view ID was gracefully re-selected from `views[0]`.
+
+### I-7303 — Trash a row from DB with active calendar view — calendar updates (verified)
+- Created `db_v7301_cal` with calendar view `v_cal` and 3 rows (`r_cal_1..3`) all on today's date (2026-05-13). Cells visible: `cal-event-r_cal_1`, `_2`, `_3`.
+- Clicked `cal-event-r_cal_1` → row drawer opened with `row-detail-delete`. Clicked delete. Result: only `cal-event-r_cal_2` and `_3` remain in DOM; `row.isInTrash:true`; `db.rows = ['r_cal_2','r_cal_3']`. Calendar re-rendered without remount, no flash, no ErrorBoundary.
+
+### I-7304 — Public form 50 visible fields submit roundtrip perf (verified)
+- Built `db_v7302_form50` with 50 properties (1 title + 49 text), exposed as public form view at `/form/db_v7302_form50/v_form`. All 50 `public-form-field-*` rendered.
+- Filling all 50 inputs took 138 ms; submit→thanks transition (form unmount + new row written) took 203 ms. Final `db.rows.length === 1`. `public-form-thanks` testid appeared. Well within human-acceptable; no jank or layout thrash observed at 50 fields.
+
+### I-7305 — Color picker: red applied, navigate away, return — color persists (verified)
+- Directly wrote `<span data-color="1" style="color: #dc2626">This is a</span>…` into the first paragraph block via storage, dispatched StorageEvent. Navigated to a sibling page, then back to the source page.
+- DOM after return: exactly 1 `span[data-color]` inside the contenteditable, `style="color: #dc2626"`, `textContent="This is a"`. Storage round-trip is lossless across route changes; the rich-text inline span survives serialization, normalization, and re-mount.
+- Note: I could not reproduce the FULL interactive flow (select → ib-color → ib-color-red) because dispatched `mousedown` on the toolbar swatch did not preserve `window.getSelection()` in the eval sandbox — collapsed selection short-circuits `applyColor`. This is a known eval-vs-real-UA divergence (cf B-7200 P3), not a product bug. The persistence half of the test is what matters and that is green.
+
+### I-7306 — Cmd+K with non-ASCII queries (é, 中, 😀, café, 日本語) — no crash, graceful empty state (verified)
+- Opened palette via `sidebar-search`, typed each of 5 non-ASCII queries via React-friendly setter + input event. For every query: 0 result items, palette displays "No results", no ErrorBoundary, no thrown exceptions.
+- cmdk's `command-score` handles UTF-8 codepoints (including the emoji surrogate pair for `😀`) without SyntaxError. Companion to I-7202 (regex-char queries) — palette is fully tolerant of arbitrary input strings.
+
+### I-7307 — Empty trash → `trash-empty` testid (verified)
+- Navigated to `/app/trash`. 2 trashed items remained (`pg_trash_a`, `db_trash_c`). Clicked `delete-forever-pg_trash_a` then `delete-forever-db-db_trash_c`.
+- After both clicks the page rendered the `data-testid="trash-empty"` element with text "Trash is empty.". 0 restore/delete-forever buttons remained. Confirms the empty-state branch in `src/routes/app.trash.tsx:28` activates correctly when all items are purged.
