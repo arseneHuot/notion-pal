@@ -5696,3 +5696,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-5609 — NewViewButton creates all 8 listed view types without crash (acceptance, ok)
 - Steps: at /app/p/pg_mp2pz5zw6oflgc0j (Getting Started, which has inline DB `db_mp3lhvrxwl40mnbf`). Clicked `db-newview-<dbId>` then each of `db-newview-<dbId>-{table,board,calendar,gallery,list,timeline,chart,form}` in turn.
 - Observed: db.views grew 5→13 (+8). No console errors. Each view appeared in the tab strip. Note: `map` view type exists in the discriminated union (InlineDatabase.tsx:249-251 + types.ts) but is NOT in the dropdown list (line 269) — a small parity gap worth flagging as I-5601.
+
+### B-5604 — Markdown export didn't inline sub-pages — fixed (commit 33e485a)
+- Fix: sub-page blocks now render the target page's content under a nested heading (## / ### / #### based on depth). Capped at 3 levels to avoid cycles. Verified live with A→B→C hierarchy: all three bodies inlined.
+
+### B-5608 — Cmd+K closed destroys editor selection — fixed (commit 33e485a)
+- Fix: CommandPalette captures the focused contenteditable + Range on open and restores both on close (Cmd+K toggle, Escape, scrim click). Cancelling out of the palette no longer loses cursor / highlight.
