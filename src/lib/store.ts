@@ -79,6 +79,45 @@ function userKey(userId: string) {
   return `notion-clone:user:${userId}`;
 }
 
+/**
+ * Defensive normalisation pass over a freshly-loaded or cross-tab-arrived
+ * `AppState`. Patches the most common shape-drift the testers and importers
+ * have surfaced so downstream code can stop guarding at every read site
+ * (I-7101 — centralized normalization). Currently:
+ *
+ * - `ui` / `calendarEvents` / `mails` defaults (legacy migrations).
+ * - Every row gets a `values: {}` map (B-7004).
+ * - Every database gets `rows: []`, `properties: []`, `views: []` arrays
+ *   (B-7100, B-3022, B-3205, B-5012/5013).
+ * - Every page gets a `blocks: []` array.
+ */
+function normalizeState(parsed: AppState): AppState {
+  if (!parsed.ui) parsed.ui = emptyState().ui;
+  if (!parsed.calendarEvents) parsed.calendarEvents = {};
+  if (!parsed.mails) parsed.mails = {};
+  if (parsed.rows) {
+    for (const [rid, r] of Object.entries(parsed.rows)) {
+      if (r && !r.values) parsed.rows[rid] = { ...r, values: {} };
+    }
+  }
+  if (parsed.databases) {
+    for (const [did, d] of Object.entries(parsed.databases)) {
+      if (!d) continue;
+      const patch: Partial<typeof d> = {};
+      if (!Array.isArray(d.rows)) patch.rows = [];
+      if (!Array.isArray(d.properties)) patch.properties = [];
+      if (!Array.isArray(d.views)) patch.views = [];
+      if (Object.keys(patch).length) parsed.databases[did] = { ...d, ...patch } as typeof d;
+    }
+  }
+  if (parsed.pages) {
+    for (const [pid, p] of Object.entries(parsed.pages)) {
+      if (p && !Array.isArray(p.blocks)) parsed.pages[pid] = { ...p, blocks: [] };
+    }
+  }
+  return parsed;
+}
+
 function loadFromStorage(userId: string | null): AppState {
   if (typeof window === "undefined") return emptyState();
   try {
@@ -87,20 +126,7 @@ function loadFromStorage(userId: string | null): AppState {
       : window.localStorage.getItem(GLOBAL_KEY);
     if (!raw) return emptyState();
     const parsed = JSON.parse(raw) as AppState;
-    // simple migration
-    if (!parsed.ui) parsed.ui = emptyState().ui;
-    if (!parsed.calendarEvents) parsed.calendarEvents = {};
-    if (!parsed.mails) parsed.mails = {};
-    // Normalize rows so downstream code can assume row.values exists
-    // (B-7004). Imports and synthetic test fixtures occasionally omit it.
-    if (parsed.rows) {
-      for (const [rid, r] of Object.entries(parsed.rows)) {
-        if (r && !r.values) {
-          parsed.rows[rid] = { ...r, values: {} };
-        }
-      }
-    }
-    return parsed;
+    return normalizeState(parsed);
   } catch {
     return emptyState();
   }
@@ -170,14 +196,7 @@ function attachCrossTabSync() {
       if (incomingTs > 0 && localTs > 0 && incomingTs < localTs) {
         return;
       }
-      // Normalize rows so a malformed cross-tab payload doesn't crash
-      // downstream `row.values[…]` accesses (B-7004).
-      if (next.rows) {
-        for (const [rid, r] of Object.entries(next.rows)) {
-          if (r && !r.values) next.rows[rid] = { ...r, values: {} };
-        }
-      }
-      _state = next;
+      _state = normalizeState(next);
       for (const l of listeners) l();
     } catch {
       // ignore parse errors
@@ -198,13 +217,7 @@ function attachCrossTabSync() {
           const localTs = (_state as unknown as { _lastWriteAt?: number })._lastWriteAt ?? 0;
           const incomingTs = (next as unknown as { _lastWriteAt?: number })._lastWriteAt ?? 0;
           if (incomingTs > 0 && localTs > 0 && incomingTs < localTs) return;
-          // Normalize malformed rows.
-          if (next.rows) {
-            for (const [rid, r] of Object.entries(next.rows)) {
-              if (r && !r.values) next.rows[rid] = { ...r, values: {} };
-            }
-          }
-          _state = next;
+          _state = normalizeState(next);
           for (const l of listeners) l();
         } catch {
           // ignore

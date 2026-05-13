@@ -6541,3 +6541,35 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7000 — Cross-tab stale event clobbered newer writes — fixed (commit 9e4f323) — P1
 - Fix: `setState` stamps `_lastWriteAt = Date.now()`. Storage event listener + BroadcastChannel handler skip incoming snapshots whose `_lastWriteAt` is strictly older than ours. Verified: marker.isFavorite=true survives a stale (60s old) storage event carrying isFavorite=false.
+
+## 2026-05-13 — B-7100 verification batch (4 verifies, 7 new coverage)
+
+### B-7000 (re-verified) — stale cross-tab event guard holds — fixed — P1
+- Repro: stamped `state._lastWriteAt = now`, set unique marker `__b7000_flag` + `pg_mp2pz5zw6oflgc0j.isFavorite=true`, dispatched synthetic `StorageEvent` carrying `_lastWriteAt: now - 60000` and the same page with `isFavorite:false` + marker 'OLD'.
+- Result: localStorage still shows marker `NEW`, `isFavorite:true`, `_lastWriteAt: now`. Listener correctly rejected the stale snapshot.
+- BroadcastChannel path also re-verified separately (see new B-7100/I-7100 below): posting a stale BC message with title 'OLD_TITLE_FROM_BC' did NOT replace `NEW_TITLE_<now>` in store.
+
+### B-7002 (re-verified) — ColumnsEl no longer loops on unrelated store writes — fixed — P1
+- Repro: built fresh `pg_b7100_cols` containing a 2-column block and a top-level paragraph. After mount, toggled `page-opt-favorite` twice (real `updatePage` writes).
+- Result: 0 `Maximum update depth exceeded` console errors. ColumnsEl's useEffect did not re-fire on the store write that didn't touch its inputs.
+
+### B-7003 (re-verified) — Cascade restore re-applies `isFavorite` on descendants — fixed
+- Repro: created `pg_b7100_p` + children `c1/c2/c3` with `isFavorite:true`. Clicked `page-opt-trash` on parent (cascade trashed all 4, only parent had `isFavorite` cleared by the trash-root rule). Clicked `restore-pg_b7100_p` in `/app/trash`.
+- Result: parent `isInTrash:false isFavorite:false`, all 3 children `isInTrash:false isFavorite:true`. Asymmetry from the original bug is gone.
+
+### B-7004 (re-verified) — DB route renders rows missing `values` — fixed — P1
+- Repro: injected `row_b7100_novalues = { id, databaseId: 'db_mp3lhvrxwl40mnbf', properties:{}, blocks:[], isInTrash:false }` (no `values` field). Navigated to `/app/db/db_mp3lhvrxwl40mnbf`.
+- Result: no ErrorBoundary, row renders with cells showing "Empty"/"Empty". `PropertyEditor` line 39 defaults to `undefined` when `row.values` is missing — cells fall through to empty render path.
+
+### B-7100 — TableView crashes when `database.rows` is undefined (full route boundary) — P1 — open
+- Repro: 2 existing DBs in this state (`db_b6014_test`, `db_6606_dup_test`) have `database.rows: undefined`. Navigating to `/app/db/db_b6014_test` shows the global ErrorBoundary: "Cannot read properties of undefined (reading 'map')". Stack: `TableView` at `src/components/database/views/TableView.tsx:25` doing `db.rows.map(...)`.
+- The B-7004 fix normalized `row.values` but did NOT normalize `database.rows`. Any DB with a missing `rows` array still crashes the entire DB route, not just the bad view.
+- Severity P1: same blast radius as B-7004 (whole-route boundary), same root cause (storage corruption / partial migrations leaving array fields undefined).
+- Fix sketch: default `db.rows ?? []` at the read site (TableView.tsx:25, plus mirror in KanbanView / ListView / GalleryView / CalendarView / TimelineView etc.), and/or normalize in `loadFromStorage` the way `row.values` is now normalized.
+
+### B-7101 — `db.rows` includes ID of a row that was hard-deleted while DB was trashed — P2 — open
+- Repro (NEW#5): trashed `db_b7100_restore` with rows `['r71_1','r71_2','r71_3']`, then deleted `state.rows['r71_2']` entirely (corruption / mid-trash hard delete), restored DB.
+- Result: restore succeeded, no crash, DB renders. But `db.rows = ['r71_1','r71_2','r71_3']` still lists the dangling ID. TableView's `rows.filter(r => r && !r.isInTrash)` covers the visible case, yet the stale ID survives indefinitely.
+- Severity P2: latent — masks legitimate row counts (`db.rows.length` is wrong by 1), and any new code path that doesn't guard `rowsMap[r]` (e.g., a future export-to-CSV) will trip on it.
+- Fix sketch: on restore-DB (and trash-DB), prune `db.rows` to entries that exist in `state.rows`. Same belt-and-suspenders as `loadFromStorage`'s normalization step for `row.values`.
+

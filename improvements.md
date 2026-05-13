@@ -2082,3 +2082,22 @@ Priority: high / medium / low.
 ### I-7001 — Virtualize synced-block-ref lists beyond N=200 (low, open)
 - See B-7001. 300 refs render eagerly. For long workspaces this is wasteful since most are off-screen.
 - Fix: wrap ref renderer in IntersectionObserver-based windowing OR `content-visibility:auto` per ref shell.
+
+## 2026-05-13 — B-7100 verification batch coverage
+
+### I-7100 — Cmd+K palette has no fuzzy match for queries that look like regex chars — low — open
+- NEW#7: opened `sidebar-search`, typed `(`, `+`, `*`, `(paren)`, `+plus`, `*star`, `[brk`, `Has (` while a page titled "Has (paren) +plus *star" existed.
+- No crash, no SyntaxError — but **none** of those queries surfaced the page either. cmdk's underlying matcher likely strips/special-cases these tokens, so users searching for files/pages whose titles legitimately contain `(`, `*`, or `+` cannot find them by typing those chars.
+- Fix sketch: lowercase + char-by-char substring fallback when cmdk's command-score returns no hits, OR explicitly escape input before passing to cmdk's filter so non-word chars participate in scoring.
+
+### I-7101 — Centralize array-field normalization in `loadFromStorage` — medium — open
+- See B-7100/B-7101. Right now `loadFromStorage` normalizes `row.values: {}` but several other array/object fields (`database.rows`, `database.properties`, `database.views`, `page.blocks`, `block.columnIds`, `block.blocks`) can also be undefined after a partial migration / synthetic import / cross-version state restore, and each is read at multiple sites with no guard, producing whole-route boundary trips.
+- Fix sketch: one normalization pass in `loadFromStorage` that walks `state.databases / pages / blocks / rows` and applies `arr ?? []` / `obj ?? {}` defaults to the known-array/object fields. Removes the need for belt-and-suspenders defaults at every read site.
+
+### I-7102 — Verifications passed: BroadcastChannel stale rejection, columns:0 legacy, multi-cols same page, multi-select equals filter, 50-reply comment thread
+- NEW#1 stale BC: posting an older `_lastWriteAt` snapshot via `BroadcastChannel('notion-clone')` does not overwrite the fresher local state. Title `NEW_TITLE_<now>` survived the stale `OLD_TITLE_FROM_BC` post.
+- NEW#2 legacy `columns: 0`: page `pg_b7100_legacy` with a `columns:0, columnIds:[]` block renders without crash, without ErrorBoundary, and with 0 console errors. The new `c.columns <= 0` bail-out in ColumnsEl works.
+- NEW#3 3 columns blocks (2/3/2) on one page each materialize independently — `columnIds.length` ends at 2, 3, 2 respectively, with no update-depth errors.
+- NEW#4 multi-select `equals` filter (`tagA`): r1 (tags=[A,B]) and r3 (tags=[A]) shown, r2 (tags=[B]) correctly filtered out via the `Array.isArray(v) ? v.includes(...)` branch in `filter.ts:52`.
+- NEW#6 50 sibling replies under one parent comment: comments panel rendered 50 `Reply #N` entries with 104 `[data-testid^="comment-"]` nodes total, 0 RangeError / call-stack errors. The recursive renderer is width-safe at this size.
+
