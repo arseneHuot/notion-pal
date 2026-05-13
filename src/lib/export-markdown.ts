@@ -120,13 +120,13 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       return `${fence}${lang}\n${c.content ?? ""}\n${fence}`;
     }
     case "image": {
-      const m = b as Extract<Block, { type: "image" }>;
+      const m = b as Block & { url: string; caption?: string };
       return m.url ? `![${m.caption ?? ""}](${m.url})` : `<!-- (empty image block) -->`;
     }
     case "video":
     case "audio":
     case "file": {
-      const m = b as Extract<Block, { type: "video" | "audio" | "file" }>;
+      const m = b as Block & { url: string; fileName?: string };
       return m.url ? `[${b.type}: ${m.fileName ?? m.url}](${m.url})` : `<!-- (empty ${b.type} block) -->`;
     }
     case "bookmark":

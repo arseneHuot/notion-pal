@@ -343,7 +343,7 @@ function PublicFormField({ property, value, onChange }: { property: Property; va
     );
   }
   if (property.type === "select" || property.type === "status") {
-    const opts = (property as Extract<Property, { type: "select" }>).options ?? [];
+    const opts = (property as Property & { options: { id: string; name: string }[] }).options ?? [];
     return (
       <select
         value={(value as string) ?? ""}
@@ -351,16 +351,16 @@ function PublicFormField({ property, value, onChange }: { property: Property; va
         className="w-full bg-background border border-input rounded px-2 py-1 text-sm"
       >
         <option value="">Choose…</option>
-        {opts.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        {opts.map((o: { id: string; name: string }) => <option key={o.id} value={o.id}>{o.name}</option>)}
       </select>
     );
   }
   if (property.type === "multi-select") {
-    const opts = (property as Extract<Property, { type: "multi-select" }>).options ?? [];
+    const opts = (property as Property & { options: { id: string; name: string }[] }).options ?? [];
     const selected = Array.isArray(value) ? (value as string[]) : [];
     return (
       <div className="flex flex-wrap gap-1">
-        {opts.map((o) => {
+        {opts.map((o: { id: string; name: string }) => {
           const active = selected.includes(o.id);
           return (
             <button
@@ -370,7 +370,7 @@ function PublicFormField({ property, value, onChange }: { property: Property; va
                 // Functional updater so rapid synchronous toggles compose
                 // correctly even before React commits the previous click
                 // (B-5506).
-                onChange((prev) => {
+                onChange((prev: unknown) => {
                   const cur = Array.isArray(prev) ? (prev as string[]) : [];
                   return cur.includes(o.id) ? cur.filter((id) => id !== o.id) : [...cur, o.id];
                 })

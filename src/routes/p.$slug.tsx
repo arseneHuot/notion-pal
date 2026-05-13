@@ -329,7 +329,7 @@ function ReadonlyBlock({
     return <div className="my-2"><span className="inline-block bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm font-medium">{b.emoji} {b.label}</span></div>;
   }
   if (block.type === "file") {
-    const f = block as Extract<Block, { type: "file" }>;
+    const f = block as Block & { url: string; fileName?: string };
     if (!/^https?:/i.test(f.url ?? "")) return null;
     return <a href={f.url} target="_blank" rel="noreferrer noopener" className="text-sm underline">📎 {f.fileName ?? f.url}</a>;
   }
