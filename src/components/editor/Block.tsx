@@ -471,8 +471,7 @@ function useEditable(
         updateBlock(block.id, newBlock as Partial<Block>);
       } else if (cmd.custom === "database-inline") {
         const dbId = createDatabase({ parentId: pageId, isInline: true });
-        const viewIdMap = useStore.toString; // not used; we just pick first view of matching type
-        const db = useStore.getState ? null : null; // no-op
+        // (no-op placeholders removed — useStore has no static helpers)
         // We'll need to read view of matching type. We do that via getState.
         // Lazy import to avoid circular dependency.
         import("@/lib/store").then(({ getState }) => {
