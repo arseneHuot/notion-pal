@@ -5811,3 +5811,52 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5010 / B-5102 / B-5304 — Block-scoped comments invisible — fixed (commit 5cd011b)
 - Fix: PageComments filter dropped the `!c.blockId` clause; block-scoped comments now render in the pane with a small "↑ on block" chip (`comment-block-anchor-<id>`) that jumps the viewport via `#block-<id>` hash. Closes the orphan-data state.
+
+
+## 2026-05-13 — Test agent batch (B-5900 / I-5900 series)
+
+### B-5900 — B-5601 breadcrumb teamspace chip on teamspaced page (acceptance, ok)
+- Steps: navigated to `pg_mp2pz5zw6oflgc0j` (teamspaceId=`ts_mp2pz5zwqdkgmzis` / Private). Enumerated `[data-testid^="breadcrumb-"]`.
+- Observed: chip `breadcrumb-teamspace-ts_mp2pz5zwqdkgmzis` renders as leading element ("🔒 Private"), followed by `breadcrumb-pg_mp2pz5zw6oflgc0j` ("🧭 Getting Started"). Title attribute = "Teamspace: Private". Non-clickable identity marker reads correctly. B-5601/B-5705 fix is live.
+
+### B-5901 — B-5010 block-scoped comment anchor — verified (acceptance, ok)
+- Steps: injected two comments with `blockId: "blk_5006_t1"` (one unresolved, one resolved). Opened pane via `open-comments`. Cleared hash + ring, clicked `comment-block-anchor-cmt_b5900_test`.
+- Observed: anchor click sets `location.hash = "#block-blk_5006_t1"`, the matching `[data-block-id="blk_5006_t1"]` gains `ring-2 ring-blue-400` + `data-block-highlight="1"`. The chip label reads "↑ on block", title = "Jump to block blk_5006_t1". B-5010/B-5102/B-5304 fix verified end-to-end.
+
+### B-5902 — Orphan page (no teamspaceId) hides the teamspace chip (acceptance, ok)
+- Steps: navigated to `pg_b4600_orphan` (teamspaceId=null). Enumerated breadcrumb chips.
+- Observed: only `breadcrumb-pg_b4600_orphan` renders ("👻 B-4600 Orphan"). No `breadcrumb-teamspace-*` element present. Confirms the chip is conditional on `pages[rootId]?.teamspaceId`, not a stray render. Orphan pages stay visually unambiguous.
+
+### B-5903 — Move-to-teamspace updates breadcrumb chip + cross-tab sync (acceptance, ok)
+- Steps: on `pg_mp2pz5zw6oflgc0j` (Private), opened `page-options` menu, clicked `page-opt-move-ts_mp2s8a5x6ku00yjn` (Test Teamspace). Then simulated a remote tab via `localStorage.setItem` + manual `StorageEvent` flipping teamspaceId to Engineering.
+- Observed: in-tab move flips the chip immediately to `breadcrumb-teamspace-ts_mp2s8a5x6ku00yjn` ("🌐 Test Teamspace"); StorageEvent re-render flips it to `breadcrumb-teamspace-ts_mp2pz5zwvod19q0j` ("⚙️ Engineering") within ~400ms. Same DOM page, both code paths drive the same reactive read. No stale chip.
+
+### B-5904 — Block-scoped comment edit / delete via testids (acceptance, ok)
+- Steps: clicked `comment-edit-cmt_b5900_test`, typed "Edited block comment" into `comment-edit-input-cmt_b5900_test`, clicked save. Then clicked `comment-delete-cmt_b5900_resolved`.
+- Observed: edit persists, "(edited)" indicator appears, and the `comment-block-anchor-cmt_b5900_test` chip stays attached (blockId not lost). Delete removes the resolved row from the DOM. The block-scoped variant uses the same edit/delete affordances as page comments — full parity confirmed.
+
+### B-5905 — Resolved block-scoped comment visible only with show-resolved on (acceptance, ok)
+- Steps: with `show-resolved-toggle` checked, observed both block-scoped comments. Resolved row has `opacity-50` styling; its `resolve-cmt_b5900_resolved` button label reads "Resolved" (not "Resolve"). Toggle persists in `ui.showResolvedComments`.
+- Observed: behavior matches page-comment resolved variant. Block anchor chip continues to render on the resolved row. No styling regression specific to block-scoped comments.
+
+### B-5906 — AI textarea auto-grow caps at max-h-40 (160px) (acceptance, ok)
+- Steps: opened AI panel via `open-ai-chat`, programmatically set `ai-input` value to 20 newline-separated lines, fired input event.
+- Observed: rendered textarea height = 160px (max-h-40), even though `scrollHeight` reports 408px. The inline `ref` callback's `Math.min(160, el.scrollHeight)` is doing its job; overflow scroll engages past the cap. No layout blowup of the AI panel for long pasted prompts.
+
+### B-5907 — Cmd+K palette tolerates selector chars in query (acceptance, ok)
+- Steps: opened palette via `open-command-palette`, typed `[contenteditable]` then `[data-foo=bar]"';DROP TABLE`. Watched window error events.
+- Observed: zero JS errors, palette stays open, results filter empty. No `querySelector` interpolation hazard — the input is used as a string match, never as a CSS selector source. Search hardening intact.
+
+### B-5908 — Trash route renders no breadcrumb chips at all (acceptance, ok)
+- Steps: navigated to `/app/trash`. Enumerated `[data-testid^="breadcrumb-"]` and `[data-testid^="breadcrumb-teamspace-"]`.
+- Observed: zero matches in both cases. TopBar reads `page` from `useParams({pageId})`; on `/app/trash` there is no pageId, so the breadcrumb array stays empty. Teamspace chip is absent by construction — correct.
+
+### B-5909 — Comment block-anchor button stays enabled when block doesn't exist (P3, open)
+- Steps: injected `cmt_b5900_ghostblock` with `blockId:"blk_does_not_exist_xyz"` (no matching block in any page). Cleared hash + highlight. Clicked `comment-block-anchor-cmt_b5900_ghostblock`.
+- Observed: button is not `disabled`; click sets `location.hash = "#block-blk_does_not_exist_xyz"`. The `hashchange` listener finds no element, so no ring appears, no scroll happens, no toast. Silent no-op.
+- Expected: either disable the chip when the target block is missing (cheap: `!blocks[blockId]`), or surface a toast "Block no longer exists" so the user understands why the jump did nothing.
+
+### B-5910 — Markdown export inlines trashed sub-pages (P1, open)
+- Steps: created parent `pg_b5900_export_parent` with a `sub-page` block pointing at `pg_b5900_trashed_sub` (`isInTrash:true`, content "Secret in trash"). Fired `export-page-markdown` with `noDownload:true`.
+- Observed: `__lastExportedMarkdown` = `# Parent For Trash Export\n\n## 🗑 Trashed Sub\n\nSecret in trash\n`. Trashed page title AND body content leak into the parent's export.
+- Expected: skip / omit the body for trashed targets (export-markdown.ts:170 should also gate on `!target.isInTrash`), or fall back to the link-only branch. Today restoring privacy from the trash bin does not extend to exports.

@@ -1874,3 +1874,26 @@ Priority: high / medium / low.
 
 ### I-5705 — Comment edit save button should disable while saving (low, open)
 - B-5709 shows save is synchronous. If the store goes async (future Supabase write-through), double-click on save could create duplicate updates. Add a `saving` state inside `CommentEditor` and disable the save button between click and resolution. Pre-emptive guard.
+
+
+## 2026-05-13 — Test agent batch (I-5900 series)
+
+### I-5900 — NewViewButton missing "map" view type (P3, open)
+- File: src/components/database/InlineDatabase.tsx:269.
+- The dropdown lists `["table", "board", "calendar", "gallery", "list", "timeline", "chart", "form"]` — `"map"` is absent even though `View["type"]` in types.ts:500 supports it. So a map view can exist via direct store mutation but not be created from the UI.
+- Either add `"map"` to the picker (and provide a sensible default for `locationProperty`), or strip the `"map"` branch from `add()` and `View` so the gap is intentional. Pick one.
+
+### I-5901 — Block-anchor comment chip should disable on stale blockId (P3, open)
+- See B-5909. PageComments.tsx:280 renders the chip unconditionally when `blockId != null`. Add a quick existence check (`useStore(s => !!s.blocks[blockId])`) and apply `disabled` + tooltip "Block no longer exists" when the lookup fails. Prevents the silent no-op click and gives users a real signal that the anchor is dead.
+
+### I-5902 — Markdown export should respect `isInTrash` on sub-page targets (P1, open)
+- See B-5910. export-markdown.ts:170 guards on depth + visited only. Add `&& !target.isInTrash` so trashed pages don't get their content inlined into the parent's export. Fall back to either the link branch (181-186) or a short "<!-- trashed sub-page omitted -->" placeholder. Privacy / completeness fix.
+
+### I-5903 — Trash route could still show teamspace context (P3, open)
+- See B-5908. Today `/app/trash` renders no breadcrumb at all. A small "Trash" chip (or "Trash · Private" if filtering by teamspace) would orient users who landed there from a specific teamspace context. Low priority — consider when the trash route grows filters.
+
+### I-5904 — Cross-tab teamspace move re-renders ~400ms after StorageEvent (P3, open)
+- See B-5903. Cross-tab sync works but the chip refresh takes ~400ms — the store likely uses a setTimeout-debounced reload. For a teamspace move the user just made elsewhere, that delay is fine; for explicit collaborative moves it could feel sluggish. Consider a "force refresh on receiving teamspace-related StorageEvent" fast-path.
+
+### I-5905 — AI textarea cap exposed as magic number 160 in two spots (P3, open)
+- File: src/components/ai/AIChat.tsx:337 (`max-h-40`) and :344 (`Math.min(160, ...)`). The two must stay synchronized; today they're 160px + 10rem-via-Tailwind. Refactor either to a named constant (e.g. `AI_TEXTAREA_MAX_PX = 160`) and reuse, or drop the `style.height` calc in favor of `field-sizing: content` (browser support permitting).

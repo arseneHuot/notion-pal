@@ -163,11 +163,13 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const title = target?.title?.trim() || "Sub-page";
       const icon = target?.icon ?? "📄";
       // For sub-pages, inline the target's content as a nested heading
-      // section (B-5604). Two safety nets: a depth cap (max 3 levels
-      // beyond the root) AND a `visited` set so an A→B→A cycle emits a
-      // link the second time A is reached. page-link blocks (mentions)
-      // stay as a bare link.
-      if (b.type === "sub-page" && target && depth < 3 && !visited.has(target.id)) {
+      // section (B-5604). Safety nets:
+      // - depth cap (max 3 levels beyond the root)
+      // - `visited` set so an A→B→A cycle emits a link the second time
+      // - skip trashed targets so deleted-but-still-linked pages don't
+      //   leak into a clean export (B-5910 / I-5902).
+      // page-link blocks (mentions) always stay as a bare link.
+      if (b.type === "sub-page" && target && !target.isInTrash && depth < 3 && !visited.has(target.id)) {
         const nextVisited = new Set(visited);
         nextVisited.add(target.id);
         const childMd = target.blocks

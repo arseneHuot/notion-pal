@@ -261,6 +261,12 @@ function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<type
   // understand the context (B-5010 / B-5304). Clicking it scrolls the
   // target block into view via the existing #block-<id> hash mechanism.
   const blockId = (comment as { blockId?: string | null }).blockId;
+  // Detect whether the target block still exists in the DOM. If not, we
+  // render the chip in a "stale" state with a tooltip explaining the
+  // jump won't work (B-5909 / I-5901).
+  const blockMissing = blockId
+    ? typeof document !== "undefined" && !document.querySelector(`[data-block-id="${blockId}"]`)
+    : false;
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
@@ -279,12 +285,20 @@ function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<type
       </div>
       {blockId && (
         <button
-          onClick={() => { window.location.hash = `block-${blockId}`; }}
-          className="mb-1 text-[10px] uppercase tracking-wider text-blue-600 hover:underline flex items-center gap-1"
+          onClick={() => {
+            if (blockMissing) return;
+            window.location.hash = `block-${blockId}`;
+          }}
+          disabled={blockMissing}
+          className={`mb-1 text-[10px] uppercase tracking-wider flex items-center gap-1 ${
+            blockMissing
+              ? "text-muted-foreground cursor-not-allowed line-through"
+              : "text-blue-600 hover:underline"
+          }`}
           data-testid={`comment-block-anchor-${comment.id}`}
-          title={`Jump to block ${blockId}`}
+          title={blockMissing ? "The referenced block no longer exists" : `Jump to block ${blockId}`}
         >
-          ↑ on block
+          ↑ on block{blockMissing ? " (missing)" : ""}
         </button>
       )}
       <div className="text-sm whitespace-pre-wrap">{comment.content}</div>
