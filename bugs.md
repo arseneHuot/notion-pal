@@ -6592,3 +6592,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Severity P3: nuisance for users with stale bookmarks; not a regression.
 - Fix sketch: add a redirect route `/app/page/$pageId → /app/p/$pageId`.
 
+
+### I-7201 — DB with no views — fixed (commit 77fc578)
+- Fix: InlineDatabase renders an actionable empty card (`db-no-views-<id>`) with the existing `NewViewButton` when `views.length === 0`. Users can create a first view in place instead of seeing a bare header.
+
+### B-7201 — `/app/page/<id>` alias — fixed (commit 77fc578)
+- Fix: new route file `app.page.$pageId.tsx` redirects via `<Navigate>` to `/app/p/$pageId`. Verbose verbose-path bookmarks no longer 404.
