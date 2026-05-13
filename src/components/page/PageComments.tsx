@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { useStore, addComment, resolveComment, deleteComment } from "@/lib/store";
+import { useStore, addComment, resolveComment, deleteComment, updateComment } from "@/lib/store";
 import { useAuth } from "@/hooks/use-auth";
-import { X, Send, Check, MessageSquare } from "lucide-react";
+import { X, Send, Check, MessageSquare, Pencil } from "lucide-react";
 import type { Comment } from "@/lib/types";
 
 export function PageComments({ pageId, open, onClose }: { pageId: string; open: boolean; onClose: () => void }) {
@@ -12,6 +12,8 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
   // Track which top-level comment we're currently replying to.
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  // Track which comment (top-level OR reply) is being edited.
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   // Top-level page comments + their nested replies.
   const pageComments = useMemo(
@@ -52,7 +54,7 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
           const replies = repliesByParent[c.id] ?? [];
           const isReplying = replyTo === c.id;
           return (
-            <div key={c.id} className={`rounded border border-border p-2 ${c.resolved ? "opacity-50" : ""}`}>
+            <div key={c.id} className={`rounded border border-border p-2 ${c.resolved ? "opacity-50" : ""}`} data-testid={`comment-row-${c.id}`}>
               <CommentRow comment={c} user={user} />
               <div className="flex gap-2 mt-2">
                 <button
@@ -70,23 +72,57 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
                   <MessageSquare className="size-3" /> {isReplying ? "Cancel" : `Reply${replies.length ? ` (${replies.length})` : ""}`}
                 </button>
                 <button
+                  onClick={() => setEditingId(editingId === c.id ? null : c.id)}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  data-testid={`comment-edit-${c.id}`}
+                >
+                  <Pencil className="size-3" /> {editingId === c.id ? "Cancel" : "Edit"}
+                </button>
+                <button
                   onClick={() => deleteComment(c.id)}
                   className="text-xs text-destructive hover:underline"
+                  data-testid={`comment-delete-${c.id}`}
                 >
                   Delete
                 </button>
               </div>
+              {editingId === c.id && (
+                <CommentEditor
+                  initial={c.content}
+                  onSave={(next) => { updateComment(c.id, next); setEditingId(null); }}
+                  onCancel={() => setEditingId(null)}
+                  commentId={c.id}
+                />
+              )}
               {replies.length > 0 && (
                 <div className="mt-2 pl-3 border-l border-border space-y-2">
                   {replies.map((r) => (
                     <div key={r.id} className="text-sm" data-testid={`reply-row-${r.id}`}>
                       <CommentRow comment={r} user={user} />
-                      <button
-                        onClick={() => deleteComment(r.id)}
-                        className="text-xs text-destructive hover:underline mt-1"
-                      >
-                        Delete
-                      </button>
+                      <div className="flex gap-2 mt-1">
+                        <button
+                          onClick={() => setEditingId(editingId === r.id ? null : r.id)}
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                          data-testid={`comment-edit-${r.id}`}
+                        >
+                          {editingId === r.id ? "Cancel" : "Edit"}
+                        </button>
+                        <button
+                          onClick={() => deleteComment(r.id)}
+                          className="text-xs text-destructive hover:underline"
+                          data-testid={`comment-delete-${r.id}`}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                      {editingId === r.id && (
+                        <CommentEditor
+                          initial={r.content}
+                          onSave={(next) => { updateComment(r.id, next); setEditingId(null); }}
+                          onCancel={() => setEditingId(null)}
+                          commentId={r.id}
+                        />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -145,6 +181,41 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
   );
 }
 
+function CommentEditor({ initial, onSave, onCancel, commentId }: { initial: string; onSave: (next: string) => void; onCancel: () => void; commentId: string }) {
+  const [value, setValue] = useState(initial);
+  return (
+    <div className="mt-2">
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        autoFocus
+        className="w-full bg-background border border-input rounded px-2 py-1 text-sm min-h-[44px] resize-none"
+        data-testid={`comment-edit-input-${commentId}`}
+      />
+      <div className="flex gap-1 mt-1">
+        <button
+          onClick={() => {
+            const next = value.trim();
+            if (next) onSave(next);
+          }}
+          disabled={!value.trim() || value.trim() === initial.trim()}
+          className="text-xs bg-primary text-primary-foreground rounded px-2 py-1 disabled:opacity-50"
+          data-testid={`comment-edit-save-${commentId}`}
+        >
+          Save
+        </button>
+        <button
+          onClick={onCancel}
+          className="text-xs text-muted-foreground hover:text-foreground px-2"
+          data-testid={`comment-edit-cancel-${commentId}`}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<typeof useAuth>["user"] }) {
   return (
     <div>
@@ -157,6 +228,9 @@ function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<type
         </span>
         <span className="text-xs text-muted-foreground ml-auto">
           {new Date(comment.createdAt).toLocaleString()}
+          {(comment as { editedAt?: number }).editedAt && (
+            <span className="ml-1 italic" title={`Edited ${new Date((comment as { editedAt?: number }).editedAt!).toLocaleString()}`}>(edited)</span>
+          )}
         </span>
       </div>
       <div className="text-sm whitespace-pre-wrap">{comment.content}</div>

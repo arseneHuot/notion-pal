@@ -1470,7 +1470,26 @@ export function deleteComment(id: string) {
   setState((s) => {
     const newC = { ...s.comments };
     delete newC[id];
+    // Also drop any nested replies pointing at this comment so the comment
+    // pane doesn't render orphans.
+    for (const [cid, c] of Object.entries(newC)) {
+      if (c.parentId === id) delete newC[cid];
+    }
     return { ...s, comments: newC };
+  });
+}
+
+export function updateComment(id: string, content: string) {
+  setState((s) => {
+    const c = s.comments[id];
+    if (!c) return s;
+    return {
+      ...s,
+      comments: {
+        ...s.comments,
+        [id]: { ...c, content, updatedAt: Date.now(), editedAt: Date.now() },
+      },
+    };
   });
 }
 

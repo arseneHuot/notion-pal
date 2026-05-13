@@ -102,7 +102,35 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
           <ViewMenu databaseId={databaseId} viewId={activeView.id} />
         </div>
       </div>
+      <HiddenColumnsChip databaseId={databaseId} viewId={activeView.id} />
       <div>{renderView(db, activeView, activeView.id)}</div>
+    </div>
+  );
+}
+
+function HiddenColumnsChip({ databaseId, viewId }: { databaseId: string; viewId: string }) {
+  const db = useStore((s) => s.databases[databaseId]);
+  const view = db?.views.find((v) => v.id === viewId);
+  const hidden = view?.hiddenProperties ?? [];
+  if (hidden.length === 0) return null;
+  const hiddenNames = hidden
+    .map((id) => db?.properties.find((p) => p.id === id)?.name)
+    .filter(Boolean) as string[];
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1 mt-1" data-testid={`hidden-cols-chip-${viewId}`}>
+      <span>
+        {hidden.length} column{hidden.length > 1 ? "s" : ""} hidden
+        {hiddenNames.length > 0 && (
+          <span className="ml-1 italic">({hiddenNames.slice(0, 3).join(", ")}{hiddenNames.length > 3 ? "…" : ""})</span>
+        )}
+      </span>
+      <button
+        onClick={() => updateView(databaseId, viewId, { hiddenProperties: [] })}
+        className="text-blue-600 hover:underline"
+        data-testid={`unhide-all-${viewId}`}
+      >
+        Show all
+      </button>
     </div>
   );
 }

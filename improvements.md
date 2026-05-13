@@ -1443,3 +1443,22 @@ Priority: high / medium / low.
 
 ### I-3607 — DB filter operator labels: rename "is" to "equals" for number/date columns (low, open)
 - See B-3625. The user-facing label "is" is fine for select/title but for number/date columns Notion convention is "equals". Switch the label based on column type to reduce user surprise. Also consider adding "starts with" / "ends with" for text/title columns to round out the parity gap.
+
+### I-3700 — Add `delete-<cmtId>` / `edit-<cmtId>` testids on comment items (medium, open)
+- See B-3707. Delete button is now rendered next to Resolve/Reply, but it has no `data-testid` and can only be targeted by text. Also no Edit affordance. Add `delete-<cmtId>` (red destructive) and `edit-<cmtId>` (textarea re-open in place) — finishes B-3404.
+
+### I-3701 — Bookmark store-field normalization (low, open)
+- See B-3702. Bookmark uses `url`, most other blocks use `content`. Either accept both at the exporter and renderer (resilient) or normalize on `url` everywhere (strict). Document the chosen contract in `src/lib/types.ts`.
+
+### I-3702 — Hidden-column unhide UX gap (medium, open)
+- See B-3704. After `prop-hide-<id>` the header is removed and the only path to unhide is buried in `view-menu → PROPERTIES → checkbox`. Add a "+N hidden" chip beside the last column header (Notion style) with click-to-toggle, OR keep the header visible-but-greyed when hidden, OR expose `prop-show-<id>` for explicit re-show. Also missing testids on the view-menu property checkboxes.
+
+### I-3703 — Database row drag-reorder (medium, open)
+- See B-3711. Rows in `/app/db/<id>` (and inline DB pages) have no drag handle and no `draggable` flag. Notion supports row drag to reorder when no sort is applied. Add `row-handle-<rowId>` with HTML5 drag listeners and a stable `rowOrder` field on the view.
+
+### I-3704 — Prop-header click cycle: asc→desc→clear (low, open)
+- See B-3715. Now that B-3624 fix exposes asc/desc/clear as explicit menu items, a power-user shortcut would be: clicking `prop-header-<id>` directly cycles the sort. Today the header click only opens the menu; users still have to click the asc/desc/clear menu item.
+
+### I-3705 — Remove `view.previewMode` if unused, or wire it (low, open)
+- See B-3716. The form view schema has a `previewMode` boolean that is writable but has no runtime effect. Either delete from `src/lib/types.ts` (and migration to strip from existing seeds), or wire it to a real read-only/preview mode on `/form/<db>/<view>`.
+

@@ -4509,3 +4509,92 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3624 / B-3507 — Prop-header dropdown lacks Sort / Hide — fixed (commit b2ce55c) — closes I-3603
 - Fix: TableView's PropertyHeader now renders Sort ascending / descending / Clear sort buttons (`prop-sort-asc-<id>`, `prop-sort-desc-<id>`, `prop-sort-clear-<id>`) and a Hide/Show column button (`prop-hide-<id>`). All wired through `updateView` on the view's `sorts` and `hiddenProperties` fields. The Type switcher and Delete option remain below a divider.
+
+### B-3700 — B-3606 acceptance: `database` block renders inline DB (fixed)
+- Repro: injected `{ type: 'database', content: '<dbId>' }` into `page.blocks` for "Getting Started", reloaded. The block now renders as an inline database (showed "Empty database" placeholder since the linked db had no rows).
+- No more "Unsupported block: database" red text. The backwards-compat shim treating bare `database` type as `database-inline` works as expected.
+- Severity: closes B-3606 (P1) and I-3602.
+
+### B-3701 — B-3604/B-3605 acceptance: bookmark + equation markdown export (fixed)
+- Repro: page with 5 blocks: text, bookmark(url=https://example.com), bookmark(url=''), equation('E=mc^2'), equation(''). Exported via `page-opt-export-md`. Intercepted Blob via `URL.createObjectURL`.
+- Output: `[🔖 https://example.com](https://example.com)` for filled bookmark; `<!-- (empty bookmark block) -->` for empty; `$$\nE=mc^2\n$$` for filled equation; `<!-- (empty equation block) -->` for empty. Page title rendered as `# QA Export Test` (not "Untitled").
+- Severity: closes B-3604 / B-3605 / B-3512 (for bookmark/equation) and I-3600 / I-3601.
+
+### B-3702 — Bookmark store-field divergence (P3, open — new doc)
+- Observed during B-3701 setup. The `bookmark` block type uses field `url` (per `src/lib/types.ts` `EmbedBlock.url`) but I initially set `content` (since many other block types store payload in `content`). The exporter only reads `.url`, so a hand-built bookmark with `content` is silently empty.
+- Not a regression — but documenting because slash-menu vs. legacy seeds vs. external constructors may disagree. Consider normalizing on `content` or supporting both, or at minimum documenting the divergence in the slash-command factory.
+- Severity: P3 doc/devx issue.
+
+### B-3703 — B-3624/B-3507 acceptance: prop-header Sort + Hide (fixed)
+- Repro: created an inline table DB via `slash-db-table` with 3 title-rows (Charlie, Alpha, Bravo). Clicked `prop-header-<titleId>` → menu now exposes Rename, ↑ Sort ascending, ↓ Sort descending, Hide column, Delete property. After applying Asc, the rendered rows reorder to Alpha→Bravo→Charlie. Desc → Charlie→Bravo→Alpha. After clicking `prop-sort-clear-<id>` (which only appears when a sort is active), rows revert to insertion order.
+- Hide Status: `cell-select-…-<statusId>` cells disappear and the prop-header itself is removed from the table head. Unhide via `view-menu` panel's PROPERTIES checkbox — column reappears.
+- Severity: closes B-3624 / B-3507 / I-3501 / I-3603.
+
+### B-3704 — Hidden column has no in-table unhide affordance (P3, open — new doc)
+- Observed during B-3703. Once a column is hidden via `prop-hide-<id>`, the column header is gone from the table. The only way to bring it back is to open the view-menu (`…`) and re-check the property in the PROPERTIES list. There's no testid for those checkboxes (each is a generic `<input type="checkbox">` inside a label).
+- Notion convention: a hidden column shows as a chip strip "+1 hidden" beside the last column or below the header, with a one-click re-show. Current UX requires hunting through view config.
+- Severity: P3 UX gap. Sort/hide infra is good; unhide UX is buried.
+
+### B-3705 — Public form select PERSISTS now (acceptance, B-3603 fixed)
+- Repro: /form/db_mp2qmu4d1va6knov/view_mp2ry265swv12c04, filled title, status=In progress, number=42, date=2026-05-20, clicked Submit. Inspected the new row's `values`: `prop_<status>` = `opt_mp2qmu4durv3zurg` (the In progress option id). Title/number/date also all saved.
+- Severity: closes B-3603 + I-3603.
+
+### B-3706 — AI chat input STILL single-line (B-3210 still open)
+- Repro: clicked sidebar `Ask AI`, inspected `[data-testid="ai-input"]`. It's `<input type="text" placeholder="Ask anything...">`. Not a textarea. Pressing Enter submits, no Shift+Enter newline support.
+- Severity: P3. Closes iteration sub-task; B-3210 stays open.
+
+### B-3707 — Comments Delete added (no testid + no Edit) — B-3404 partial fix
+- Repro: posted a comment via `comment-input`/`post-comment`. Now in the comment row there's a "Delete" button (red, hover-underline) alongside `resolve-<cmtId>` and `reply-<cmtId>`. Clicking Delete removes the comment from the store and DOM. No native dialog (window.confirm overridden but app doesn't even prompt).
+- Missing: 1) the Delete button has NO `data-testid` — automation can't target it by id; 2) NO "Edit" button — typos still stuck. 
+- Severity: keeps B-3404 / I-3604 open (now partial). Add `delete-<cmtId>` testid and an Edit affordance.
+
+### B-3708 — Calendar event chip STILL no testid / not draggable (B-3513/B-3514 still open)
+- Repro: /app/calendar, clicked `day-add-2026-05-13`, typed title in `cal-compose-title`, clicked `cal-compose-create`. Chip "QA Drag Test" rendered as plain `<div class="text-xs ..." style="background:#3b82f6">`. No `data-testid`, `draggable=false`, no `onDragStart` handlers visible.
+- Repeats the iteration-13 finding from B-3613. Tied to I-3506 / I-3508.
+- Severity: P2. Re-confirms B-3513 + B-3514.
+
+
+### B-3709 — Markdown export covers 19+ block types (acceptance)
+- Repro: page with 19 blocks: text, h1, h2, h3, bullet-list, numbered-list, todo, toggle, quote, callout, divider, code, equation, bookmark, embed, image, video, audio, file. Exported via `page-opt-export-md`. Output begins `# QA 22 Types` then renders each block correctly:
+  - bookmark → `[🔖 https://example.com](https://example.com)` ✓ (B-3604)
+  - embed → `[↗ https://example.com/embed](https://example.com/embed)` ✓
+  - image → `![Cat](https://example.com/cat.png)` ✓
+  - video/audio/file → `[<type>: <filename>](<url>)` ✓
+  - equation → `$$\nx^2\n$$` ✓
+  - callout → `> 💡 callout text` ✓
+- Severity: closes the 22-types coverage sub-task.
+
+### B-3710 — /app/db/<id> renders inline DB just fine (acceptance)
+- Repro: navigated to `/app/db/db_mp2qmu4d1va6knov`. The page shows 4 prop headers + 5 rows × 4 cells = 20 cells, plus the view tabs, `db-newrow-<dbId>`, `db-actions-<dbId>` etc. No 404 / fallback. The InlineDatabase component handles the standalone route correctly.
+- Severity: closes the /app/db sub-task. Probably wired via the same renderer that B-3606's fix exposes for `database` blocks.
+
+### B-3711 — DB table view: no row drag-reorder (P2, open — new doc / B-3616 related)
+- Repro: inspected `/app/db/<id>` table view. Each row only has `row-open-<rowId>` (the `⤢` button) and `row-delete-<rowId>`. No `row-handle-<rowId>` / `dragHandle` testid. No `draggable=true` anywhere in row markup. Same as sidebar drag (B-3616): rows must be reordered via sort or recreated.
+- Severity: P2. Tied to I-3605.
+
+### B-3712 — Cmd+K perf with 93 pages: 59ms paint (acceptance)
+- Repro: seeded +80 bulk pages into store (now 93 pages total). Opened command palette, typed "b" → paint 59 ms; typed "bulk page" → paint 68 ms. Still under 100 ms with 6.5× the previous corpus. No regression from B-3607's 53 ms baseline.
+- Severity: closes Cmd+K perf sub-task. No JS errors logged.
+
+### B-3713 — H2 typing perf with 50 sibling text blocks: 0.6 ms/char (acceptance)
+- Repro: created page with 1 heading-2 + 50 text siblings. Focused the h2, ran `document.execCommand('insertText','a')` 100x. Total 59.9 ms = 0.6 ms/char. Slightly slower than B-3617's 0.175 ms/char (which was a fresh page) — the extra cost from 50 sibling re-render checks is real but bounded.
+- Severity: acceptable. No human-perceptible lag.
+
+### B-3714 — Mobile responsive: viewport stays 1150×820 in iframe; matchMedia false (B-3521/B-3522 still open)
+- Same conclusion as B-3620. Cannot truly emulate 375px in this harness — the iframe's `innerWidth` is the parent allocated width. Real-device QA still required.
+- Severity: P3 doc.
+
+
+### B-3715 — prop-sort-asc click is idempotent, not cycling (P3, open — new)
+- Repro: clicked `prop-sort-asc-<id>` twice in a row. Second click did not toggle to desc or clear. Sorts in store stay `[{direction:'asc', propertyId:...}]`. Notion's header convention is asc → desc → clear on repeated clicks on the same header.
+- Severity: P3. Not a regression — the new menu (B-3624 fix) explicitly exposes asc/desc/clear as separate buttons, which is fine. But the prop-header itself is no longer a quick-toggle, and clicking asc again should probably be a no-op (current) or cycle (Notion style). Document so users don't expect a single-click toggle.
+
+### B-3716 — Form view `previewMode` field writable but no runtime effect (P3, open — new doc)
+- Repro: toggled `view.previewMode` on the form view via direct store edit. Re-navigated to `/form/<db>/<viewId>`. The form rendered the same as before (Name/Status/Tags/Date + Submit). No "Preview" badge, no read-only toggle.
+- The `previewMode` field is part of the form-view schema but is currently dead state — either remove it from the type or wire a real preview mode (show without persisting submissions).
+- Severity: P3 dead-code / dead-state.
+
+### B-3717 — Inline toolbar (ib-bold/ib-italic/ib-underline/ib-strike/ib-code/ib-link/ib-color/ib-ai) appears on selection (acceptance)
+- Repro: navigated to a page with a heading-2, selected 2 chars. Toolbar appears with all 8 expected actions. Consistent with prior B-3504 / I-3408 acceptance.
+- Severity: closes inline-toolbar verification sub-task.
+
