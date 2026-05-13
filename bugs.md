@@ -6610,3 +6610,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-7201 (re-verified) — `/app/page/<id>` alias redirect — fixed
 - Repro: navigated to `/app/page/pg_mp43svzu14dmlh94` (Welcome page). After ~700 ms the URL settled at `/app/p/pg_mp43svzu14dmlh94` and the Welcome editor content rendered normally. No 404.
 - Confirms the `<Navigate>` route in `app.page.$pageId.tsx` resolves on first paint without flashing the Not Found body.
+
+### B-7101 — Dangling row IDs in db.rows — fixed (commit 4dac1be)
+- Fix: `normalizeState` filters `db.rows` to only IDs that exist in `state.rows`. Hard-deletes, migrations, or imports that leave dangling IDs no longer throw off counts or trip ungaurded read sites. Verified: DB with [real, dangling, dangling] → 1 row rendered.
