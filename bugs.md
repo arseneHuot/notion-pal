@@ -5749,3 +5749,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-5710 — PageView crashes if a Comment record lacks `content` field (P2, open)
 - Steps: while preparing B-5709 I accidentally seeded `cmt_b5704_parent` with `body` instead of `content`. Clicking `comment-edit-...` swapped the error boundary to "This page didn't load — Cannot read properties of undefined (reading 'trim')". PageComments.tsx:236 calls `initial.trim()` on the `CommentEditor` prop seeded from `c.content`.
 - Cause: no defensive default for `content` in the editor. A malformed import or schema migration leaves `c.content === undefined`, taking down the entire `/app/p/<id>` route. Trivial fix: `initial={c.content ?? ""}` at PageComments.tsx:99 and :128. The `?? ""` keeps the disabled-save guard working without crashing.
+
+### B-5704 — Sub-page cycle re-inlined pages — fixed (commit 906e0e9)
+- Fix: `visited: Set<string>` threaded through every recursive `blockToMarkdown` call. A→B→A now emits a bare link the second time A is reached instead of re-inlining. Verified end-to-end: each body appears exactly once.
+
+### B-5710 — CommentEditor crashes on undefined content — fixed (commit 906e0e9)
+- Fix: `initial` prop coalesced with `?? ""` at both call sites AND inside CommentEditor's useState initializer.
