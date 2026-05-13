@@ -14,6 +14,14 @@ export function GalleryView({ databaseId, viewId }: { databaseId: string; viewId
   const sorted = applySorts(filtered, (view.sorts ?? []), db);
   const sizeClass = view.cardSize === "small" ? "w-40" : view.cardSize === "large" ? "w-72" : "w-56";
 
+  if (sorted.length === 0) {
+    return (
+      <div className="border border-dashed border-border rounded p-6 text-center text-xs text-muted-foreground" data-testid={`gallery-empty-${databaseId}`}>
+        No cards yet. Add a row from the table view or via "+ New".
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-wrap gap-3">
       {sorted.map((r) => (

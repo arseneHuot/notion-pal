@@ -5301,3 +5301,47 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4810 — Duplicate sidebar-page-<id> testid from favorites — fixed (commit 785030a)
 - Fix: PageItem accepts an optional `testidPrefix` prop. The Favorites section passes `testidPrefix="sidebar-fav"` so each favorited page exposes both `sidebar-page-<id>` (its teamspace position) and `sidebar-fav-<id>` (favorites position). E2E queries are now deterministic.
+
+## 2026-05-13 — Iteration 17 verification + new coverage
+
+### B-4900 — B-4802 hooks-order on DB restore verified (acceptance, fixed)
+- Seeded `db_4802_a_h1tb7` with `isInTrash:true` via LS, navigated `/app/db/db_4802_a_h1tb7`. Placeholder `db-trashed-placeholder-...` rendered. Clicked `db-restore-db_4802_a_h1tb7` → placeholder removed, normal DB UI rendered (table row testids present), zero `console.error`s, no "Rendered more hooks" / "didn't load" strings in DOM. Confirms commit 27798fe holds — early returns in `InlineDatabase` are after all hooks (file: src/components/database/InlineDatabase.tsx:62-86).
+
+### B-4901 — B-4808 dangling page-link cleanup verified (acceptance, fixed)
+- Seeded page A `pg_4900_A_test` with one `page-link` block `blk_4900_link` pointing at page B `pg_4900_B_test` (trashed). Navigated /app/trash, clicked `delete-forever-pg_4900_B_test`. Post-state: `state.pages['pg_4900_B_test']` removed, `state.blocks['blk_4900_link']` removed, `state.pages['pg_4900_A_test'].blocks === []`. Cascade in store.ts:714-733 strips the orphan id from its parent's `blocks` array.
+
+### B-4902 — B-4810 distinct fav testid verified (acceptance, fixed)
+- Pre-existing favorite `pg_mp2pz5zwikifg7r3` ("Welcome"). DOM at /app: exactly one `sidebar-fav-pg_mp2pz5zwikifg7r3` AND exactly one `sidebar-page-pg_mp2pz5zwikifg7r3`. Sidebar.tsx:76 passes `testidPrefix="sidebar-fav"` for the Favorites copy of PageItem (line 189); each is now query-unique.
+
+### B-4903 — B-4814 AI multiline prompt now preserves newlines (acceptance, fixed-implicit)
+- Sent `"line one\nline two\nline three"` via `[data-testid="ai-input"]` + click `ai-send`. Stored assistant message contains the verbatim `"…about \"line one\nline two\nline three\":…"` and the rendered bubble's `whitespace-pre-wrap` wrapper splits it across three lines (HTML inspection: `<div>line one</div><div>line two</div><div>line three":</div>`). The earlier B-4814 cosmetic concern was about collapsed display — the rendered DOM now separates lines correctly. Closing original I-4804 too.
+
+### B-4904 — AI textarea hits max-h-40 + scrolls at 8 lines (acceptance, ok)
+- Set 8-line prompt in `[data-testid="ai-input"]`. Measured: `clientHeight=158`, `scrollHeight=168`, `style.height=160px`, class includes `max-h-40 overflow-y-auto`. Scroll behavior activates as expected; clamp prevents the textarea from pushing the chat layout. No bug.
+
+### B-4905 — Cross-tab StorageEvent DB row sync works (acceptance, ok)
+- On `/app/db/db_4802_a_h1tb7` (2 rows). Wrote a new row `row_4900_xtab` to LS (modifying the `notion-clone:user:<id>` blob and pushing into `databases[<id>].rows`). Dispatched synthetic `StorageEvent` on window. Result: store rehydrated (store.ts:143-156), table view re-rendered with a 3rd `row-row_4900_xtab` node — text/name "CrossTab Row" present. Cross-tab path verified beyond the `currentUser` guard.
+
+### B-4906 — Slash /sub-page creates child page + sub-page link block (acceptance, partial)
+- On page `pg_mp2pz5zw6oflgc0j`, seeded paragraph block `blk_4900_subpage_target`, typed `/sub-page`. Slash menu item `slash-page` selected (the slash registry collapses `page` and `sub-page` into one entry). Result: new child page `pg_mp3sqbpzvew2d2jr` created with `parentId` set, target block converted from `paragraph → sub-page` with `pageId=pg_mp3sqbpzvew2d2jr`. Core behavior correct, but see B-4907.
+
+### B-4907 — /sub-page slash conversion leaves stale `content: "/sub-page"` on the converted block (P3, open)
+- Same flow as B-4906. After conversion the block now has `type:"sub-page"` AND `content:"/sub-page"` lingering (Block.tsx:439-447 does `updateBlock(block.id, { type, parentId, order, pageId })` — no `content:""` patch). Today `sub-page` renderers ignore `content`, so it's invisible; but the residue surfaces if the block is converted back, exported as markdown, or read by AI search (which indexes `block.content`). Mirrors the long-standing I-4801. Patch: extend the existing `clear-on-convert` guard in handleSlashSelect to also blank `content` for `custom === "page" | "sub-page"`.
+
+### B-4908 — Search "OKRS" matches "OKRs" page case-insensitively (acceptance, fixed)
+- Cmd+K + "OKRS" returns 3 results: `cmd-page-pg_mp2sao9lpgex28m4` ("OKRs"), `cmd-page-pg_4805_okrs_lower` ("team okrs notes"), `cmd-block-blk_mp2sao9lx5xe34u9`. CommandPalette.tsx:115-145 lowercases both query and title, so caps don't affect match. Confirms B-4811 stays fixed across the recent edits.
+
+### B-4909 — Cmd+K block-snippet excerpt anchored on first token (acceptance, ok)
+- Seeded block with "The quick brown fox jumps over the lazy dog and then continues with alphazebra one two three four five six seven eight nine ten" on Getting Started. Cmd+K + "alphazebra" yields `cmd-block-blk_4900_snippet_test` with label `"…then continues with alphazebra one two three four five six s…  ·  Getting Started"`. Snippet starts 20 chars before `idx` and extends 30 chars past the match (CommandPalette.tsx:166-171). Anchor is on `tokens[0]` so the first matched word is centered.
+
+### B-4910 — Mobile 375px sidebar auto-closes after page nav (acceptance, ok)
+- Resized viewport to 375x812 (mobile preset). Reloaded /app with `ui.sidebarOpen:true`. Clicked the page-link button inside `sidebar-page-pg_mp2pz5zw6oflgc0j` (PageItem nav button — Sidebar.tsx:252-258 has NO `closeOnMobile()` call). Despite missing the explicit call, the route-state effect in app.tsx:46-52 fires `setUI({sidebarOpen:false})` on pathname change → drawer closes after nav. Verified `data.ui.sidebarOpen === false` and `<aside>` is unmounted (gated by `sidebarOpen` in app.tsx:81). Bug is masked by the route-state effect; see I-4900 for the latent inconsistency.
+
+### B-4911 — Empty DB renders board/calendar/gallery views with no crash (acceptance, ok)
+- Created `db_4900_empty` with 0 rows + select/date/file properties and views `[table, board, calendar, gallery, list, timeline]`. Clicked each non-table tab. No `Rendered more hooks` / `Cannot read` / `Uncaught` strings in body, all three views mount their containers. Calendar shows the dot-grid with no event chips. See I-4901 — board/gallery lack a textual empty-state.
+
+### B-4912 — Comment edit twice keeps editedAt fresh (acceptance, ok)
+- Seeded `cmt_4900_edit_twice` on pg_mp2pz5zw6oflgc0j with `editedAt:undefined`. Opened comments panel, edited → "edit one" (editedAt=1778661128284), edited again → "edit two" (editedAt=1778661128741, delta 457ms). `updateComment` in store.ts:1606-1614 unconditionally writes a fresh `Date.now()` on every call; the inline editor in PageComments.tsx exits edit mode after Save (line 100), so a second click on `comment-edit-...` re-enters cleanly. Reflected `(edited)` label tooltip shows the latest timestamp.
+
+### B-4913 — Public /p/<slug> hides comments entirely (acceptance, ok)
+- Published pg_mp2pz5zw6oflgc0j as slug `getting-started-4900` (2 existing comments on the page). Navigated /p/getting-started-4900: `comments-btn`, `comment-input`, `comment-row-*` all absent. p.$slug.tsx does not import PageComments, so the public renderer has zero comment surface. Read-only requirement satisfied — anonymous readers can't see threads or post.

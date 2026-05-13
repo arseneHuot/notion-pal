@@ -1681,3 +1681,21 @@ Priority: high / medium / low.
 
 ### I-4807 — Public form should mark required fields visually (low, open)
 - See B-4813. The combined-filter form respects hiddenProperties + conditional, but there's no `required` flag on the form schema. The title field is enforced via JS validation (form.$dbId.$viewId.tsx:128-133), yet the UI doesn't render an asterisk or `aria-required` on the label. Either expose `requiredProperties` on the form view (and respect it in submit-guard) or at minimum render an asterisk + aria-required on the inferred title prop.
+
+### I-4900 — PageItem nav button should also call closeOnMobile() (low, open)
+- See B-4910. Sidebar.tsx:252-258 navigates without invoking the local `closeOnMobile()` helper that wraps `matchMedia(max-width:768px) → setUI({sidebarOpen:false})`. Today the route-state effect in app.tsx:47-52 saves us by closing the drawer on any pathname change, but if a future refactor inlines drawer/over­lay state (or skips the route effect for sub-paths that don't change the path) this redundancy disappears. Add the missing `closeOnMobile()` call inside the PageItem onClick — defense in depth and aligns with every other sidebar nav button.
+
+### I-4901 — Empty Board / Gallery views need a textual empty state (low, open)
+- See B-4911. Calendar shows the grid (clear "no events today" affordance), but Board and Gallery render the toolbar + zero cards with no copy. New users can't tell whether the DB has 0 rows, 0 visible rows due to a filter, or whether the view is broken. Add a "No <rows | cards | items> yet — `+ New`" centered ghost in BoardView / GalleryView when `rows.length === 0`. Matches what List/Timeline already do (no crash but visually empty).
+
+### I-4902 — Cmd+K palette empties out (loses input + content) when re-opened across awaits (low, open)
+- Observed while testing B-4908 / B-4909: dispatching `keydown(meta+k)` once + reading `[data-testid="command-input"]` inside the same eval works; splitting across two evals returns `null` because some prior keystroke (or focusout) closes the palette. The palette's outside-click / Escape handling clears state even without explicit user input. Consider a `data-keep-open-on-blur` flag or keying open-state to URL hash (`#cmdk`) so dev tools / automation can interact without racing against focusout.
+
+### I-4903 — Slash conversion should clear placeholder content for `sub-page` too (low, open)
+- See B-4907. `handleSlashSelect` in Block.tsx already does `ref.current.innerHTML = ""` for the `convert` path (per B-002 fix) but the `insert` path with `custom === "page" | "sub-page"` only calls `updateBlock(block.id, { type, parentId, order, pageId })` — no `content` clear. Add `content: ""` to the patch and also blank `ref.current.innerHTML` so the converted block is pristine. Same fix template as I-4801 but for the page/sub-page branches.
+
+### I-4904 — DB views in trash placeholder lack a "Trashed N days ago" timestamp (low, open)
+- See B-4900 / B-4801. The placeholder copy reads `Database "X" is in the Trash.` with a single Restore button. Users restoring weeks-old DBs have no idea how stale the row data is. Add `trashedAt` formatted as relative time ("Moved to Trash 4 days ago") next to the icon. Field is already populated in `updateDatabase({ isInTrash:true, trashedAt: Date.now() })`. Pairs with I-4805's "Delete forever" inline action.
+
+### I-4905 — Public published-page surface lacks a "Comments are disabled for public viewers" hint (low, open)
+- See B-4913. Comments are correctly hidden on /p/<slug>, but a reader who knows the same page on /app/p/... has a discussion may wonder why they can't see it (or expect a public commenting affordance like Notion's). Either render a tiny ghost note at the bottom ("Comments are only visible to workspace members") or surface a "Discuss this page" CTA that links back to the auth flow. Keeps the read-only contract while signalling intent.

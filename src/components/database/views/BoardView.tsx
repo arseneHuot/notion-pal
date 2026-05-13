@@ -52,6 +52,14 @@ export function BoardView({ databaseId, viewId }: { databaseId: string; viewId: 
     updateRow(rowId, { values: { [groupBy.id]: v } });
   }
 
+  if (sorted.length === 0) {
+    return (
+      <div className="border border-dashed border-border rounded p-6 text-center text-xs text-muted-foreground" data-testid={`board-empty-${databaseId}`}>
+        No rows yet. Click <span className="font-mono">+ New</span> in any column to add one.
+      </div>
+    );
+  }
+
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
       {groups.map((g) => (

@@ -443,6 +443,10 @@ function useEditable(
           parentId: pageId,
           order: 0,
           pageId: newPageId,
+          // Clear the leftover "/sub-page" query string the user typed so it
+          // doesn't survive as a block.content field — surfaces in markdown
+          // export + AI search indexing (B-4907 / I-4903).
+          content: "",
         };
         updateBlock(block.id, newBlock as Partial<Block>);
       } else if (cmd.custom === "database-inline") {

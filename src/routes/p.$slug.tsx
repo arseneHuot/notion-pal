@@ -73,6 +73,10 @@ function PublicPage() {
             <ReadonlyBlock key={b.id} block={b} blocks={blocks} pages={pages} />
           ))}
         </div>
+        <footer className="mt-12 pt-4 border-t border-border text-xs text-muted-foreground flex items-center justify-between" data-testid="public-page-footer">
+          <span>Read-only · Comments are disabled on public pages.</span>
+          <Link to="/" className="hover:underline">Make your own ↗</Link>
+        </footer>
       </article>
     </div>
   );
