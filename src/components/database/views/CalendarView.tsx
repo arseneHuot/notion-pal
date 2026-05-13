@@ -9,9 +9,19 @@ export function CalendarView({ databaseId, viewId }: { databaseId: string; viewI
   const view = db?.views.find((v) => v.id === viewId);
   const [cursor, setCursor] = useState(() => new Date());
   if (!db || !view || view.type !== "calendar") return null;
-  const dateProp = db.properties.find((p) => p.id === view.dateProperty);
+  // Auto-fall-back to the first date property if the view's explicit
+  // `dateProperty` is unset or stale (B-4010). Calendar views written by
+  // older seeds or auto-created without an explicit date pick previously
+  // rendered an empty placeholder and looked broken.
+  const dateProp =
+    db.properties.find((p) => p.id === view.dateProperty) ??
+    db.properties.find((p) => p.type === "date");
   if (!dateProp) {
-    return <div className="text-sm text-muted-foreground p-4">Calendar requires a date property.</div>;
+    return (
+      <div className="text-sm text-muted-foreground p-4" data-testid={`cal-needs-date-${databaseId}`}>
+        Add a date property to this database to use the calendar view.
+      </div>
+    );
   }
   const titleProp = db.properties.find((p) => p.type === "title");
 

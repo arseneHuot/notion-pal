@@ -5098,3 +5098,52 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### Tracker — three UX polish items (commit 6484519)
 - I-4302: `cmd-empty` testid on Cmd+K palette empty state + `trash-empty` testid on /app/trash empty state.
 - I-4304: ib-ai now embeds the page title in the AI prompt → `On page "<title>", help me with: "<selection>"`.
+
+## 2026-05-13 — QA agent iteration B-4400
+
+### B-4400 — Columns export markdown (acceptance for B-4207, fixed)
+- Seeded a `columns` block on `pg_mp2pz5zw6oflgc0j` with 2 columns, each with one paragraph (`B-4207-LEFT-PARA`, `B-4207-RIGHT-PARA`), and a second `columns` block with `columnIds: []` (truly empty).
+- Intercepted `Blob` and dispatched `export-page-markdown`. Captured MD contains `<!-- multi-column layout: -->`, two `<!-- column -->` markers, both paragraph contents in order, and then `<!-- (empty multi-column layout) -->` for the empty block.
+- Closes B-4207. The `columnIds || parentId-scan` fallback works.
+
+### B-4401 — Cmd+K palette `cmd-empty` testid renders (acceptance for I-4302, fixed)
+- Opened palette via `[data-testid="sidebar-search"]`, typed `zzzz_no_match_query_xyz_4400`. `[data-testid="cmd-empty"]` rendered with innerText "No results". `[data-testid^="cmd-page-"]` count = 0. Automation can now target the empty state without scraping innerText.
+
+### B-4402 — `/app/trash` `trash-empty` testid renders (acceptance for I-4302, fixed)
+- Pages-trashed=0, dbs-trashed=0. Navigated to `/app/trash`. `[data-testid="trash-empty"]` rendered with innerText "Trash is empty.". No restore buttons. Empty branch is now testid-addressable.
+
+### B-4403 — `open-ai-chat-with` embeds page title (acceptance for I-4304, fixed)
+- Dispatched `new CustomEvent('open-ai-chat-with', { detail: { selected: 'X', pageTitle: 'Y' } })` from `/app/p/pg_mp2pz5zw6oflgc0j`. `[data-testid="ai-input"]` mounted with value `On page "Y", help me with: "X"` — matches the spec verbatim.
+
+### B-4404 — Reply Cmd+Enter posts a child comment (acceptance, fixed)
+- Target: `cmt_mp3niuvytmw222be` on `pg_mp2pz5zwikifg7r3`. Clicked `reply-cmt_mp3niuvytmw222be`, set `reply-input-<id>` value to "B-4400 reply via Cmd+Enter", dispatched `keydown` with `key=Enter, metaKey=true`. Comments map gained one child with `parentId=cmt_mp3niuvytmw222be` and matching content. Parity with comment composer confirmed.
+
+### B-4405 — Move sub-page to a different teamspace nulls parentId (acceptance for new coverage 1)
+- On `/app/p/pg_mp2srzedee1ec1wa` (parentId=pg_mp2pz5zwikifg7r3, ts=Private). Opened `page-options` → menu listed `page-opt-move-ts_*` for all 4 teamspaces. Clicked `page-opt-move-ts_mp2pz5zwvod19q0j` (Engineering). After: `teamspaceId=ts_mp2pz5zwvod19q0j`, `parentId=null` (promoted to top-level of new teamspace). Sidebar reflowed: `[data-testid="sidebar-page-pg_mp2srzedee1ec1wa"]` now under Engineering section. Behaviour matches Notion's "move-to-teamspace makes it a root page there".
+
+### B-4406 — Synced-block-ref export propagates source content (acceptance for new coverage 2)
+- Seeded a `synced-block` on `pg_mp2pz5zw6oflgc0j` with one child paragraph ("B-4400 synced source content"), and a `synced-block-ref` on `pg_mp2pz5zws2l1z775` with `sourceId` pointing back. Triggered export-page-markdown on the REF page; output contains the source content verbatim ("B-4400 synced source content"). Matches `export-markdown.ts:209-217` which scans `parentId === source.id` for the ref's children. Refs don't go stale in exports.
+
+### B-4407 — Inline DB combines multiple filter rules with AND (acceptance for new coverage 3)
+- Added two filters to view "All" on `db_mp3jj2jnavmaxi0e`: (1) Name contains "a", (2) Tags is-not-empty. JS preview: rule-A matches 6/6, rule-B matches 1/6, intersection=1 row (`row_mp3jk8zuxoypboda`). UI on `pg_qa_db_uhgak1` rendered exactly 1 `row-*` element, matching the intersection. Implicit AND via `filters.every()` in `filter.ts:5` works; no "or" combinator surface in the UI which is fine for now.
+
+### B-4408 — Page-link block renders icon + title (acceptance for new coverage 4)
+- Seeded `page-link` block (id=blk_b4400_pagelink) on `pg_mp2pz5zw6oflgc0j` with `pageId=pg_mp2pz5zws2l1z775` (Roadmap Q3, icon set to 🚀). `[data-testid="pagelink-blk_b4400_pagelink"]` rendered with innerHTML `<span>🚀</span><span class="underline ...">Roadmap Q3</span>`. Both icon (🚀) and title ("Roadmap Q3") present.
+
+### B-4409 — Calendar same-day drag is a no-op for the chip's exact start time (acceptance for new coverage 5)
+- Event `evt_qa_b4302_0_*` start=1779436800000 on 2026-05-22. Simulated DataTransfer "application/x-cal-event-id" → dispatched dragstart, dragover, drop on `day-2026-05-22`. `moveCalendarEvent(id, "2026-05-22")` preserves hour/minute of original start; result: start unchanged (sameStart=true), end unchanged (sameEnd=true). No visible chip jumping, no data churn. Matches expected.
+
+### B-4410 — Sign-out → /auth → sign-in cycle (acceptance for new coverage 6)
+- Clicked `[data-testid="sign-out"]` from `/app`. Redirected to `/auth` with email/password inputs and one `<form>`. Filled arsene+test1@notionclone.app / test12345, called `form.requestSubmit()`. After ~3s: route=`/app`, sidebar mounted (sidebar-settings present). Round-trip works. No console errors observed.
+
+### B-4411 — Wiki badge & Verify flow (acceptance for new coverage 7)
+- Set `pages[pg_mp2pz5zw6oflgc0j].isWiki=true, verifiedAt=null`. After reload, header rendered "🪪 Wiki page · Not verified" plus `[data-testid="verify-wiki"]` button. Clicked Verify; badge updated to "🪪 Wiki page · Verified", `verifiedAt` stamped to now(), `verifiedBy` = current user id. The Verify button disappears (conditional render). Works as documented in PageView.tsx:242-254.
+
+### B-4412 — Block-jump highlight is transient; not restored on browser back (P3, open — for new coverage 8)
+- Cmd+K, query "Plan the next", click `cmd-block-blk_mp2pz5zwr51z7xke`. Route changed to /app/p/pg_mp2pz5zws2l1z775, target block briefly got `ring-1 ring-blue-400` for 1500ms (CommandPalette.tsx:184-185). Waited >1700ms (ring gone) → history.back() to /app → history.forward() back to the same page → ring NOT restored. By design (no persistent highlight state), but a user who navigates away mid-flash and comes back loses the visual cue. Consider persisting `highlightBlockId` in a hash anchor (`#blk_*`) so back/forward re-applies the flash.
+
+### B-4413 — `/page` slash command creates sub-page + sidebar updates (acceptance for new coverage 9)
+- On a contenteditable text block, set HTML "/page" → SlashMenu shows two matches (basic "Page" + advanced "Synced block"). Pressed Enter → page count went 117→118; new page `{ title: "Untitled", parentId: "pg_mp2pz5zw6oflgc0j" }` minted. Sidebar `sidebar-page-*` count went 115→116 (live reactive). The slash handler at Block.tsx:421-429 calls `createPage` + transforms the current block to a `sub-page` referencing the new page.
+
+### B-4414 — AI textarea max-height + internal scroll (acceptance for new coverage 10)
+- `[data-testid="ai-input"]` is a `<textarea>` with `max-height: 160px`, `overflow-y: auto`. Filled with 8 newline-separated lines: scrollHeight=328, clientHeight=158. Parent panel `parentRect.bottom <= window.innerHeight` (no overflow); content scrolls internally. The textarea does not push the panel off-screen even with many lines.

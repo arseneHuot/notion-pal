@@ -1604,3 +1604,23 @@ Priority: high / medium / low.
 
 ### I-4304 — ib-ai prompt should embed the page context (low, open)
 - See B-4314. The pre-filled prompt is `Ask AI about: "<selection>"` — useful for short selections but loses *which page* the selection came from. Optionally include `(Page: <title>)` in the quoted prompt so the AI demo response can cite the source without the user retyping the context.
+
+## 2026-05-13 — QA agent iteration I-4400
+
+### I-4400 — Move-to-teamspace should preserve sub-page parent within the same workspace (medium, open)
+- See B-4405. Moving `pg_mp2srzedee1ec1wa` from Private to Engineering nulled its `parentId`. If a user just wanted to reclassify the teamspace (and parent page is also in the same workspace), the sudden promotion to a root page is surprising. Either:
+  - When parent page would be visible in the destination teamspace too, keep `parentId` and recursively update `teamspaceId` on descendants.
+  - Or, prompt with "Move this page to <teamspace>? Children will follow." before nulling parentId.
+- Today's behaviour is fine for cross-teamspace reparenting but feels destructive within-workspace.
+
+### I-4401 — `move-to-teamspace` not exposed in sidebar `page-menu-*` (low, open)
+- See B-4405. The 7-item sidebar context menu (favorite / duplicate / new-sub / copy-link / trash) is missing the `move-to-ts_*` actions that the in-page `page-options` menu surfaces. Adding a "Move to teamspace ▸" sub-menu in the sidebar would save a navigation hop for power users.
+
+### I-4402 — Block-jump highlight should survive navigation (low, open)
+- See B-4412. The 1500ms ring flash on the target block is invisible to users who immediately scroll or switch routes. Persist the target block id in the URL hash (`/app/p/<id>#blk_<id>`) and re-apply the ring on mount; that way back/forward and reload preserve the visual landing cue.
+
+### I-4403 — Inline DB filter UI lacks visible AND/OR toggle (low, open)
+- See B-4407. Filters combine with implicit AND (`every()`). Notion exposes "Where: and / or" between rules. Today there's no way to ask for OR. Add a small operator pill between filter rows and extend `applyFilters` with a top-level operator field on the view.
+
+### I-4404 — Calendar same-day drop should short-circuit before calling moveCalendarEvent (low, open)
+- See B-4409. Same-day drag is a no-op but still goes through the store mutation in `moveCalendarEvent` (rebuilds the calendarEvents map). Skipping when `keyForDate(new Date(e.start)) === dayKey` avoids the React rerender churn and any animations. Tiny but free.
