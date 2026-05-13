@@ -5805,3 +5805,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-5811 — Sidebar `sidebar-fav-<id>` testid uniqueness holds (acceptance, ok / B-4810 regression check)
 - Steps: with two favorited root pages (`pg_mp2pz5zwikifg7r3`, `pg_b5800_P`), enumerated `[data-testid^="sidebar-fav-"]` and `[data-testid^="sidebar-page-"]`. Computed duplicate counts.
 - Observed: each favorited page renders exactly one `sidebar-fav-<id>` and one matching `sidebar-page-<id>` element. No duplicates, no overlap between the two namespaces. The favorites strip and the main page tree stay separately addressable — B-4810 hardening intact.
+
+### B-5601 / B-5705 — TopBar breadcrumb teamspace — fixed (commit 5cd011b)
+- Fix: breadcrumb prepends a non-clickable teamspace chip derived from the root ancestor's `teamspaceId`. Testid `breadcrumb-teamspace-<id>`. After a move-to-teamspace, the breadcrumb identity now reflects the new home.
+
+### B-5010 / B-5102 / B-5304 — Block-scoped comments invisible — fixed (commit 5cd011b)
+- Fix: PageComments filter dropped the `!c.blockId` clause; block-scoped comments now render in the pane with a small "↑ on block" chip (`comment-block-anchor-<id>`) that jumps the viewport via `#block-<id>` hash. Closes the orphan-data state.
