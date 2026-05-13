@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore, consumeAICredits } from "@/lib/store";
+import { askAI } from "@/lib/ai-server";
 import { Sparkles, X, Send } from "lucide-react";
 import { stripHtml } from "@/lib/text";
 
@@ -187,29 +188,44 @@ export function AIChat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
-  function pseudoAnswer(question: string) {
+  // Find up to N relevant pages by keyword overlap. Used both as a
+  // pre-filter (we ship the snippet to Gemini for context) and as the
+  // local fallback when the LLM is unreachable.
+  function findRelevantPages(question: string, limit = 5) {
     const q = question.toLowerCase();
-    // Naive semantic search across pages
-    const matches = Object.values(pages)
+    return Object.values(pages)
       .filter((p) => !p.isInTrash)
       .map((p) => {
         let score = 0;
+        let bestSnippet = "";
         if (p.title.toLowerCase().includes(q)) score += 5;
-        for (const bid of p.blocks) {
+        for (const bid of p.blocks ?? []) {
           const b = blocks[bid];
           if (b && "content" in b && typeof b.content === "string") {
-            const txt = stripHtml(b.content).toLowerCase();
-            if (txt.includes(q)) score += 2;
+            const txt = stripHtml(b.content);
+            const txtLower = txt.toLowerCase();
+            if (txtLower.includes(q)) {
+              score += 2;
+              if (!bestSnippet) bestSnippet = txt.slice(0, 280);
+            }
             for (const w of q.split(/\s+/)) {
-              if (w && txt.includes(w)) score += 0.5;
+              if (w && w.length >= 2 && txtLower.includes(w)) score += 0.5;
             }
           }
         }
-        return { p, score };
+        return { p, score, snippet: bestSnippet };
       })
       .filter((m) => m.score > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 3);
+      .slice(0, limit);
+  }
+
+  /**
+   * Legacy keyword-only answer — kept as the fallback when the Gemini
+   * server function errors out so the panel never feels broken.
+   */
+  function pseudoAnswer(question: string) {
+    const matches = findRelevantPages(question, 3);
 
     let answer = "";
     // Recognise simple code-asking prompts so we can demo code-block rendering.
@@ -245,18 +261,59 @@ export function AIChat() {
     return { answer, sources: matches.map((m) => ({ pageId: m.p.id, title: m.p.title || "Untitled" })) };
   }
 
-  function send() {
+  async function send() {
     const text = input.trim();
     if (!text) return;
+    if (busy) return; // guard duplicate sends (B-6203)
     setMessages((m) => [...m, { role: "user", content: text }]);
     setInput("");
     setBusy(true);
-    setTimeout(() => {
-      const { answer, sources } = pseudoAnswer(text);
-      setMessages((m) => [...m, { role: "assistant", content: answer, sources }]);
-      consumeAICredits(5); // simple cost model
+
+    // Pre-filter relevant pages by keyword so we ship Gemini just the
+    // sources that matter (keeps the prompt small + fast). The server
+    // fn echoes them back so the UI can render citation chips.
+    const relevant = findRelevantPages(text, 5);
+    const sources = relevant.map((m) => ({
+      pageId: m.p.id,
+      title: m.p.title || "Untitled",
+      snippet: m.snippet,
+    }));
+
+    // Find the page title for context if the user is currently on a page.
+    const pageTitleEl =
+      typeof document !== "undefined"
+        ? (document.querySelector('[data-testid="page-title"]') as HTMLElement | null)
+        : null;
+    const pageTitle = pageTitleEl?.innerText?.trim() || undefined;
+
+    try {
+      const res = await askAI({ data: { prompt: text, pageTitle, sources } });
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: res.answer,
+          sources: res.sources,
+        },
+      ]);
+      // Charge credits only when the request actually succeeded.
+      if (!res.error) consumeAICredits(5);
+    } catch (err) {
+      // Network / transport error — fall back to local keyword answer so
+      // the panel never silently hangs.
+      const fallback = pseudoAnswer(text);
+      const msg = err instanceof Error ? err.message : String(err);
+      setMessages((m) => [
+        ...m,
+        {
+          role: "assistant",
+          content: `⚠️ Couldn't reach the AI server (${msg}). Falling back to keyword search:\n\n${fallback.answer}`,
+          sources: fallback.sources,
+        },
+      ]);
+    } finally {
       setBusy(false);
-    }, 600);
+    }
   }
 
   if (!open) return null;
