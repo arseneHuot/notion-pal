@@ -5292,3 +5292,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4814 — AI panel reply collapses newlines in echoed prompt (P3, open)
 - Repro: B-4805. The stub reply uses the prompt as a quoted phrase ("Based on your workspace, here's what I found about \"<prompt>\":…"). The echoed string strips the newlines so `Hello AI\nThis is line two\nAnd a third line` becomes `Hello AIThis is line twoAnd a third line` — no separators, words concatenate. Cosmetic only (the stored user message keeps newlines and the auto-grow textarea works). Either insert a space when collapsing or render the prompt on its own line.
+
+### B-4802 — Hooks-order error on DB restore — fixed (commit 27798fe) — P1
+- Fix: moved early returns in `InlineDatabase` to AFTER all `useState`/`useMemo` calls; hooks now run unconditionally on every render. The previous shape (early return on `isInTrash` between hooks) violated Rules of Hooks and tripped "Rendered more hooks than during the previous render" on restore.
+
+### B-4808 — Hard-delete leaves orphan page-link blocks — fixed (commit 785030a)
+- Fix: `permanentlyDeletePage` now scans `state.blocks` for any `page-link`/`sub-page` whose `pageId` is in the deleted set, deletes those blocks, and removes their ids from their parent pages' `blocks` arrays.
+
+### B-4810 — Duplicate sidebar-page-<id> testid from favorites — fixed (commit 785030a)
+- Fix: PageItem accepts an optional `testidPrefix` prop. The Favorites section passes `testidPrefix="sidebar-fav"` so each favorited page exposes both `sidebar-page-<id>` (its teamspace position) and `sidebar-fav-<id>` (favorites position). E2E queries are now deterministic.
