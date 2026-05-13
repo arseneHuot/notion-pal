@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/Sidebar";
@@ -41,6 +41,30 @@ function AppLayout() {
     mq.addEventListener?.("change", sync);
     return () => mq.removeEventListener?.("change", sync);
   }, []);
+
+  // Auto-close sidebar drawer on route change on mobile (B-3521 / B-4014).
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(max-width: 768px)").matches) {
+      setUI({ sidebarOpen: false });
+    }
+  }, [pathname]);
+
+  // Escape closes the mobile drawer (when overlaid). On desktop the sidebar
+  // is in-flow and we don't intercept Escape (it's already a no-op).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      if (!sidebarOpen) return;
+      if (window.matchMedia("(max-width: 768px)").matches) {
+        setUI({ sidebarOpen: false });
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sidebarOpen]);
 
   if (loading) {
     return (
