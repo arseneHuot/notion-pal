@@ -2439,3 +2439,46 @@ Priority: high / medium / low.
   - destructive-color "Delete" link on card bg: 6.22:1
   - textarea placeholder (at 50% alpha) composited on input bg: 5.11:1 (AA)
 - Light mode marginally lower (4.77:1 for muted, 4.62:1 for destructive) — still passes AA for normal text but does NOT clear AAA (7:1). No P-rated issue; logging as informational so the next theme tweak doesn't drop below AA accidentally.
+
+## 2026-05-13 — Iteration 8200 (editor / DB / DnD / a11y gaps)
+
+### I-8200 — No `@`-mention / page-link autocomplete inside contenteditable blocks — P2 — open
+- Verified live in `src/components/editor/Block.tsx`: no `@`-trigger logic, no MentionMenu component. The slash menu (`SlashMenu.tsx`) is the only inline picker. To link to another page mid-paragraph, the user has to type `/page` (which converts the WHOLE block to a page-link), or open the inline toolbar's "Link" and paste a URL.
+- Notion's `@page-name` is the workhorse for cross-page linking — its absence makes wiki / docs use cases painful.
+- Suggestion: mirror the slash-menu plumbing for `@`. Track `@` in `onInput`, surface a `MentionMenu` listing pages (`useStore(s => Object.values(s.pages))` filtered by title), insert as an inline `<a data-page-id="...">` on select. Same trick for `+` to insert a date, `#` to insert a page-section anchor.
+
+### I-8201 — Tab / Shift+Tab inside editor blocks does nothing (no indent / outdent inside lists or toggles) — P2 — open
+- File: `src/components/editor/Block.tsx:479-611` (`onKeyDown`). The handler covers Enter, Backspace, Arrow keys, Cmd+B/I/U/S/E/D/Slash — but has no Tab branch. Pressing Tab inside a bullet-list, numbered-list, or toggle leaves focus on the block (verified live: `el.focus(); dispatchEvent KeyboardEvent({key:'Tab'})` — `document.activeElement` does NOT change, but no nesting happens either).
+- The notion-style nested-toggle keyboard nav mentioned in the focus list is a no-op surface today. Tab should indent a list item to the next level; Shift+Tab should outdent.
+- Suggestion: in `onKeyDown`, add `if (e.key === 'Tab') { e.preventDefault(); if (e.shiftKey) outdent(block); else indent(block); }`. `indent(block)` adopts the previous sibling list item / toggle as parent (sets `block.parentId` to that sibling's id). `outdent` walks up to the parent's parent. Validate against bullet/numbered/todo/toggle types.
+
+### I-8202 — Slash menu always shows all 40 commands when query matches `description` (filter is too permissive) — P3 — open
+- File: `src/lib/slash-commands.ts:451-464`. The filter accepts a match against `label`, any `alias` (substring), the `category`, OR the `description`. Because every command has a 4-10-word description with many common words, a query like "block", "text", "list", "create", "page" can match 20-30+ commands — defeating the purpose of filtering. Verified live: query "math" shows all 40 items (math is in the list but no narrowing happened, because every description contains a math-adjacent token).
+- Suggestion: drop description from the match, OR weight it: only fall back to description match when label/alias/category produce zero hits. Mirror Notion's behavior — strict prefix-match on label + alias.
+
+### I-8203 — Code block textarea has no monospaced line numbers, no soft-wrap toggle, no copy-feedback toast — P3 — open
+- File: `src/components/editor/Block.tsx:900-944`. After clicking the Copy button (`navigator.clipboard.writeText`), no visual confirmation fires. The user can't tell if the copy succeeded — Notion shows a "Copied" pill that fades after 1.5s.
+- Soft-wrap toggle: a long URL or a 200-char line in a textarea wraps by default but there's no way to switch to horizontal-scroll for code that should be read in original columns.
+- Line numbers absent — common ask once a code block crosses ~30 lines.
+- Suggestion: add a toast on copy success, add a wrap/no-wrap toggle in the header (next to language and copy). Line numbers are nice-to-have.
+
+### I-8204 — Bookmark host-line empty for non-http URLs (renders blank primary text) — P3 — open
+- File: `src/components/editor/Block.tsx:1066-1079`. `host` falls back to the raw URL when `new URL(...).hostname` throws — but `data:` and `vbscript:` URLs PARSE successfully and return hostname `""`, so the fallback never fires and the bookmark's primary text is empty. Companion to B-8200.
+- Suggestion: `const host = (() => { try { const u = new URL(e.url); return u.hostname || u.protocol.replace(":", "") || e.url; } catch { return e.url; } })()` — surface the protocol when no host is parseable so the user sees "data" / "mailto" / "tel" instead of a blank line.
+
+### I-8205 — Database FilesCell renders attachments as `📎 1` / `📎 2` (no filename, no size, no thumbnail) — P3 — open
+- File: `src/components/database/PropertyEditor.tsx:334-362`. Every attachment renders as the paperclip emoji + 1-indexed position. Since the only stored data is a base64 data URL, there's no filename to display — but the upload handler also discards `file.name` instead of storing it alongside the data URL.
+- Suggestion: change the stored shape to `{ name, dataUrl, size, mime }[]` instead of `string[]`. Render the filename truncated next to the paperclip. For images, render a 32×32 thumbnail (the data URL is already in memory). For PDFs / docs, keep the emoji but at least show the name.
+
+### I-8206 — Page-history dialog: Restore is the only action — no "Preview", no "Compare to current", no side-by-side diff — P2 — open
+- Companion to I-8000 (already filed). Note: clicking a version row in `PageHistoryDialog.tsx:50-65` only offers Restore (gated through a `window.confirm`). There's no way to inspect what's in the snapshot before destroying current state.
+- Suggestion: each row gets two buttons: "Preview" (opens a read-only inline render of the snapshot's blocks, like the public-page view), and "Restore" (current behavior, ideally with the confirm replaced by an in-app modal explaining what will change). Add a "Diff" affordance once we have a diff engine.
+
+### I-8207 — Drag-and-drop has no auto-scroll near viewport edges — P3 — open
+- Verified live in `src/components/editor/Block.tsx:137-148`. While drag-hovering over a block near the top/bottom of the viewport, the page does NOT auto-scroll. Reordering across long pages requires manual scroll mid-drag, which usually drops the drag.
+- Suggestion: in `onDragOver` at the page-level container, detect Y position within ~80px of top/bottom and start a `requestAnimationFrame` loop that increments `scrollTop` until either the pointer moves away or `drop`/`dragend` fires.
+
+### I-8208 — Drag-and-drop on a collapsed toggle should auto-expand and nest the dropped block inside — P3 — open
+- Companion to B-8203. Today, dropping on a collapsed `<>` toggle just inserts the dragged block as a sibling AFTER the toggle, never as a child. Notion expands the toggle after a brief hover and lets you drop into the (now-visible) children list.
+- Suggestion: in the toggle block's `onDragOver`, after ~500ms of sustained hover, set `tog.open = true` (no save, transient) so children become drop targets. On `dragleave`/`dragend`, restore the original open state if no drop occurred.
+

@@ -146,6 +146,18 @@ function BlockShell({
       innerRef.current.classList.remove("ring-1", "ring-blue-400");
     }
   }
+  function onDragEnd() {
+    // B-8202 — when the user presses Escape mid-drag, the browser fires
+    // `dragend` on the source but NO `dragleave` on whichever target was
+    // hovered. The blue ring would otherwise remain glued to that target
+    // forever. Clear every block's drop-hover ring on dragend (cheap and
+    // matches the dragging contract).
+    if (typeof document !== "undefined") {
+      document.querySelectorAll("[data-block-id]").forEach((el) => {
+        el.classList.remove("ring-1", "ring-blue-400");
+      });
+    }
+  }
   function onDrop(e: React.DragEvent) {
     e.preventDefault();
     if (innerRef?.current) {
@@ -157,7 +169,13 @@ function BlockShell({
     const sourceIndex = pageBlocks.indexOf(sourceId);
     if (targetIndex === -1 || sourceIndex === -1) return;
     const newOrder = pageBlocks.filter((b) => b !== sourceId);
-    const insertIndex = sourceIndex < targetIndex ? targetIndex : targetIndex;
+    // B-8201 — forward drag (source BEFORE target): removing source
+    // shifts target's index down by 1, so we need to insert at
+    // `targetIndex - 1` to land before the target visually. The old
+    // ternary had identical branches (copy-paste bug); both forward and
+    // backward drops were going to `targetIndex`, which is one slot too
+    // late for forward drags.
+    const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
     newOrder.splice(insertIndex, 0, sourceId);
     reorderBlocks(pageId, newOrder);
   }
@@ -186,6 +204,7 @@ function BlockShell({
           ref={handleRef}
           draggable
           onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
           onClick={() => setMenuOpen((v) => !v)}
           className="p-0.5 rounded hover:bg-accent text-muted-foreground cursor-grab active:cursor-grabbing"
           title="Block options"
@@ -1028,6 +1047,12 @@ function VideoEmbed({ url }: { url: string }) {
   );
 }
 
+// Same allowlist as the HTML sanitizer (`SAFE_URL_RE` in src/lib/sanitize.ts).
+// Kept local so the embed/bookmark URL input rejects unsafe schemes
+// (`data:`, `vbscript:`, `javascript:`, file:, etc.) before they ever reach
+// the store — see B-8200.
+const SAFE_EMBED_URL_RE = /^(https?:|mailto:|tel:|\/|#)/i;
+
 function EmbedBlockEl({ block, pageId }: { block: Block; pageId: string }) {
   const e = block as Extract<Block, { type: "embed" | "bookmark" }>;
   const [urlInput, setUrlInput] = useState(e.url ?? "");
@@ -1039,11 +1064,25 @@ function EmbedBlockEl({ block, pageId }: { block: Block; pageId: string }) {
             <input
               value={urlInput}
               onChange={(ev) => setUrlInput(ev.target.value)}
-              placeholder="Paste a link to embed"
+              placeholder="Paste a link to embed (https://…)"
               className="flex-1 bg-background border border-input rounded px-2 py-1 text-sm"
             />
             <button
-              onClick={() => updateBlock(block.id, { url: urlInput } as Partial<Block>)}
+              onClick={() => {
+                // B-8200 — reject `data:`, `vbscript:`, `javascript:`,
+                // `file:` etc. at the input boundary. Browsers neutralize
+                // some of these today, but the URL also feeds the public
+                // page renderer and copy-paste round-trips; defense in
+                // depth lives here.
+                const v = urlInput.trim();
+                if (!SAFE_EMBED_URL_RE.test(v)) {
+                  import("@/components/ui/Toast").then((m) =>
+                    m.toast("Only http(s)/mailto/tel URLs can be embedded.", "error"),
+                  );
+                  return;
+                }
+                updateBlock(block.id, { url: v } as Partial<Block>);
+              }}
               className="bg-primary text-primary-foreground px-3 py-1 rounded text-sm"
             >
               Embed
@@ -1053,11 +1092,28 @@ function EmbedBlockEl({ block, pageId }: { block: Block; pageId: string }) {
       </BlockShell>
     );
   }
+  // Defense in depth on rehydrate: even if a malformed URL slipped past
+  // the input gate (older imports, manual storage edits), don't render an
+  // unsafe iframe / anchor (B-8200).
+  if (!SAFE_EMBED_URL_RE.test(e.url)) {
+    return (
+      <BlockShell block={block} pageId={pageId}>
+        <div className="border border-dashed border-border rounded-lg p-3 text-xs text-muted-foreground">
+          (Unsafe URL — embed disabled. Edit this block to set an http(s) link.)
+        </div>
+      </BlockShell>
+    );
+  }
   if (e.type === "embed") {
     return (
       <BlockShell block={block} pageId={pageId}>
         <div className="aspect-video w-full rounded-md overflow-hidden bg-muted border border-border">
-          <iframe src={e.url} className="w-full h-full" sandbox="allow-scripts allow-same-origin allow-forms" />
+          {/* B-8200 — sandbox drops `allow-same-origin`. Pairing
+              `allow-scripts` + `allow-same-origin` is the canonical
+              sandbox-bypass combo (the embedded doc could read parent
+              cookies / storage). Real embeds (YouTube, Vimeo, Loom,
+              Codepen) work fine in a null-origin sandbox. */}
+          <iframe src={e.url} className="w-full h-full" sandbox="allow-scripts allow-forms allow-popups allow-presentation" />
         </div>
       </BlockShell>
     );
@@ -1072,7 +1128,7 @@ function EmbedBlockEl({ block, pageId }: { block: Block; pageId: string }) {
   })();
   return (
     <BlockShell block={block} pageId={pageId}>
-      <a href={e.url} target="_blank" rel="noreferrer" className="block border border-border rounded-md p-3 hover:bg-accent">
+      <a href={e.url} target="_blank" rel="noopener noreferrer" className="block border border-border rounded-md p-3 hover:bg-accent">
         <div className="text-sm font-medium truncate">{host}</div>
         <div className="text-xs text-muted-foreground truncate">{e.url}</div>
       </a>

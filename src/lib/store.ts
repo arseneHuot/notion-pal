@@ -216,6 +216,7 @@ function loadFromStorage(userId: string | null): AppState {
   }
 }
 
+let _quotaToastShown = false;
 function persist(state: AppState) {
   if (typeof window === "undefined") return;
   try {
@@ -233,6 +234,20 @@ function persist(state: AppState) {
     );
   } catch (e) {
     console.error("Failed to persist state", e);
+    // B-8209 — when localStorage hits its 5-10 MB cap (typically from
+    // large file attachments), every subsequent write silently fails and
+    // edits stop landing. Surface a single toast so the user knows their
+    // changes aren't being saved. Once-per-session so we don't spam.
+    const isQuota = e instanceof Error && (e.name === "QuotaExceededError" || /quota/i.test(e.message));
+    if (isQuota && !_quotaToastShown && typeof window !== "undefined") {
+      _quotaToastShown = true;
+      import("@/components/ui/Toast").then((m) =>
+        m.toast(
+          "Workspace storage is full. Recent changes may not be saved — remove large attachments and reload.",
+          "error",
+        ),
+      ).catch(() => { /* toast module load shouldn't itself error-loop */ });
+    }
   }
 }
 

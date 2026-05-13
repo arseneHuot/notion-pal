@@ -298,7 +298,7 @@ function URLCell({ row, value, property, className }: { row: DatabaseRow; value:
       type="url"
       value={value}
       onChange={(e) => updateRow(row.id, { values: { [property.id]: e.target.value } })}
-      className={`bg-transparent outline-none underline w-full text-blue-600 ${className ?? ""}`}
+      className={`bg-transparent outline-none underline w-full text-blue-600 dark:text-blue-400 ${className ?? ""}`}
       placeholder="https://…"
       data-testid={`cell-url-${row.id}-${property.id}`}
     />
@@ -331,6 +331,15 @@ function PhoneCell({ row, value, property, className }: { row: DatabaseRow; valu
   );
 }
 
+// B-8209 — FilesCell base64-encodes uploads into localStorage. The
+// browser cap is 5-10 MB total for the whole workspace; a single large
+// file (or several normal ones) silently triggers QuotaExceededError on
+// the next persist, after which writes stop landing. Cap each upload at
+// 1 MB so base64 (~1.4 MB) leaves headroom; cap total cell size at 3 MB
+// across all attachments so a row can't monopolise the quota.
+const FILES_MAX_PER_FILE = 1 * 1024 * 1024;
+const FILES_MAX_TOTAL = 3 * 1024 * 1024;
+
 function FilesCell({ row, value, property }: { row: DatabaseRow; value: string[]; property: Property }) {
   return (
     <div className="flex items-center gap-1 flex-wrap" data-testid={`cell-files-${row.id}-${property.id}`}>
@@ -348,11 +357,32 @@ function FilesCell({ row, value, property }: { row: DatabaseRow; value: string[]
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (!file) return;
+            if (file.size > FILES_MAX_PER_FILE) {
+              toast(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Per-file limit is 1 MB in this build.`, "error");
+              // Reset the input so re-selecting the same file fires `change`.
+              e.target.value = "";
+              return;
+            }
+            // Approximate base64 inflation (4/3) when summing already-stored
+            // data-URLs — close enough for a quota guard.
+            const currentTotal = value.reduce((a, v) => a + v.length, 0);
+            const projected = currentTotal + Math.ceil(file.size * 1.4);
+            if (projected > FILES_MAX_TOTAL) {
+              toast("This cell is full (3 MB total). Remove an attachment first.", "error");
+              e.target.value = "";
+              return;
+            }
             const reader = new FileReader();
             reader.onload = (ev) => {
               const result = ev.target?.result as string;
-              updateRow(row.id, { values: { [property.id]: [...value, result] } });
+              try {
+                updateRow(row.id, { values: { [property.id]: [...value, result] } });
+              } catch (err) {
+                toast("Storage full — attachment not saved.", "error");
+                console.error("FilesCell persist failed", err);
+              }
             };
+            reader.onerror = () => toast("Couldn't read that file.", "error");
             reader.readAsDataURL(file);
           }}
         />

@@ -7015,3 +7015,118 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-8104 — Palette Home/End/PageUp/PageDown — fixed — P3
 - Input `onKeyDown` adds branches: `Home` → index 0, `End` → items.length-1, `PageDown` → +10, `PageUp` → −10 (each clamped to valid range). Keyboard-only and screen-reader users can now reach the ends of the list in O(1).
+
+## 2026-05-13 — Iteration 8200 (XSS surface, drag-drop math, dark-mode focus)
+
+### B-8200 — Bookmark / Embed URL accepts `data:`, `vbscript:` schemes (and `javascript:` is silently neutered by React) — P1 — open
+- File: `src/components/editor/Block.tsx` lines 1031-1080 (`EmbedBlockEl`).
+- Repro (no live navigation needed; verified via direct store injection on `/app/p/pg_mp43svzu14dmlh94`):
+  - Inject `block.url = "data:text/html,<script>alert(1)</script>"` with `type: "bookmark"`. The bookmark renders `<a href="data:text/html,..." target="_blank" rel="noreferrer">` directly. React's protocol filter only blocks `javascript:` for href, NOT `data:` or `vbscript:`. Clicking opens a new tab whose document.origin is `null` BUT the data URL still runs in a separate origin; modern Chrome/Firefox do block top-level `data:` navigation, so the immediate XSS is mitigated by browsers — but the link still flows through `<a>` and is one browser-policy change away from re-arming.
+  - `vbscript:msgbox(1)` renders as plain `<a href="vbscript:..">` (not blocked by React at all — modern browsers ignore the protocol, but the URL is still surfaced verbatim, leaks into copy-paste, and shows up in the bookmark "subtext").
+  - `javascript:alert(1)` is rewritten by React into `href="javascript:throw new Error('React has blocked a javascript: URL as a security precaution.')"` — the user-typed payload is replaced, but the bookmark UI happily ACCEPTS the input in `updateBlock`, so the block carries an unusable URL and the user gets no error.
+- The store-side sanitizer (`SAFE_URL_RE` in `src/lib/sanitize.ts:26`) is `^(https?:|mailto:|tel:|/|#)` — that's the right whitelist, BUT it only runs on HTML content of contenteditable blocks (`sanitizeHtml`). The bookmark/embed URL field is a plain `<input>` whose value goes straight to `updateBlock({url})` with zero validation.
+- Companion: same hole on the `embed` type (line 1056) — `<iframe src="data:..">` or `<iframe src="vbscript:..">` would render. Worse: the iframe is `sandbox="allow-scripts allow-same-origin allow-forms"` which is the canonical sandbox-bypass combo (allow-scripts + allow-same-origin together = effectively no sandbox; the iframe can `parent.document.cookie`).
+- Severity P1: defense-in-depth gap on an obvious user-input vector. The browser saves us today; the next browser policy change or the next code path that stops going through React (e.g. server-rendered public page) re-opens the hole.
+- Fix sketch:
+  1. In `EmbedBlockEl`, reuse `SAFE_URL_RE.test(urlInput)` before calling `updateBlock`. Reject with a toast on bad protocol.
+  2. The iframe `sandbox` should drop `allow-same-origin` (keep `allow-scripts allow-forms` — embeds need scripts but should be in a null origin so they can't reach the parent). Confirmed safe for YouTube / Vimeo / Loom (they tolerate it).
+  3. The host display in the bookmark renders empty for `data:` / `vbscript:` (because `new URL(...).hostname` returns ""). At minimum show "(non-http link)" so the user sees something is wrong.
+
+### B-8201 — Drag-and-drop block reorder: forward drag drops one slot too late (off-by-one) — P2 — open
+- File: `src/components/editor/Block.tsx:149-163` (`onDrop`).
+- Code:
+  ```ts
+  const insertIndex = sourceIndex < targetIndex ? targetIndex : targetIndex;
+  ```
+  Both branches of the ternary are identical (clearly a copy-paste defect — the writer intended `targetIndex - 1 : targetIndex` per Notion convention "drop on a block = insert before it").
+- Repro: page with blocks [A,B,C,D]. Grab A's drag handle and drop on C. Expected result: [B,A,C,D] (A inserted before C). Observed result: [B,C,A,D] (A drops after C).
+- Backward drag works correctly: drop D on B → [A,D,B,C] (matches expectation) because the ternary's "else" branch is the only one that does the right thing.
+- Severity P2: the operation completes (no crash), but the resulting order is off-by-one for half of all drags. Users have to drop one slot above the intended target to compensate — fights muscle memory hard.
+- Fix sketch: `const insertIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;`. Verify after filter: when source is BEFORE target in the list, removing source shifts target's index down by 1, so the user-visible drop position should compensate.
+
+### B-8202 — Drag-and-drop hover ring leaks when drag is aborted with Escape — P3 — open
+- File: `src/components/editor/Block.tsx:137-148`. `onDragOver` adds `ring-1 ring-blue-400` to `innerRef`; only `onDragLeave` / `onDrop` clear it. If the user presses Escape mid-drag (browser fires `dragend` but NOT `dragleave` on the hovered target), the blue ring stays glued to the block until the next hover.
+- Repro: hover-drag a block onto another, hold, press Escape. The blue 1px ring remains on the would-be drop target indefinitely.
+- Fix sketch: add `onDragEnd` handler on the source element that walks all `[data-block-id]` descendants of the page and removes `ring-1 ring-blue-400`. Or migrate to a CSS state (`data-drag-over`) and clear it in a single `dragend` reducer.
+
+### B-8203 — Drag-and-drop cross-container drops are silently dropped — P2 — open
+- File: `src/components/editor/Block.tsx:154-162`. The drop handler looks up `sourceIndex` in `pageBlocks` (the top-level page block array). If the dragged block lives inside a toggle (`parentId !== pageId`) or inside a column (`column.blockIds`), `sourceIndex === -1` and the drop early-returns. No error, no toast, the drag just appears to do nothing.
+- Repro: open a page with a toggle. Open the toggle. Drag a child block out onto a top-level block. Expected: the child is removed from the toggle and inserted at the top level. Observed: nothing happens; child stays in the toggle.
+- Same on synced-blocks and columns. The DnD only supports same-level reordering inside `pageBlocks`.
+- Severity P2: well-known Notion affordance is fully absent. Users will try the gesture and conclude the app is broken.
+- Fix sketch: in `onDrop`, after `sourceIndex === -1` branch, look up the source block in `state.blocks`; if found and has a `parentId`, call a future `moveBlockToPage(sourceId, pageId, targetIndex)` mutation that detaches from the parent's `blockIds` and inserts at the new position. Mirror for toggle→column, column→toggle.
+
+### B-8204 — Database URL cell `text-blue-600` fails WCAG AA contrast in dark mode (3.40:1 on bg-card, 3.84:1 on bg-background) — P2 — open
+- File: `src/components/database/PropertyEditor.tsx:295-306` (`URLCell`). Hardcoded `text-blue-600` (no `dark:` variant). Same issue applies anywhere `text-blue-600` is used without a dark variant — grep finds it at least in URLCell and the file-link `📎` chip in `FilesCell`.
+- Verified live (dark mode active, `document.documentElement.classList.contains('dark') === true`):
+  - URLCell text color resolves to `oklch(0.546 0.245 262.881)` → sRGB `[21, 93, 252]`.
+  - `bg-card` resolves to `[15, 23, 43]` → contrast 3.40:1 (FAIL — WCAG AA needs 4.5:1 for normal text).
+  - `bg-background` resolves to `[2, 6, 24]` → contrast 3.84:1 (also FAIL).
+- Light mode passes (verified at `[239,246,255]`→`[21,93,252]` ≈ 4.77:1 just clears AA).
+- Severity P2: any database with a URL property has unreadable cells in dark mode. Compound with B-8205 (no focus ring) and the cell becomes both hard to read and impossible to locate via keyboard.
+- Fix sketch: replace `text-blue-600` with `text-blue-600 dark:text-blue-400` (`oklch(0.707 0.165 254.624)` clears 7:1 on bg-card). Or migrate to a semantic `text-link` token defined per theme in `styles.css`.
+
+### B-8205 — Buttons / inputs have no visible focus indicator in either theme — P1 — open
+- Verified live: focusing a sidebar `<button>` via `el.focus()` yields `outlineWidth: 0px`, `boxShadow: none`. Same for `<input>` elements. `styles.css` defines `--ring` color tokens (`oklch(0.551 0.027 264.364)` dark, `oklch(0.704 0.04 256.788)` light) but no Tailwind class or global rule applies `focus-visible:ring` / `outline` to any component.
+- A keyboard-only user (or anyone using Tab nav) cannot tell where focus is — every interactive element is invisibly "focused". Combined with B-8204 (low-contrast text), the keyboard experience is unusable.
+- Severity P1: WCAG 2.1 SC 2.4.7 (Focus Visible) failure on the entire app. This is the canonical "blocks accessibility certification" issue.
+- Fix sketch: add to `styles.css`:
+  ```css
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  ```
+  Then audit components that use `outline-none` (the editor's contenteditables, code/equation textareas) and either remove the override or add an explicit `focus-visible:ring-2 focus-visible:ring-ring`. Cheap, global, and discoverable.
+
+### B-8206 — Database TextCell is a single-line `<input>` — pasting multi-line text silently strips newlines — P2 — open
+- File: `src/components/database/PropertyEditor.tsx:128-139` (`TextCell`). The "text" property type renders an `<input>` (not `<textarea>`), so pasting a multi-line value (e.g. a copied block from outside the app, or `"line1\nline2"`) drops everything after the first newline. The user gets a truncated value with no warning.
+- TitleCell (line 113) has the same shape but truncation is arguably acceptable for title. Plain "text" is meant for longer values — this is where Notion uses a multi-line input that auto-grows.
+- Severity P2: silent data loss on a common operation (paste prose / paste a paragraph). The user thinks they pasted everything; only the first line survives.
+- Fix sketch: convert `TextCell` to a `<textarea>` with `rows={1}` + JS auto-grow on content change (the row-detail drawer already uses textareas; just align the table-cell variant). Alternatively keep the input but on paste, detect `\n` in clipboard text and open the row-detail drawer for full edit.
+
+### B-8207 — Equation block renders LaTeX as plain serif text (no actual math rendering) — P2 — open
+- File: `src/components/editor/Block.tsx:1184-1207` (`EquationEl`). The block accepts LaTeX in a textarea but renders it as `<div className="text-center font-serif text-lg">{content}</div>` — literally the source string in italic serif. `E = mc^2` displays as the four characters "E = mc^2", not as an equation.
+- The block is offered via slash menu (`slash-math`) and is a first-class block type in `types.ts`. Users will type LaTeX and see no math.
+- Severity P2: feature is wired up end-to-end except for the actual rendering. Either remove the block from the slash menu OR render via KaTeX.
+- Fix sketch: import `katex` (or `react-katex`), render via `<BlockMath math={content} />`. Already in the focus-list candidates. If KaTeX is too heavy, render Unicode math as a fallback for `^`, `_`, common Greek letters.
+
+### B-8208 — Code block has zero syntax highlighting despite language selector — P2 — open
+- File: `src/components/editor/Block.tsx:900-944` (`CodeBlockEl`). The dropdown sets `language` on the block; the dropdown then has NO effect — the code is rendered in a plain `<textarea>` with `font-mono`. No `<pre><code>`, no Prism / highlight.js / Shiki. Setting the language to "rust" vs "javascript" vs "plaintext" produces identical visuals.
+- A user who selects "python" expects keyword colors. The dropdown actively misleads.
+- Severity P2: chrome-misleading UI. Either highlight or hide the language selector when no highlighting is wired up.
+- Fix sketch: switch render to a contenteditable `<pre>` plus a tokenizer (Shiki has a CDN bundle; Prism is ~50KB). On `language` change, re-tokenize. Keep the textarea as the edit surface, or use a single contenteditable pre with custom highlighter pass on input (debounced).
+
+### B-8209 — Database FilesCell stores arbitrary base64 in localStorage with NO size or type limit — P1 — open
+- File: `src/components/database/PropertyEditor.tsx:334-362`. The `<input type="file">` reads any file with `FileReader.readAsDataURL` and pushes the base64 string into `row.values[propId]`. No `accept=`, no `maxSize` check, no `if (file.size > N)` guard.
+- localStorage typically caps at 5MB (Chrome) / 10MB (Firefox). A single 4MB PDF blows the entire workspace store; the next `localStorage.setItem` from `_lastWriteAt` throws `QuotaExceededError` and the user loses ALL subsequent writes silently (the store has no error-toast on persist failure that I can see).
+- Severity P1: a user attaching a normal-sized image (3-5MB) corrupts their entire workspace persistence. No warning, no toast — writes just stop landing.
+- Fix sketch:
+  1. Reject files > 1MB at the cell level with a toast ("Files larger than 1MB aren't supported in this build"). 1MB base64-encodes to ~1.4MB which still leaves room under the cap.
+  2. Wrap `localStorage.setItem` in a try/catch; on QuotaExceededError, toast "Storage full — recent changes lost" and refuse the write. (Probably worth a separate ticket.)
+  3. Long term: blob-out to IndexedDB or pretend to upload by returning a short stub URL.
+
+
+
+## 2026-05-13 — B-8200 batch fixes
+
+### B-8200 — Bookmark / Embed URL allowlist + sandbox tightening — fixed — P1
+- `EmbedBlockEl` validates new URL input against `SAFE_EMBED_URL_RE = /^(https?:|mailto:|tel:|\/|#)/i` before persisting; rejects with a toast on `data:`, `vbscript:`, `javascript:`, `file:`, etc. Defense-in-depth on rehydrate: if a malformed URL slipped through (older imports, manual storage edits), the renderer surfaces "(Unsafe URL — embed disabled.)" instead of mounting an `<iframe>` or `<a href>` to it.
+- iframe `sandbox` drops `allow-same-origin`. The previous `allow-scripts allow-same-origin allow-forms` combo is the canonical sandbox-bypass (the embedded doc could `parent.document.cookie`). New value: `allow-scripts allow-forms allow-popups allow-presentation` — YouTube/Vimeo/Loom/CodePen still render correctly in a null origin.
+- Bookmark anchor now uses `rel="noopener noreferrer"` (was just `noreferrer`).
+
+### B-8205 — Global :focus-visible outline — fixed — P1
+- `src/styles.css` adds `:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }` + `:focus:not(:focus-visible) { outline: none; }`. Tab navigation now lands a visible 2px ring on every focusable element in both themes. Mouse-click focus stays unindicated so non-keyboard users don't see noisy rings. Verified live: rule present in the served stylesheet at runtime.
+
+### B-8209 — FilesCell size limit + quota toast — fixed — P1
+- `FilesCell` rejects files >1 MB per upload (toast: "Per-file limit is 1 MB in this build.") and refuses to push past 3 MB total per cell (toast: "This cell is full…"). Resets the `<input>` value so re-selecting the same file fires `change`. Wraps `updateRow` in try/catch with an error toast if persist throws.
+- Belt + suspenders on `persist` (store.ts) — `QuotaExceededError` triggers a one-time toast "Workspace storage is full. Recent changes may not be saved — remove large attachments and reload." Previously the failure was silent and the user lost every subsequent edit without warning.
+
+### B-8201 — DnD forward-drag off-by-one — fixed — P2
+- `Block.tsx:onDrop` ternary now reads `sourceIndex < targetIndex ? targetIndex - 1 : targetIndex`. The previous version had identical branches (copy-paste bug); forward drags landed one slot too late. Backward drags continue to work as before.
+
+### B-8202 — DnD ring leak on Escape — fixed — P3
+- `onDragEnd` handler wired to the draggable handle clears `ring-1 ring-blue-400` from every `[data-block-id]` in the document. Covers the case where the browser fires `dragend` but no `dragleave` on the hovered target (ESC mid-drag).
+
+### B-8204 — URL cell dark-mode contrast — fixed — P2
+- `URLCell` class now `text-blue-600 dark:text-blue-400`. `text-blue-400` resolves to oklch(0.707 0.165) ≈ 7:1 on `bg-card` in dark mode — clears WCAG AA easily. Light mode still uses `text-blue-600`.

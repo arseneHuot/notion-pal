@@ -142,6 +142,22 @@
     color: var(--color-foreground);
   }
 
+  /* B-8205 — global :focus-visible outline so keyboard-only users can see
+     where focus lands. Uses --ring (per-theme) with a 2px offset so it
+     reads cleanly against both light and dark backgrounds. Components
+     that intentionally suppress the outline (e.g. contenteditable
+     surfaces, custom focus chrome) should opt out with
+     `focus-visible:outline-none` rather than this rule being weaker. */
+  :focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+  /* Mouse-click focus stays unindicated — only keyboard focus surfaces. */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
   /* Contenteditable placeholder — show data-placeholder when empty */
   [contenteditable][data-placeholder]:empty::before {
     content: attr(data-placeholder);
