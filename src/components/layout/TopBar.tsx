@@ -1,7 +1,7 @@
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useStore, setUI, toggleDarkMode, toggleFavorite, updatePage, deletePage, duplicatePage } from "@/lib/store";
+import { useStore, setUI, toggleDarkMode, toggleFavorite, updatePage, deletePage, duplicatePage, movePageToTeamspace } from "@/lib/store";
 import { PanelLeftOpen, MoreHorizontal, Star, Share, MessageCircle, Clock, Sun, Moon, ChevronRight, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { PageHistoryDialog } from "@/components/page/PageHistoryDialog";
 import { ShareDialog } from "@/components/page/ShareDialog";
 
@@ -14,6 +14,14 @@ export function TopBar() {
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+
+  // Listen for the `open-page-history` custom event so the page-options
+  // menu (B-5103) and any future surface can open the history dialog.
+  useEffect(() => {
+    function onOpen() { setHistoryOpen(true); }
+    window.addEventListener("open-page-history", onOpen);
+    return () => window.removeEventListener("open-page-history", onOpen);
+  }, []);
 
   // Breadcrumb path
   const breadcrumbs: { id: string; title: string; icon: string | null }[] = [];
@@ -204,6 +212,14 @@ function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean;
           setTimeout(() => window.print(), 100);
         }}
       />
+      <MenuItem
+        label="Page history"
+        testid="page-opt-history"
+        onClick={() => {
+          close();
+          window.dispatchEvent(new CustomEvent("open-page-history"));
+        }}
+      />
       <div className="border-t border-border my-1" />
       <div className="px-3 py-1 text-[10px] uppercase text-muted-foreground">Move to teamspace</div>
       {teamspaces.map((ts) => (
@@ -212,7 +228,10 @@ function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean;
           label={`${ts.icon} ${ts.name}`}
           testid={`page-opt-move-${ts.id}`}
           onClick={() => {
-            updatePage(page.id, { teamspaceId: ts.id, parentId: null });
+            // Cascade the new teamspaceId to every descendant so the
+            // sub-tree stays consistent (B-5101). updatePage alone only
+            // touched the root, leaving children with the old teamspaceId.
+            movePageToTeamspace(page.id, ts.id);
             close();
           }}
         />

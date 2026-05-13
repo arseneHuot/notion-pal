@@ -1716,3 +1716,24 @@ Priority: high / medium / low.
 
 ### I-5004 — Empty board/gallery testid copy could include "+ New" affordance (low, open)
 - See B-5001. Both empty-state placeholders display informative text but no clickable CTA. A user staring at "No cards yet. Add a row from the table view…" still has to find the `+ New` button elsewhere. Either link the empty-state CTA inline (e.g., `<button data-testid="board-empty-new-<id>">+ New</button>`) or replicate the toolbar's "+ New" inside the empty state. Today the testid works but the UI is dead-air.
+
+## 2026-05-13 — I-5100 series
+
+### I-5100 — Cascade `teamspaceId` to descendants when moving a page (medium, open)
+- Linked to B-5101. `TopBar.tsx:215` writes `{ teamspaceId: ts.id, parentId: null }` only on the moved page. Mirror the recursion in `deletePage` (store.ts cascades through child pages) so descendants inherit the new teamspaceId. Without it, the page tree is "visually consistent but data-inconsistent" — a class of bug that surfaces only on the next move/delete. Suggested signature: `function reparentTeamspace(pageId: string, newTeamspaceId: string)` walking `parentId`-children recursively.
+
+### I-5101 — Add `page-opt-history` shortcut to the "•••" page menu (low, open)
+- See B-5103. The Page History feature exists and works (`history-btn` in TopBar, `snapshot-now` + `restore-<id>` in dialog) but is buried as a date-stamp button. Add a `MenuItem` in `PageOptionsMenu` (TopBar.tsx:147) right above "Move to Trash":
+  ```
+  <MenuItem label="Page history" testid="page-opt-history" onClick={() => { setHistoryOpen(true); close(); }} />
+  ```
+  Requires lifting `historyOpen` setter into a context or passing as prop. Improves discoverability and aligns with Notion's pattern.
+
+### I-5102 — Surface block-scoped comments via inline indicator + popover (medium, open)
+- Linked to B-5102 / B-5010. Today `Comment.blockId` is write-only. Two options: (a) keep the field and render a yellow comment dot on the parent block (e.g., `<button data-testid="block-comment-marker-<bid>">💬</button>` near the drag-handle), opening a thread panel; (b) drop the field entirely from `addComment` and the `Comment` type. Pick one — leaving it half-implemented is worse than either path.
+
+### I-5103 — Templates page would benefit from a "Custom templates" section (low, open)
+- See B-5110. /app/templates lists 8 hard-coded templates from `templates` array. The Page History snapshot mechanism + the `state.templates` schema field (already wired in storage shape) suggest custom user templates are intended but not exposed. Add an "Add to Templates" `MenuItem` on `PageOptionsMenu` and a "Your templates" section above the 8 starter cards.
+
+### I-5104 — Cmd+K palette should highlight the matched token in block excerpts (low, open)
+- See B-5107. The block-match label is currently "B5100ALPHA foo bar B5100BETA · Welcome" — the matched tokens are not visually emphasized. Wrap each token match in a `<mark>` (or apply a CSS class) inside `blockMatches.push(...).label`. Standard search-result polish; low effort.

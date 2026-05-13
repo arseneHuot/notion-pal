@@ -5404,3 +5404,40 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5012 / B-5013 — deleteDatabase crash on legacy views — fixed (commit bd0d3fa) — P1
 - Fix: `deleteDatabase`'s per-other-DB cleanup now coalesces `db.properties`, `db.views`, and per-view `propertyOrder` / `hiddenProperties` with `?? []`. Legacy / imported DBs whose views were persisted before those fields were required no longer trip a swallowed TypeError. Verified live: deleting a trashed DB whose view lacks both fields succeeds end-to-end (DB removed from state, no ErrorBoundary).
+
+## 2026-05-13 — B-5100 series
+
+### B-5100 — deleteDatabase legacy view repro (acceptance, ok / fixed)
+- Re-verified B-5012/B-5013 fix. Seeded `db_b5100_legacy_trashed` (trashed) AND `db_b5100_legacy_active` (live), both with a single view missing both `propertyOrder` AND `hiddenProperties`. Clicked `delete-forever-db-db_b5100_legacy_trashed`. Result: `state.databases` no longer contains the trashed id, `db_b5100_legacy_active` preserved unchanged, zero console.error, no "didn't load" / ErrorBoundary fallback. The defensive `?? []` fix from bd0d3fa holds.
+
+### B-5101 — Moving a page across teamspaces leaves children with stale teamspaceId (P1, open)
+- Repro: navigate to a page with subpages (e.g. `pg_mp3loogelnvyiuhq` "Cascade Parent", three children in Private teamspace). Open `page-options` > click `page-opt-move-ts_mp2pz5zwvod19q0j` (Engineering). After move: parent's `teamspaceId = ts_mp2pz5zwvod19q0j`, `parentId = null` — good. But each child still has `teamspaceId = ts_mp2pz5zwqdkgmzis` (Private). Their `parentId` still points to the moved parent.
+- Impact: stale children silently diverge from parent. Sidebar renders children via `parentId` so the tree LOOKS correct, but: (a) `reorderSiblingPages` guard at Sidebar.tsx:231 compares both fields and now blocks legitimate sibling reorders; (b) new subpages created via `page-new-*` use `page.teamspaceId` of the parent (now Engineering), so existing children and any new sibling diverge; (c) if the parent is later deleted/orphaned, surviving children resurface in the WRONG teamspace.
+- Fix: `TopBar.tsx:215` `updatePage(...)` should cascade `teamspaceId` to all descendants (mirror the `deletePage` recursion pattern).
+
+### B-5102 — Block-scoped comments invisible even on a deeply-nested target (P2, open, dup B-5010)
+- Re-confirmed on a freshly-seeded `toggle > callout > text` tower (`pg_b5100_nested`). Seeded `cmt_b5100_nested` with `blockId = blk_b5100_text` and opened `comments-btn`. Comments panel renders nothing; the page body contains no inline marker either. PageComments.tsx:23 explicitly drops `c.blockId != null`. No other consumer references `Comment.blockId` (`grep -rn "c.blockId" src/components` returns zero hits). Either render an inline indicator on the parent block or drop the field — currently it's data corruption waiting to happen.
+
+### B-5103 — Page History feature has no `page-opt-history` entry in the page menu (P3, open)
+- The prompt expected `page-opt-history` but it doesn't exist. Page History is only reachable via `[data-testid="history-btn"]` in the TopBar (the date-stamp button next to Share). The "•••" page menu (`page-options-menu`) has Favorite, Duplicate, Wiki, Word count, Copy link, Export MD, Print, Move-to-*, Trash — no history entry. Discoverability gap: users hovering for "Version history" expect it under "•••". The dialog itself works (`snapshot-now` writes a new entry to `page.history[]`, `restore-<id>` restores).
+
+### B-5104 — AI Cmd+J rapid keystrokes are deterministic (acceptance, ok)
+- Counter to the lingering B-5011 note: 10 rapid `window.dispatchEvent` of `KeyboardEvent('keydown', {key:'j', metaKey:true})` from CLOSED state lands on CLOSED after ≥200ms settle; 11 rapid lands on OPEN. Each `setOpen((v)=>!v)` correctly composes. The earlier B-5011 report appears to be a measurement artifact (DOM inspected too quickly before React flushed).
+
+### B-5105 — Cross-tab StorageEvent for foreign uid is correctly ignored (acceptance, ok)
+- Dispatched a `new StorageEvent('storage', { key: 'notion-clone:user:<other-uid>', newValue: '{...empty pages...}' })` and posted `BroadcastChannel('notion-clone').postMessage({type:'rehydrate', userId:'other-uid-different'})`. Sidebar page count unchanged (125 → 125). store.ts:147 + store.ts:163 both gate on `e.key === userKey(uid)` / `data.userId === uid`. Security boundary intact.
+
+### B-5106 — Sub-page creation via sidebar `+` button works AND appears in tree (acceptance, ok)
+- Clicked `page-new-pg_mp2pz5zwikifg7r3` (the "+ subpage" affordance on Welcome). Post-state: new `pg_mp3tuiqplq2drdbg`, parentId = Welcome, sidebar testid `sidebar-page-pg_mp3tuiqplq2drdbg` mounted, URL navigated to the new page. Note: this path does NOT insert a `sub-page` block on the parent (only the slash command path does — Block.tsx:439-451). Both flows are intentional; documenting the divergence.
+
+### B-5107 — Cmd+K block-match spans newline-separated tokens (acceptance, ok)
+- Seeded `blk_b5100_cmdk_test` with content `"B5100ALPHA\nfoo bar\nB5100BETA"`. Opened palette, typed `B5100ALPHA B5100BETA`. Result: a single block match surfaces ("¶ B5100ALPHA foo bar B5100BETA · Welcome"). CommandPalette.tsx:46 splits the query on `\s+` and `allMatch(stripHtml(b.content).toLowerCase())` looks each token up independently. Newlines are normalized by `stripHtml` so cross-newline matching works.
+
+### B-5108 — Filter `is-not-empty` on multi-select returns rows with non-empty arrays (acceptance, ok)
+- DB `db_mp3jj2jnavmaxi0e` (4 rows total, multi-select `Tags` set only on `row_mp3jk8zuxoypboda`) already has `flt_2: {operator:'is-not-empty', propertyId:'prop_mp3jj2jnh8n0aijp'}` on the All view. Navigated `/app/db/...` — only one `row-row_*` testid rendered, matching the row that has Tags. filter.ts:57-58 handles `Array.isArray && length===0` correctly. Edge cases (null, '', `['']`) all evaluate per spec.
+
+### B-5109 — Typing in AI input does not trigger Cmd+K accidentally (acceptance, ok)
+- Opened AI panel via `ai-btn`, focused `ai-input`, dispatched plain `'k'` keydown then set value to `"k"`. Palette did NOT open. Separately, Cmd+K WHILE focused on AI input DOES open the palette — this is expected (CommandPalette listens on window). No regression.
+
+### B-5110 — /app/templates lists 8 templates with stable testids and clicking creates a page (acceptance, ok)
+- Navigated to `/app/templates`. Renders 8 cards: `template-meeting-notes`, `-project-brief`, `-daily-journal`, `-reading-list`, `-okrs`, `-runbook`, `-decision-log-adr`, `-1-1-agenda`. Clicked Meeting Notes — `pages` map grew by 1, navigated to new `pg_*` with title "Meeting notes" and 9 seeded blocks. Clean E2E.

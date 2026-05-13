@@ -564,6 +564,45 @@ export function createPage(input: {
   return id;
 }
 
+/**
+ * Move a page to a new teamspace AND cascade the same teamspaceId to every
+ * descendant page so the entire sub-tree stays consistent (B-5101 / I-5100).
+ * Also clears parentId on the root (it becomes a top-level page in the
+ * destination teamspace) — descendants keep their existing parentId so the
+ * tree shape is preserved.
+ */
+export function movePageToTeamspace(id: string, teamspaceId: string | null) {
+  setState((s) => {
+    const root = s.pages[id];
+    if (!root) return s;
+    const newPages: Record<string, Page> = { ...s.pages };
+    const now = Date.now();
+    // BFS over descendants by parentId
+    const queue: string[] = [id];
+    const seen = new Set<string>();
+    while (queue.length > 0) {
+      const pid = queue.shift()!;
+      if (seen.has(pid)) continue;
+      seen.add(pid);
+      const p = newPages[pid];
+      if (!p) continue;
+      const isRoot = pid === id;
+      newPages[pid] = {
+        ...p,
+        teamspaceId,
+        // Only the root becomes a top-level page; descendants keep parentId
+        // so the tree shape (and the sidebar's nested rendering) is intact.
+        parentId: isRoot ? null : p.parentId,
+        updatedAt: now,
+      };
+      for (const child of Object.values(s.pages)) {
+        if (child.parentId === pid && !seen.has(child.id)) queue.push(child.id);
+      }
+    }
+    return { ...s, pages: newPages };
+  });
+}
+
 export function updatePage(id: string, patch: Partial<Page>) {
   setState((s) => {
     const page = s.pages[id];
