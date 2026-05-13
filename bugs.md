@@ -4235,3 +4235,10 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-3417 — `view-menu-v_b` crash on fresh load (P0 regression, open) — confirms B-3400
 - After full page reload + login, clicking `view-menu-v_b` still triggers the same global error boundary "Cannot read properties of undefined (reading 'includes')". 100% reproducible.
 - Severity: P0.
+
+### B-3400 / B-3408 / B-3417 — view-menu crash on undefined hiddenProperties — fixed (commit e878544) — P0 REGRESSION
+- Fix: ViewMenu in InlineDatabase.tsx now reads `const hidden = view.hiddenProperties ?? []` at the top of the `db.properties.map(...)` callback and uses it for both the checkbox state and the toggle handler. View documents written before the field existed (or after malformed import) no longer crash the entire DB page. Verified: setting hiddenProperties to undefined and opening the menu renders view-delete-* and view-addprop-* items, no ErrorBoundary trip.
+- Also unblocks B-3408 (filter/sort/group UI unreachable due to crash).
+
+### B-3412 — Inline toolbar lacked underline — fixed (commit e878544) — closes I-3211
+- Fix: Added a new ib-underline button between italic and strikethrough, wired to `exec("underline")` and the existing `active.underline` toggle state.
