@@ -5866,3 +5866,52 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5909 — Block-anchor chip stays enabled when target missing — fixed (commit 640a856)
 - Fix: PageComments queries `[data-block-id]` to detect missing targets. Chip renders disabled with strike-through, "(missing)" suffix, tooltip "The referenced block no longer exists".
+
+### B-6001 — Verified B-5910 fix holds: trashed sub-page body NOT inlined in export (re-verify, fixed)
+- Steps: injected parent `pg_b6001_parent_P` + sub-page block pointing to trashed page `pg_b6001_trashed_T` ("TRASHED-T-BODY-MARK"). Dispatched `export-page-markdown` with `{noDownload:true}`.
+- Observed: `__lastExportedMarkdown` = `# Parent Page P (B-6001)\n\nParent body content P-BODY-MARK\n\n🗑️ [Trashed Sub-Page T](/app/p/pg_b6001_trashed_T)\n`. Parent body inlined, trashed body omitted, trashed page rendered as link.
+- Status: B-5910 confirmed fixed. Guard at export-markdown.ts:172 (`!target.isInTrash`) is active.
+
+### B-6002 — Verified B-5909 fix holds: missing-block comment anchor disabled + line-through (re-verify, fixed)
+- Steps: injected `cmt_b6002_missing` with `blockId:"nonexistent_blk"` on parent P. Opened comments via `open-comments` event.
+- Observed: anchor `comment-block-anchor-cmt_b6002_missing` has `disabled=true`, class `line-through`, text "↑ on block (missing)", tooltip "The referenced block no longer exists".
+- Status: B-5909 confirmed fixed in PageComments.tsx:267-302.
+
+### B-6003 — All-trashed sub-pages: parent export emits link list only (passes, fixed)
+- Steps: parent `pg_b6003_parent` with two sub-page blocks pointing to trashed `pg_b6003_t1`/`t2` (both `isInTrash:true`, content `HIDDEN-T1/T2-CONTENT`). Triggered export.
+- Observed: `# Parent All-Trashed (B-6003)\n\n🪶 [Trashed Sub T1](...)\n\n🪶 [Trashed Sub T2](...)\n`. Zero leakage of HIDDEN-* content. No headings.
+- Status: works as designed; B-5910 fix covers this edge case too. No bug.
+
+### B-6004 — Cross-tab trash flip: parent's export updates after BroadcastChannel rehydrate (passes, fixed)
+- Steps: parent `pg_b6004_parent` with sub-page block → active `pg_b6004_sub_active` ("ACTIVE-BODY-CONTENT"). Exported once (inlined). Then mutated storage to set `isInTrash=true` and broadcast `rehydrate`. Re-exported.
+- Observed: first export inlines `## ✅ Active Sub` + ACTIVE-BODY-CONTENT. After rehydrate: just `✅ [Active Sub (B-6004)](...)`. Cross-tab path works.
+- Status: pass. Note: only verified via BroadcastChannel path; same-tab `storage` event doesn't fire so this leans on BC. Adequate within one browser.
+
+### B-6005 — Map view missing from NewViewButton dropdown (P2, open)
+- File: src/components/database/InlineDatabase.tsx:269. Dropdown lists `["table","board","calendar","gallery","list","timeline","chart","form"]` — `"map"` absent.
+- But the switch on :249 has a `case "map"` and `ViewType` (types.ts:433) includes `"map"`. Users cannot create a map view from UI; only via direct store mutation.
+- Expected: include `"map"` in the dropdown so the type union, switch, and UI are coherent.
+
+### B-6006 — Block-scoped comment survives trash + restore cascade cleanly (passes)
+- Steps: parent `pg_b6005_parent`, child `pg_b6005_child` with block `blk_b6005_child_p` and comment `cmt_b6005_blkscoped` (blockId set). Trashed child via mutation, then clicked banner-restore.
+- Observed: comment present after trash, present after restore; binding to pageId/blockId intact. B-5408 followup behavior holds for block-scoped comments.
+
+### B-6007 — Resolve / unresolve a block-scoped comment both toggles work (passes)
+- Steps: on restored child page, opened comments, clicked `resolve-cmt_b6005_blkscoped`. State flipped to `resolved:true`, label changed Resolve → Resolved. Clicked again, flipped back to `resolved:false`, Resolved → Resolve.
+- Status: works as expected. No B-5811-style stickiness.
+
+### B-6008 — Public page (/p/<slug>) does NOT inline sub-pages, only links (by design? observe)
+- Steps: published parent `b6007-public-parent` containing a sub-page block to a published sub `b6007-pub-sub` ("PRIVATE-SUB-CONTENT"). Opened `/p/b6007-public-parent`.
+- Observed: rendered as `<a href="/p/b6007-pub-sub">🔓 Published Sub</a>` (link only, body NOT inlined). Unpublished variant renders "(unpublished)" chip.
+- Status: intentional divergence from app-side export (which inlines depth ≤ 3). Note for parity: if a user expects "Publish to web" to include sub-page bodies, today it doesn't. Tracked here for awareness, no fix needed unless product asks for parity.
+
+### B-6009 — Cmd+K returns same page TWICE when query hits both title and block content (P2, open)
+- Steps: page `pg_b6009_dedupetest` titled "Dedupe ZZQUACKZZ Title" with block "Body containing ZZQUACKZZ token". Opened palette via Cmd+K, typed "ZZQUACKZZ".
+- Observed: two results: (1) Pages group "🦆 Dedupe ZZQUACKZZ Title", (2) Block matches group "¶ Body containing ZZQUACKZZ token · Dedupe ZZQUACKZZ Title". Same destination page.
+- Expected: dedupe — if the page is already present in Pages, skip its block-match (or vice versa). CommandPalette.tsx:204-250 should track seen pageIds.
+
+### B-6010 — Cmd+K block-result activation drops caret / selection in source editor (P2, open)
+- Steps: focused a contenteditable on parent P, set caret at start. Opened palette (captures range). Searched "ZZQUACKZZ", clicked the ¶ block result.
+- Observed: palette closes, navigates to target page, but `document.activeElement` returns to `BODY`. Source-page caret never restored even when staying on same page; even on the destination page no editor focus.
+- Cause: action callback at CommandPalette.tsx:228-244 calls `setOpen(false)` directly, skipping `restoreSelection()` (the path used by click-outside / Escape). Page-item and action paths share the same gap. Mix of B-5608 + B-5704: navigation works but cursor is lost.
+- Expected: call `restoreSelection()` before navigation, OR focus the highlighted block's contenteditable after the scroll-into-view.

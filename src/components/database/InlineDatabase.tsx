@@ -266,7 +266,7 @@ function NewViewButton({ databaseId, onCreate }: { databaseId: string; onCreate:
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 bg-popover border border-border rounded-md shadow-lg z-30 w-48">
-          {(["table", "board", "calendar", "gallery", "list", "timeline", "chart", "form"] as View["type"][]).map((t) => (
+          {(["table", "board", "calendar", "gallery", "list", "timeline", "chart", "form", "map"] as View["type"][]).map((t) => (
             <button
               key={t}
               onClick={() => add(t)}

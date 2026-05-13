@@ -1897,3 +1897,21 @@ Priority: high / medium / low.
 
 ### I-5905 — AI textarea cap exposed as magic number 160 in two spots (P3, open)
 - File: src/components/ai/AIChat.tsx:337 (`max-h-40`) and :344 (`Math.min(160, ...)`). The two must stay synchronized; today they're 160px + 10rem-via-Tailwind. Refactor either to a named constant (e.g. `AI_TEXTAREA_MAX_PX = 160`) and reuse, or drop the `style.height` calc in favor of `field-sizing: content` (browser support permitting).
+
+### I-6001 — Add `map` to NewViewButton dropdown (P2, open)
+- See B-6005. src/components/database/InlineDatabase.tsx:269 lists 8 of 9 ViewType values. Add `"map"` so the dropdown matches the type union and the switch already at :249. Also surface a sensible default `mapViewIcon` in `viewIcon()` (:163-176).
+
+### I-6002 — Dedupe Cmd+K results: skip block-match for pages already in Pages group (P2, open)
+- See B-6009. In CommandPalette.tsx:204-250, build a `Set<string>` of `pageItems` page ids and skip blockMatches whose `p.id` is in the set. Alternative: prefer the block-match (it carries snippet context) and remove the page-item — but Pages-first is the lower-risk change.
+
+### I-6003 — Restore caret after Cmd+K block / page navigation (P2, open)
+- See B-6010. Each action callback should call the existing `restoreSelection()` before `setOpen(false)`. Block-match action additionally could focus the contenteditable inside the destination block after `scrollIntoView`. This makes Cmd+K → resume-typing feel native.
+
+### I-6004 — Public page sub-page block could inline published-sub bodies for hub pages (P3, open)
+- See B-6008. Today `/p/<slug>` always renders sub-page blocks as a link, even when the sub is also published. If product wants hub-style indexes ("Public Wiki" pattern), mirror the app-side inline behavior (depth-capped) for `target.isPublished && !target.isInTrash`. Otherwise document the current behavior as intentional.
+
+### I-6005 — Cross-tab `storage` event path is untested by current rehydrate flow (P3, open)
+- See B-6004. Same-tab `localStorage.setItem` does NOT fire the `storage` event in the writing tab; only BroadcastChannel. If BC is unavailable (older Safari, private mode), cross-tab sync may degrade. Add a fallback that calls `_state = rehydrate()` after writes that explicitly want a self-resync, OR document the BC dependency.
+
+### I-6006 — Block-scoped comment count not surfaced on the trashed-page banner (P3, open)
+- See B-6006. When a page enters trash with N block-scoped comments, the banner is silent. Consider "This page has 2 comments that will be hidden until restore." so users have a hint before permanent-delete.

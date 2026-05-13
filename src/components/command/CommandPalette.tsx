@@ -205,9 +205,14 @@ export function CommandPalette() {
     if (q.length >= 2) {
       // Surface up to 10 block-snippet matches (raised from 5, B-4214). One
       // per page so a single chatty page can't crowd out other matches.
+      // Dedupe against `pageItems` — if a page is already in the Pages
+      // group (title match), skip its block matches to keep the result
+      // list compact (B-6009 / I-6005).
       const BLOCK_MATCH_CAP = 10;
+      const pagesAlreadyListed = new Set(matchingPages.map((p) => p.id));
       for (const p of Object.values(pages)) {
         if (p.isInTrash) continue;
+        if (pagesAlreadyListed.has(p.id)) continue;
         if (blockMatches.length >= BLOCK_MATCH_CAP) break;
         for (const bid of p.blocks ?? []) {
           const b = blocks[bid];
