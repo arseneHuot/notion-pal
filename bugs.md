@@ -7130,3 +7130,53 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-8204 — URL cell dark-mode contrast — fixed — P2
 - `URLCell` class now `text-blue-600 dark:text-blue-400`. `text-blue-400` resolves to oklch(0.707 0.165) ≈ 7:1 on `bg-card` in dark mode — clears WCAG AA easily. Light mode still uses `text-blue-600`.
+
+
+## 2026-05-13 — Iteration 8300 (ShareDialog / slug validation / a11y)
+
+### B-8300 — ShareDialog accepts empty/whitespace/special-only/unicode slug; published URL becomes literal `/p/` (collides for every such page) — P1 — open
+- File: `src/components/page/ShareDialog.tsx:6-8, 75-87`. `slugify("")`, `slugify("   ")`, `slugify("!!!@@@")`, `slugify("中文")`, `slugify("中文العربية")` all return `""`. The input's `onChange` calls `setSlug(s)` then `updatePage(page.id, { publishSlug: safe })` where `safe = uniqueSlug(s, page.id, pages)`. `uniqueSlug` only checks for collisions among non-empty slugs (`p.publishSlug` truthiness via Set lookup), so `""` is NEVER treated as "taken". As a result two or more pages can each persist `publishSlug = ""` while `isPublished = true`, and the displayed public URL is literally `http://localhost:8080/p/` (verified live — page.publishSlug stored as `""`).
+- Repro:
+  1. Open any page, click `share-btn`, click `publish-toggle`.
+  2. Clear the `public-slug` input (set value to `""` or `"!!!"`, both slugify to `""`).
+  3. Re-read `state.pages[id]`: `isPublished: true, publishSlug: ""`. Re-read shown URL: `…/p/`.
+  4. Repeat on a second page — both now collide on the same empty slug, but `slug-collision-warning` does NOT fire (the collision predicate `slug && ...` short-circuits on falsy slug).
+- Severity P1: a "publish" workflow that silently produces an un-resolvable URL with no slug, no warning, no way for the user to know the link is broken. Compound with a routing layer (`/p/:slug`) that almost certainly 404s or routes to the first page lexicographically.
+- Fix sketch: in `onChange`, if `slugify(value) === ""` reject the commit, keep the user's keystroke in local state, and surface an inline warning ("Slug can't be empty — use letters or numbers"). Disable the Copy button while slug is empty. The Publish action's slug-derivation already falls back to `slugify(page.title || page.id)` — re-run that fallback whenever slug becomes empty so an empty input never lands in store.
+
+### B-8301 — Page slug has no length cap — 290+ character slugs persist and render in URL — P3 — open
+- File: `src/components/page/ShareDialog.tsx:75-87`. Verified live: pasted a 291-character string in `public-slug`; `slugify` returned a 291-char output (only strips non-alphanumeric, no truncation). The full string was written to `page.publishSlug` and shown in the URL preview as `http://localhost:8080/p/aaaaaa…[291 chars]`.
+- Browsers cap URL path segments well above this, but the input field has no `maxlength`, and the displayed URL line wraps weirdly past ~200 chars. Worse: a malicious user could publish a page with a 50KB slug — every render of any sidebar / breadcrumb that includes the slug pays the rendering cost.
+- Fix sketch: in `slugify`, cap output at 64 characters: `const out = s.toLowerCase()…; return out.slice(0, 64);`. Add `maxLength={64}` on the input as defense in depth. (Notion's URL slugs are ~30 chars typical.)
+
+### B-8302 — ShareDialog does not close on Escape — P3 — open
+- File: `src/components/page/ShareDialog.tsx:22-117`. No `useEffect`/keydown listener wired up. Verified live: dialog opens via `share-btn`, dispatching `Escape` (window + document, bubbles + cancelable) does NOT close the dialog. The only ways to dismiss are (a) the X close button or (b) clicking the overlay.
+- `RowDetailDrawer` (db drawer) does subscribe to `keydown` for Escape and closes correctly. Same treatment should apply to ShareDialog and any other modal (PageHistoryDialog, IconPicker, CoverPicker probably).
+- Severity P3: low-impact discoverability nit; users habitually press Esc to dismiss a modal. Not closing breaks the convention.
+- Fix sketch: add a `useEffect` that registers `window.addEventListener("keydown", e => e.key === "Escape" && onClose())` while `open === true`, cleans up on unmount or `open` falsy. Mirror the pattern from `RowDetailDrawer.tsx:21-29`.
+
+### B-8303 — Slash menu arrow keys do not wrap around at boundaries — P3 — open
+- File: `src/components/editor/SlashMenu.tsx:21-34`. ArrowDown uses `Math.min(items.length - 1, i + 1)` and ArrowUp uses `Math.max(0, i - 1)`. Verified live: with 41 commands visible, ArrowDown pressed 50 times leaves activeIndex at the last item (`slash-columns-4`); pressing ArrowDown once more does NOT wrap to the first item (`slash-text`). Symmetric problem on ArrowUp at top.
+- Notion's slash menu wraps both directions. The focus-list explicitly calls this out: "arrow wraparound".
+- Severity P3: minor keyboard ergonomics. Users who press ArrowUp from the top expecting to land at the bottom item must instead scroll the entire list to reach it.
+- Fix sketch: ArrowDown → `(i + 1) % items.length`; ArrowUp → `(i - 1 + items.length) % items.length`. One-line change each.
+
+
+## 2026-05-13 — B-8300 batch fixes
+
+### B-8300 — ShareDialog empty/invalid slug guard — fixed — P1
+- `slugify` returns `""` for punctuation-only / emoji / non-Latin input. The dialog now:
+  - Detects "user typed something but it normalized to empty" and keeps the previous valid slug committed, surfaces `slug-invalid-warning` ("Slug needs at least one letter or number. Keeping the previous slug.").
+  - When the user clears the input entirely, falls back to `fallbackSlug(page)` = `slugify(page.title)` or `page-<id-suffix>` if title is also empty.
+  - `Publish` toggle uses `slug || fallbackSlug(page)` so the first commit is always non-empty.
+  - `Copy` button is `disabled` while `slug` is empty.
+- Verified live: typing `!!!@@@` into `public-slug` keeps `publishSlug: "welcome"` (was: `""`), warning surfaces, dialog stays usable.
+
+### B-8301 — Slug length cap — fixed — P3
+- `slugify` slices output to `MAX_SLUG_LEN = 64`. Input gains `maxLength={64}` as defense in depth. URL preview can no longer be a 50KB string.
+
+### B-8302 — ShareDialog closes on Escape — fixed — P3
+- `useEffect` registers a `keydown` listener while `open`; calls `onClose()` on `Escape`. Mirrors `RowDetailDrawer`'s pattern. Verified live.
+
+### B-8303 — Slash menu arrow wraparound — fixed — P3
+- `ArrowDown` → `(i + 1) % items.length`; `ArrowUp` → `(i - 1 + items.length) % items.length`. Both wrap when items.length > 0; both fall back to index 0 when the list is empty.

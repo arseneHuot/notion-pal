@@ -2482,3 +2482,33 @@ Priority: high / medium / low.
 - Companion to B-8203. Today, dropping on a collapsed `<>` toggle just inserts the dragged block as a sibling AFTER the toggle, never as a child. Notion expands the toggle after a brief hover and lets you drop into the (now-visible) children list.
 - Suggestion: in the toggle block's `onDragOver`, after ~500ms of sustained hover, set `tog.open = true` (no save, transient) so children become drop targets. On `dragleave`/`dragend`, restore the original open state if no drop occurred.
 
+## 2026-05-13 — Iteration 8300 (share / share-perms / search / trash / shortcuts)
+
+### I-8300 — No find-in-page search (Cmd+F equivalent) — P2 — open
+- Verified live: no listener for `Cmd+F` / `Ctrl+F` in the app. `grep -r "metaKey.*'f'\\|FindInPage\\|find-in-page" src/` returns nothing. The only search affordance is the global command palette (`Cmd+K`), which searches across pages but does NOT search within the current page.
+- Notion supports `Cmd+F` to open a tiny floating overlay that highlights matches inside the current page, with next/prev arrows. Long docs (200+ blocks) are essentially un-navigable without it.
+- Suggestion: register a global `keydown` for `(meta|ctrl)+f` when the route matches `/app/p/:id`. Mount a small `FindInPage` component pinned to top-right with an input, match count, prev/next buttons, and Esc to close. Highlight matches via wrapping a `<mark>` in `block.text` runs (or via a CSS Highlights API `Highlight` instance if available).
+
+### I-8301 — Dark-mode toggle has no keyboard shortcut (Cmd+Shift+L convention) — P3 — open
+- File: `src/components/layout/TopBar.tsx:148-151` renders the `dark-btn` button, click-only. The Command Palette has a "Toggle dark mode" entry (`CommandPalette.tsx:201`) but no direct global hotkey. Notion's default is `Cmd+Shift+L`; Linear / VSCode also offer `Cmd+K Cmd+T`.
+- Suggestion: add a global keydown listener for `Cmd+Shift+L` that calls `toggleDarkMode()`. Wire into the same listener that drives `Cmd+K` for the palette.
+
+### I-8302 — No auto-purge of trashed items after N days — P3 — open
+- File: `src/routes/app.trash.tsx` and `src/lib/store.ts`. `Page.trashedAt` is recorded at delete time, but no timer or hydration-pass purges items older than a retention window. Notion default is 30 days. Trash grows monotonically until the user opens the trash route and clicks "Empty trash" manually.
+- Implication: a user who soft-deletes a 4MB-attachment-heavy page pays the localStorage quota cost indefinitely. Compound with the (already-mitigated) `QuotaExceededError` path — auto-purge would reduce the surface area considerably.
+- Suggestion: on `normalizeState` rehydrate, iterate pages and `database`s with `isInTrash && trashedAt && (Date.now() - trashedAt) > 30 * 86400 * 1000` and hard-delete them. Show a `trash-retention-notice` line at the top of the trash route ("Items in trash are auto-deleted after 30 days").
+
+### I-8303 — ShareDialog "People with access" is a static label — no per-person grants UI — P2 — open
+- File: `src/components/page/ShareDialog.tsx:109-112`. The section renders one line: "Workspace members get access automatically". No input to add a guest by email, no role picker (Viewer/Editor/Owner), no list of current members with revoke buttons.
+- Implication: the only "permission" today is the binary public-publish toggle. There's no way to share with a single external collaborator (without making the page world-readable). This is a feature gap, not a defect, but worth a tracked I-ticket.
+- Suggestion: stub a `<MemberRow>` list with a single mocked entry ("You — Owner"), an "Add people" input, and a Role dropdown. Persist to a `page.sharedWith: { userId, role }[]` array. Even an offline-only mock provides the affordance shape until backend lands.
+
+### I-8304 — Row detail drawer commits every keystroke; no batched "Save" or unsaved-state cue — P3 — open
+- File: `src/components/database/RowDetailDrawer.tsx:75-91`. Every cell-edit calls `updateRow(row.id, { values: { … } })` on each `onChange`. There's no batched apply, no "discard changes" affordance, no visual indicator that a field has unsaved state. Closing the drawer (Esc, X, or click-outside) just dismisses it; the last keystroke is already committed.
+- This is mostly fine for the local-only store, but it means every character typed in the detail drawer's title or text fields persists to localStorage immediately — visible perf cost on pages with many auto-snapshots.
+- Suggestion: debounce `updateRow` at the cell level (say 300ms after last keystroke). Keep the dirty cell value in local state; show an unobtrusive saved-indicator dot near the field name when persisted. Combine with a "Save and close" button or Cmd+Enter.
+
+### I-8305 — Page history dialog has no "Save snapshot" cue while you edit — P3 — open
+- Observed: the history modal text reads "No history yet. Save a snapshot to begin." The Editor never auto-snapshots in the background (only manual via the modal's button), so a user who never opens the history dialog has zero history, ever.
+- Suggestion: add a background timer that snapshots a page after 60s of edits or every N writes (whatever the auto-snapshot job that already exists is — B-8000 referenced "auto-snapshot restore", so the snapshot job exists; just confirm it's running for everyone and surface "Last auto-saved 2m ago" near the history button).
+

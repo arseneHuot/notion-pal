@@ -21,10 +21,12 @@ export function SlashMenu({ query, position, onSelect, onClose }: Props) {
     function handler(e: KeyboardEvent) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setActiveIndex((i) => Math.min(items.length - 1, i + 1));
+        // B-8303 — wrap to the first item when at the end. Matches Notion's
+        // slash menu behaviour; previously clamped at items.length - 1.
+        setActiveIndex((i) => items.length === 0 ? 0 : (i + 1) % items.length);
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        setActiveIndex((i) => Math.max(0, i - 1));
+        setActiveIndex((i) => items.length === 0 ? 0 : (i - 1 + items.length) % items.length);
       } else if (e.key === "Enter") {
         e.preventDefault();
         if (items[activeIndex]) onSelect(items[activeIndex]);
