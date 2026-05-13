@@ -5485,3 +5485,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5211 — Page submit handler invoked correctly via Enter key on form (acceptance, ok)
 - During B-5204 verification, the `<form>` element handles `onSubmit={e => { e.preventDefault(); submit(); }}`. Pressing Enter inside any field correctly fires submit. No accidental anchor click / page-reload behavior.
+
+### B-5210 — Public form fell back to text inputs for person/files/relation — fixed (commit a34a316)
+- Fix: form `fields` memo filters out `person`, `files`, and `relation` types in addition to the system-managed ones. Visitors no longer see broken plain-text widgets for those columns; form-builders should use select/text columns for any public-collectible reference.
