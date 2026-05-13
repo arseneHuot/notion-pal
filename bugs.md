@@ -4828,3 +4828,41 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4010 — Calendar view of DB renders no event chips / no drag target (P1, open — re-confirms B-2907)
 - Navigated to `/app/db/db_mp3lhvrxwl40mnbf/view_mp3lhvrxrj0lp5pi` (calendar view). No `[draggable=true]` elements, no `[data-row-id]`, no grid-cols-7 calendar grid in the DOM. The calendar view renders an empty container without month grid or event chips — there's nothing to drag-reschedule. B-2907 remains open: calendar drag-reschedule cannot be tested because the calendar UI itself is missing. Severity P1: feature gap on a 1st-class view type.
+
+### B-4011 — Calendar view: chips are draggable but day cells have no drop target (P1, open — re-confirms B-2907)
+- On `view_mp3lhvrxrj0lp5pi`: `cal-event-row_<rowId>` is `draggable=true` with an onDragStart handler. The 7-col day grid renders, but day cells are plain `<div class="border-r border-b ... min-h-[80px]">` with no `data-day` / `data-date` attribute, no `data-testid`, no onDragOver / onDrop in React props (only `className`/`children`). The drag chip can be picked up but there's nowhere to drop it; the date prop remains unchanged. To close B-2907, add `data-day="YYYY-MM-DD"` and on the day cell wire `onDragOver={preventDefault}` + `onDrop={handler}` to call a `rescheduleEvent` store action.
+
+### B-4012 — AI textarea multi-line input verified (acceptance for B-3210/B-3806/B-3911)
+- `[data-testid="ai-input"]` is now a TEXTAREA (was INPUT). Placeholder reads "Ask anything... (Shift+Enter for newline)". Setting `value` to "Line 1\nLine 2\nLine 3" preserves all three newlines and the textarea auto-grows: height jumped from default to 68px after the multi-line content. Closes B-3210/B-3806/B-3911.
+
+### B-4013 — Cmd+K block-match navigates + highlights matching block (acceptance)
+- Opened palette via `sidebar-search`, typed "orientation" (a string only present in a paragraph block on Getting Started, not in a page title). Palette shows two sections: "Pages" and "Block matches". The block match `cmd-block-blk_mp2pz5zwsytlvger` shows the matched paragraph snippet `…ome! Here's a quick orientation.  ·  Getting Started`. Clicking it navigated to `/app/p/pg_mp2pz5zw6oflgc0j` and the target block gets `ring-1 ring-blue-400` highlight ring on its container. Verified.
+
+### B-4014 — Mobile (375px) still has no drawer / hamburger; sidebar overlays content (P1, open — re-confirms B-3521/3522)
+- Resized viewport to 375x812. `<aside class="w-64 ... z-30 md:relative max-md:absolute">` becomes absolutely-positioned and occupies left 0→256 of the 375px viewport. There's no `drawer/menu-toggle/hamburger` testid, no `close-sidebar` accessible from main content while sidebar is closed. Result: 256/375 = 68% of the page is permanently occluded by the sidebar on mobile. `close-sidebar` exists *inside* the sidebar but once dismissed there's no way to reopen it on mobile. Severity P1: the app is essentially unusable below md breakpoint.
+
+### B-4015 — Settings dark-mode toggle persists across reload (acceptance)
+- `data-testid="dark-btn"` flips `documentElement.classList.dark` AND writes `darkMode:<bool>` into `notion-clone:global` localStorage. Hard reload re-reads the persisted value and applies the correct class on mount. Verified one full cycle (true→false→reload→still false→toggle back to true).
+
+### B-4016 — No view duplicate action in view-menu (P2, open — re-confirms B-3624 gap)
+- Clicked `view-menu-view_mp3lhvrxts5dk1bx` — only 3 items visible: `view-rename-`, `view-delete-`, `view-addprop-`. No `view-duplicate-` testid renders. Notion offers "Duplicate view" so users can branch off filters/sorts without rebuilding. Add a `duplicateView(databaseId, viewId)` store action that deep-clones name/filters/sorts/visibility and re-mounts as a new view tab.
+
+### B-4017 — Sidebar pages still not draggable (P1, open — re-confirms B-2908 / B-3712 / B-3616)
+- Walked all sidebar buttons/links: every `[data-testid^="page-link-"]`, `[data-testid^="expand-"]`, and unlabeled page row in `<aside>` has `draggable=false`. No `onDragStart` is wired on the sidebar tree. Users cannot reorder pages, nest a page under another, or move it across teamspaces by drag-and-drop. Server-side `parentId` exists, so all that's missing is the DnD layer.
+
+### B-4018 — DB row drag handles + draggable TRs verified (acceptance for B-3711)
+- On QA DB table view, every `<tr>` has `data-row-id`, `draggable=true`, plus a `row-handle-<id>` span. React props include `onDragStart`/`onDragOver`/`onDrop`. B-3711 closed.
+
+### B-4019 — 50KB paragraph paste shows no jank (acceptance for perf concern)
+- Loaded a paragraph block, focused it, executed `document.execCommand('insertText')` with a 50,004-byte `lorem ipsum` repeat. Synchronous insert took 11ms, full Zustand+re-render settled within 313ms total. No frame drops detected via the timing window; final block.textContent length is 50,011 (matches input). Editor remained responsive.
+
+### B-4020 — Comment edit/delete/reply/resolve buttons lack aria-label (P3, open)
+- All four buttons (`resolve-`, `reply-`, `comment-edit-`, `comment-delete-`) render visible text labels ("Resolve", "Reply", "Edit", "Delete") with no aria-label or title attribute. Screen readers will read the visible text, so this isn't a hard a11y failure — but if the buttons ever become icon-only (e.g. responsive variant) they'd lose all labels. Defensive fix: add aria-label mirroring the text. Severity P3.
+
+### B-4021 — `<img onerror>` in block content stripped from published page (acceptance for sanitization)
+- Constructed a paragraph block with `content: '<img src=x onerror="window._XSS=1">'` and rendered it through the published page route. Output is `<p></p>` — the `<img>` tag (and its `onerror`) is removed entirely. `window._XSS` never set. No `<img>` elements in the DOM. HTML sanitization on published pages is intact for this vector.
+
+### B-2908 / B-3712 / B-3616 / B-3203 — Sidebar page drag-reorder — fixed (commit b7fc151)
+- Fix: PageItem in Sidebar.tsx is now `draggable` with `dragstart`/`dragover`/`drop` handlers. New store action `reorderSiblingPages(sourceId, targetId)` sets the source's `sortOrder` to the midpoint of (target.order, predecessor.order). Page type gains optional `sortOrder?: number` (no migration — falls back to `createdAt`). Sidebar root + child lists now sort by `sortOrder ?? createdAt`.
+- Same parent + teamspace only (cross-teamspace moves go through movePage). Each row exposes `sidebar-page-<id>` testid + `data-page-id`.
+- Verified live: synthetic drag of sib[2] onto sib[0] sets `sortOrder` so source lands before target.
