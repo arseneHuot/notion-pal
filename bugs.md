@@ -4017,3 +4017,90 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3206 — Cmd+K palette crash on undefined title/name — fixed (commit 7cf7822) — P0
 - Fix: CommandPalette filter now uses `(p.title ?? "").toLowerCase()`, `(d.name ?? "").toLowerCase()`, and iterates `p.blocks ?? []` so a page persisted without a title (older schema, malformed write) cannot kill the palette on a single keystroke. Verified: injecting a page `{id, blocks: []}` (no title) and typing "O" returns 17 results, no ErrorBoundary.
+
+
+### B-3205 (re-verified) — Calendar route resilient to malformed DB — confirmed fixed P0
+- Repro: inject `{id:"db_malformed_v34", isInTrash:false}` (no `properties`, no `rows`) into `notion-clone:user:<uid>`, dispatch StorageEvent, navigate to `/app/calendar`.
+- Observed: heading "Calendar" renders. No error-boundary text. No console error.
+- Status: fixed — guard holding across iterations.
+
+### B-3206 (re-verified) — Cmd+K palette resilient to malformed page — confirmed fixed P0
+- Repro: inject `{id:"pg_malformed_v34", blocks:[]}` (no title), open Cmd+K, type "O".
+- Observed: 17+ items render (commands + pages + DBs), no "toLowerCase" error, no boundary text.
+- Status: fixed — guard holding.
+
+
+### B-3210 — AI input is single-line `<input type="text">` — multiline prompts impossible (P2, open)
+- Repro: open Ask AI panel. Set `aiInputEl.value = "Line1\nLine2\nLine3"` then trigger input. Read back `aiInputEl.value`.
+- Observed: value is `"Line1Line2Line3"` (length 15 vs 17). Newlines silently stripped. Submitting "# H\n## H2\n- item" renders user bubble as "# H## H2- item" all on one line. The bubble container has `whitespace-pre-wrap` so it WOULD render newlines if any were present — they're lost at the input layer.
+- Expected: AI prompts often span multiple lines (code, structured questions). Use a `<textarea>` (with Shift+Enter for newline, Enter to send) or contenteditable.
+- Severity: P2 — limits effective AI usage; users can't paste multi-line code.
+
+### B-3211 — AI assistant does not reply when message is sent via programmatic input event (P3, info)
+- Repro: set `ai-input` value via React-aware setter + dispatch `input` event, click `ai-send` (no form submit).
+- Observed: the user bubble appears (`ai-msg-9 = "hello AI"`) but no assistant response is appended, even after 6s+ wait. Dispatching `form.submit` event also did not trigger response on subsequent sends.
+- Note: prior bubbles (ai-msg-0..7) show the assistant DID respond for organic clicks, so the dispatch path likely diverges from the React onSubmit handler. Probably a test-only artifact rather than a user-facing bug.
+- Severity: P3 — flag for engineers as possible E2E test instability.
+
+### B-3212 — Relation→Rollup type change leaves rollup unconfigured (targetPropertyId="") (P2, open)
+- Repro: on db_a, open `prop-header-p_a_to_b` (a relation prop), choose "rollup" type.
+- Observed: state mutates to `{type:"rollup", function:"count", relationPropertyId:"p_a_to_b", targetPropertyId:""}`. Notice `relationPropertyId` == own id (self-referential, nonsensical) and `targetPropertyId` is empty.
+- Expected: when converting a relation prop to a rollup, either (a) preserve link to that relation as the source relation but keep them as separate properties, or (b) open a configuration UI to pick `relationPropertyId` (a different prop) and `targetPropertyId` (a property in the related DB) before persisting. Self-pointing `relationPropertyId` will likely throw downstream when the rollup tries to traverse.
+- Severity: P2 — silent data-shape corruption; rollup is unusable in this state.
+
+
+### B-3213 — Calendar event chips not draggable, drag-reschedule unimplemented (P2, open)
+- Repro: navigate to `/app/calendar` with seeded events. Inspect any event chip (e.g. "Test event B21" in `day-2026-05-12`).
+- Observed: chip is a plain `<div>` (style background-color), `draggable=false`, no `ondragstart`. Drop-targets on `day-YYYY-MM-DD` cells exist but no drag source.
+- Expected: B-2907 wants drag-reschedule. Add `draggable=true` + dragstart/dragend handlers on event chip; on drop into another `day-*` cell, update `event.date`.
+- Severity: P2 — primary calendar feature in Notion; visible regression.
+
+### B-3214 — Form view: required Title not enforced; empty submission creates a blank row (P2, open)
+- Repro: Form view of `db_dates_test` (testid `db-view-v_form`). Click `form-submit-v_form` without filling any field.
+- Observed: row count goes 10 → 11; new row has `values: { p_dt: "" }`. No visible validation error.
+- Expected: Form should require at least the title; submit button disabled until non-empty, or shows inline error.
+- Severity: P2 — pollutes the DB with empty rows; form misses its primary contract.
+
+### B-3215 — Performance regression: keystroke triggers ~20 DOM mutations (was 2 in B-3209) (P2, open)
+- Repro: focus an editable block, attach MutationObserver to body (childList+subtree+attributes+characterData), call `document.execCommand('insertText', false, 'q')`, sleep 220ms. Repeat ×3.
+- Observed: 20, 20, 20 mutations (consistent). Previously B-3209 reported 2 after I-3108 work.
+- Likely cause: a re-render of a sibling collection (toolbar, formatting menu) on each keystroke. Compare against the iteration where the count was 2 — find the diff.
+- Severity: P2 — visible regression vs the documented win.
+
+### B-3216 — Mobile sidebar: open sidebar has no backdrop / no auto-close on link click (P3, open)
+- Repro: viewport 375×667, navigate to `/app/home`, click `open-sidebar`. Sidebar slides in (absolute position, w-64 = 256px). Click a sidebar link (e.g. `sidebar-calendar`).
+- Observed: no semi-transparent backdrop overlay behind the sidebar; clicking outside the sidebar does not auto-close it; navigating to a new route also leaves it open.
+- Expected: mobile drawer pattern — backdrop dims main content + closes on outside-tap, and link clicks dismiss the drawer so the user can see the destination.
+- Severity: P3 — usability nuisance, but does not block functionality.
+
+### B-3217 — Icon-only buttons missing aria-labels: `close-ai`, `ai-send` (P3, open)
+- Repro: any route, AI panel open. Inspect `button[data-testid="close-ai"]` and `button[data-testid="ai-send"]`.
+- Observed: both buttons render only an SVG icon; no `aria-label`, no `title`, no visually-hidden text.
+- Expected: aria-label "Close AI panel" / "Send message" for screen reader users.
+- Severity: P3 — accessibility regression. Note: other icon buttons in the same panel correctly have aria-labels.
+
+
+### B-3218 — Many DB property types not rendered in row cells (P1, open)
+- Repro: navigate `/app/db/db_b` (a.k.a. QA DB with all property types). db_b has 26 properties including formula×4, rollup, files, created-time, last-edited-time, created-by, last-edited-by, verification, unique-id.
+- Observed: row UI only renders cells for: title, relation, text, number, select, date, url, email, phone, checkbox, person, button. **Missing in DOM**: formula, rollup, files, created-time, created-by, last-edited-time, last-edited-by, verification, unique-id.
+- Expected: every property in `db.properties` should have a corresponding row cell (read-only for system properties like created-time / unique-id). Either render placeholders or skip the property header — currently the header (e.g. `prop-header-p_qa_formula_3106 "∑QA_formula"`) sits above nothing.
+- Severity: P1 — visible UI/data mismatch; formula values never display even with a valid expression. This likely explains why B-3107 still feels unfixed — there's nowhere to see the computed formula result.
+
+### B-3219 — Page-options menu does not open via programmatic click events (P3, info)
+- Repro: navigate to any page. Find `[data-testid="page-options"]`. Dispatch `click`, `mousedown+mouseup`, or MouseEvent with coordinates.
+- Observed: no portal opens. No `[role="menu"]` appears. The same button clicked manually works.
+- Cause: likely a Radix/PopperJS pointer-event handler binding that needs synthetic pointer events. E2E test impact only.
+- Severity: P3 — flag for E2E testing infrastructure.
+
+
+### B-3220 — Trash db row-count display ALWAYS reads "0 rows" even when rows exist (P2, open — confirms B-3204)
+- Repro: programmatically create a database `db_3300_trash_with_rows` with `isInTrash:true` and three rows whose `databaseId` matches; dispatch StorageEvent. Navigate to `/app/trash`.
+- Observed: Trash page row shows "🗑Trash with rows 3300 **0 rows** Restore Delete" despite `Object.values(state.rows).filter(r => r.databaseId === id).length === 3`.
+- Expected: count should reflect actual referenced rows so user knows what they're about to permanently delete.
+- Severity: P2 — misleading; users may delete-without-restore thinking the DB is empty.
+
+### B-3221 — Restore DB does not clear `trashedAt` timestamp (P3, open)
+- Repro: trash `db_mixed`, navigate to `/app/trash`, click `restore-db-db_mixed`.
+- Observed: `isInTrash` correctly set to `false`. `trashedAt` left at the stale timestamp (1778641383050 in this run).
+- Expected: also reset `trashedAt = null` on restore. Leaving the field populated risks confusing later audit logic.
+- Severity: P3 — data hygiene only.

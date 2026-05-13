@@ -262,7 +262,13 @@ export function AIChat() {
         >
           New
         </button>
-        <button onClick={() => setOpen(false)} className="p-1 hover:bg-accent rounded" data-testid="close-ai">
+        <button
+          onClick={() => setOpen(false)}
+          className="p-1 hover:bg-accent rounded"
+          aria-label="Close AI chat"
+          title="Close"
+          data-testid="close-ai"
+        >
           <X className="size-4" />
         </button>
       </div>
@@ -320,6 +326,8 @@ export function AIChat() {
             type="submit"
             disabled={busy || !input.trim()}
             className="bg-primary text-primary-foreground rounded p-1.5 disabled:opacity-50"
+            aria-label="Send message"
+            title="Send"
             data-testid="ai-send"
           >
             <Send className="size-4" />

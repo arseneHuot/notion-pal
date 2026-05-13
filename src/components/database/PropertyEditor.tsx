@@ -75,16 +75,16 @@ export function PropertyCell({
     return <PersonCell row={row} value={(v as string[]) ?? []} property={property} />;
   }
   if (property.type === "created-time") {
-    return <span className="text-xs text-muted-foreground">{new Date(row.createdAt).toLocaleString()}</span>;
+    return <span className="text-xs text-muted-foreground" data-testid={`cell-created-time-${row.id}-${property.id}`}>{new Date(row.createdAt).toLocaleString()}</span>;
   }
   if (property.type === "last-edited-time") {
-    return <span className="text-xs text-muted-foreground">{new Date(row.updatedAt).toLocaleString()}</span>;
+    return <span className="text-xs text-muted-foreground" data-testid={`cell-last-edited-time-${row.id}-${property.id}`}>{new Date(row.updatedAt).toLocaleString()}</span>;
   }
   if (property.type === "created-by") {
-    return <span className="text-xs text-muted-foreground">{row.createdBy ? row.createdBy.slice(-6) : "—"}</span>;
+    return <span className="text-xs text-muted-foreground" data-testid={`cell-created-by-${row.id}-${property.id}`}>{row.createdBy ? row.createdBy.slice(-6) : "—"}</span>;
   }
   if (property.type === "last-edited-by") {
-    return <span className="text-xs text-muted-foreground">{row.lastEditedBy ? row.lastEditedBy.slice(-6) : "—"}</span>;
+    return <span className="text-xs text-muted-foreground" data-testid={`cell-last-edited-by-${row.id}-${property.id}`}>{row.lastEditedBy ? row.lastEditedBy.slice(-6) : "—"}</span>;
   }
   if (property.type === "unique-id") {
     return <UniqueIdCell row={row} property={property} database={database} />;
@@ -330,7 +330,7 @@ function PhoneCell({ row, value, property, className }: { row: DatabaseRow; valu
 
 function FilesCell({ row, value, property }: { row: DatabaseRow; value: string[]; property: Property }) {
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="flex items-center gap-1 flex-wrap" data-testid={`cell-files-${row.id}-${property.id}`}>
       {value.length === 0 && <span className="text-xs text-muted-foreground">Empty</span>}
       {value.map((url, i) => (
         <a key={i} href={url} target="_blank" rel="noreferrer" className="text-xs underline truncate max-w-[100px]">
@@ -389,7 +389,7 @@ function UniqueIdCell({ row, property, database }: { row: DatabaseRow; property:
   // Prefer the stable per-row uniqueIdSeq; fallback to a positional index for
   // rows created before the schema migration so old rows stay readable.
   const seq = row.uniqueIdSeq ?? (database.rows.indexOf(row.id) + 1);
-  return <span className="text-xs font-mono text-muted-foreground">{prefix}{prefix ? "-" : ""}{seq}</span>;
+  return <span className="text-xs font-mono text-muted-foreground" data-testid={`cell-unique-id-${row.id}-${property.id}`}>{prefix}{prefix ? "-" : ""}{seq}</span>;
 }
 
 function FormulaCell({ row, property, database }: { row: DatabaseRow; property: Property; database: NotionDatabase }) {
@@ -400,10 +400,10 @@ function FormulaCell({ row, property, database }: { row: DatabaseRow; property: 
     (property as { formula?: string }).formula ??
     "";
   if (!expr.trim()) {
-    return <span className="text-xs text-muted-foreground italic" title="Set an expression for this formula property">—</span>;
+    return <span className="text-xs text-muted-foreground italic" title="Set an expression for this formula property" data-testid={`cell-formula-${row.id}-${property.id}`}>—</span>;
   }
   const result = evaluateFormula(expr, row, database);
-  return <span className="text-xs font-mono">{String(result ?? "")}</span>;
+  return <span className="text-xs font-mono" data-testid={`cell-formula-${row.id}-${property.id}`}>{String(result ?? "")}</span>;
 }
 
 function RollupCell({ row, property, database }: { row: DatabaseRow; property: Property; database: NotionDatabase }) {
@@ -412,7 +412,7 @@ function RollupCell({ row, property, database }: { row: DatabaseRow; property: P
   const relProp = database.properties.find((p) => p.id === rp.relationPropertyId);
   if (!relProp || relProp.type !== "relation") {
     return (
-      <span className="text-xs text-muted-foreground italic" title="Open the property menu to pick a Relation to roll up.">
+      <span className="text-xs text-muted-foreground italic" title="Open the property menu to pick a Relation to roll up." data-testid={`cell-rollup-${row.id}-${property.id}`}>
         configure rollup
       </span>
     );
@@ -420,10 +420,13 @@ function RollupCell({ row, property, database }: { row: DatabaseRow; property: P
   const fn = rp.function ?? "count";
   const linkedIds = (row.values[rp.relationPropertyId] as string[]) ?? [];
   const linked = linkedIds.map((id) => allRows[id]).filter(Boolean) as DatabaseRow[];
-  if (fn === "count") return <span className="text-xs">{linked.length}</span>;
+  const wrap = (children: React.ReactNode) => (
+    <span className="text-xs" data-testid={`cell-rollup-${row.id}-${property.id}`}>{children}</span>
+  );
+  if (fn === "count") return wrap(linked.length);
   if (!rp.targetPropertyId) {
     // Function chosen but no target prop yet — count linked rows as a sane fallback.
-    return <span className="text-xs">{linked.length}</span>;
+    return wrap(linked.length);
   }
   const values = linked.map((r) => r.values[rp.targetPropertyId]).filter((v) => v !== undefined && v !== null);
   let result: unknown = "";
@@ -435,7 +438,7 @@ function RollupCell({ row, property, database }: { row: DatabaseRow; property: P
   else if (fn === "show-original") result = values.join(", ");
   else if (fn === "earliest") result = values.length ? new Date(Math.min(...values.map((v) => Date.parse(String(v))))).toISOString().slice(0, 10) : "";
   else if (fn === "latest") result = values.length ? new Date(Math.max(...values.map((v) => Date.parse(String(v))))).toISOString().slice(0, 10) : "";
-  return <span className="text-xs">{String(result)}</span>;
+  return wrap(String(result));
 }
 
 function RelationCell({ row, value, property }: { row: DatabaseRow; value: string[]; property: Property }) {
@@ -558,6 +561,7 @@ function VerificationCell({ row, value, property }: { row: DatabaseRow; value: {
     <button
       onClick={() => updateRow(row.id, { values: { [property.id]: { verified: !value?.verified } } })}
       className={`text-xs px-1.5 py-0.5 rounded ${value?.verified ? "bg-green-100 text-green-800" : "bg-muted text-muted-foreground"}`}
+      data-testid={`cell-verification-${row.id}-${property.id}`}
     >
       {value?.verified ? "✔ Verified" : "Unverified"}
     </button>

@@ -1323,3 +1323,31 @@ Priority: high / medium / low.
 ### I-3203 — Sidebar pages should be draggable for reordering (medium, open)
 - See B-3209 (drag sweep). Block handles are draggable, but sidebar page tiles have `draggable=false`. Notion lets you drag sidebar pages to reorder, nest under another page, or move to a different teamspace. Consider adding HTML5 drag handlers to page tiles.
 
+
+
+### I-3204 — Use textarea for AI input + auto-grow (high, open)
+- See B-3210. Replace `<input type="text" data-testid="ai-input">` with `<textarea>` (or contenteditable) so multiline prompts survive. Map Enter→send, Shift+Enter→newline; auto-grow height to ~6 rows.
+
+### I-3205 — Rollup property: open configuration UI on type-change (high, open)
+- See B-3212. After flipping a property to rollup, immediately open a popover that requires the user to pick (a) source relation property (not the rollup itself!), (b) target property of the related DB, (c) aggregation function. Without this, rollup state lands invalid and silent.
+
+### I-3206 — Calendar event chips: enable drag-reschedule (medium, open)
+- See B-3213. Set `draggable=true` on the chip; on dragend over a `day-YYYY-MM-DD` cell, update `event.date`. Add aria-grabbed/aria-dropeffect for a11y.
+
+### I-3207 — Form view: enforce required title on submit (medium, open)
+- See B-3214. Add an `isRequired` flag to the title property (or all required properties); disable `form-submit-*` while any required is empty; show inline `[role="alert"]` below the field.
+
+### I-3208 — Mobile drawer pattern for sidebar (low, open)
+- See B-3216. On viewports < md, render a backdrop element behind the open sidebar and dismiss the sidebar on (a) backdrop tap, (b) link navigation, (c) Escape key.
+
+### I-3209 — Add aria-labels to AI panel icon buttons (low, open)
+- See B-3217. `close-ai` → "Close AI panel"; `ai-send` → "Send message". Apply to other icon-only buttons in the panel as well.
+
+### I-3210 — Render row cells for ALL property types defined on a DB (high, open)
+- See B-3218. Many property types (formula, rollup, files, created-time, created-by, last-edited-time, last-edited-by, verification, unique-id) define a header but no row cell. Add cell renderers (read-only for system metadata) so users can see computed values.
+
+### I-3211 — Trash row count should reflect actual stored rows (medium, open)
+- See B-3220. The trash view's `0 rows` literal should be replaced with `Object.values(rows).filter(r => r.databaseId === db.id).length`. Either the iterator is filtering by an outdated index or it's reading a soft-deleted index that's never set.
+
+### I-3212 — Restore: clear `trashedAt` and any soft-delete metadata (low, open)
+- See B-3221. Restoring should be the symmetric inverse of trashing — clear `trashedAt`, `trashedBy`, etc.
