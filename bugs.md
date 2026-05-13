@@ -6197,3 +6197,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Repro: injected parent `pg_b6400_parent` + child `pg_b6400_c1` + grandchild `pg_b6400_c2`, all isInTrash=true. The store.restorePageCascade (store.ts:649-674) BFS-collects all descendants in trash and restores them in a SINGLE setState.
 - Observed: atomic update — no intermediate state where parent is restored but child still trashed. No race.
 - Status: works as designed.
+
+### B-6401 — Comment replies beyond depth 2 invisible — fixed (commit 3ccda8d) — P1
+- Fix: recursive `<CommentNode>` component replaces the hard-coded two-level loop. Edit / reply / delete buttons + their inline textareas work at any depth. Visual nesting caps at 6 levels. Verified live: 5-level chain renders all 5.
+
+### B-6400 — Inline color picker nested spans — fixed (commit 3ccda8d)
+- Fix: applyColor unwraps any existing color spans (data-color, font, span[style*=color]) inside the selection BEFORE wrapping with the new color. No more 5-deep nested wrappers; visible color always matches the latest pick.
+
+### B-6402 — Form validation error stuck during edit — fixed (commit 3ccda8d)
+- Fix: onChange in the public form clears the error as soon as the user edits a field. Submit re-validates fresh.
