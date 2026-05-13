@@ -4776,3 +4776,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3917 — Public form Enter-to-submit verified structurally (acceptance, B-3817 reinforces)
 - The form has 3 visible text/number/date inputs + 1 `button[type="submit"]` inside the `<form>` wrapper. Per HTML spec, this guarantees Enter in any single-line input fires `formdata` → `submit`. Manual `form.requestSubmit()` succeeded earlier (B-3901). Synthetic KeyboardEvent doesn't replicate Enter-submit, but that's a browser quirk — real users get implicit submission.
+
+### B-3906 — Resolve button one-way — fixed (commit 447acfb)
+- Fix: `resolveComment` now flips `resolved: !c.resolved` instead of always setting true. Verified: posting then clicking Resolve sets label to "Resolved"; second click toggles back to "Resolve" and the comment leaves the resolved bin.
+
+### B-3914 — Bookmark export reuses URL as label, drops metadata — fixed (commit 447acfb)
+- Fix: export-markdown.ts bookmark/embed branch now reads optional `bookmarkTitle`/`bookmarkDescription` fields when present, falling back to `caption`, then to the tagged URL. A description renders as a blockquote line below the link.
+
+### B-3915 — Sub-page links inside columns/toggles/synced lost target metadata — fixed (commit 447acfb)
+- Fix: `pages` arg now threaded through every recursive blockToMarkdown call (toggle children, columns, synced-block, synced-block-ref). Nested sub-page links now resolve title + href correctly instead of emitting bare "Sub-page".
