@@ -10,12 +10,15 @@ function SettingsPage() {
   const workspace = useStore((s) => (s.currentWorkspaceId ? s.workspaces[s.currentWorkspaceId] : null));
   const darkMode = useStore((s) => s.ui.darkMode);
   const { user, signOut } = useAuth();
+  // Language is a stub for now — real localization is out of scope. The
+  // testid is wired so E2E can assert the row exists (B-2814 / I-2808).
+  const language = (typeof navigator !== "undefined" ? navigator.language : "en-US") || "en-US";
 
   return (
     <div className="max-w-3xl mx-auto px-8 py-12 space-y-8">
       <h1 className="text-3xl font-bold">Settings</h1>
 
-      <section>
+      <section data-testid="settings-profile">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Account</h2>
         <div className="space-y-2 border border-border rounded p-4">
           <div className="text-sm">
@@ -36,14 +39,14 @@ function SettingsPage() {
         </div>
       </section>
 
-      <section>
+      <section data-testid="settings-workspace">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Workspace</h2>
         <div className="space-y-2 border border-border rounded p-4">
           <div className="text-sm">
             <span className="text-muted-foreground">Name: </span>
             <span className="font-medium">{workspace?.name}</span>
           </div>
-          <div className="text-sm">
+          <div className="text-sm" data-testid="settings-billing">
             <span className="text-muted-foreground">Plan: </span>
             <span className="font-medium capitalize">{workspace?.plan}</span>
           </div>
@@ -51,6 +54,33 @@ function SettingsPage() {
             <span className="text-muted-foreground">AI credits remaining: </span>
             <span className="font-medium">{workspace?.aiCredits}</span>
           </div>
+        </div>
+      </section>
+
+      <section data-testid="settings-language">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Language &amp; Region</h2>
+        <div className="space-y-2 border border-border rounded p-4">
+          <div className="text-sm">
+            <span className="text-muted-foreground">Detected locale: </span>
+            <span className="font-medium">{language}</span>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            Localization is detected from your browser. UI text remains in English for now.
+          </div>
+        </div>
+      </section>
+
+      <section data-testid="settings-notifications">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Notifications</h2>
+        <div className="space-y-2 border border-border rounded p-4 text-sm text-muted-foreground">
+          In-app notifications appear in the Inbox. Email digests are not enabled.
+        </div>
+      </section>
+
+      <section data-testid="settings-connections">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3">Connections</h2>
+        <div className="space-y-2 border border-border rounded p-4 text-sm text-muted-foreground">
+          No third-party integrations configured.
         </div>
       </section>
 

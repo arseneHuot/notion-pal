@@ -146,6 +146,30 @@ function PageHeader({ page }: { page: ReturnType<typeof useStore<NonNullable<Ret
     }
   }, [(page as { id?: string }).id, (page as { title?: string }).title, (page as { updatedAt?: number }).updatedAt]);
 
+  // Defense-in-depth (B-2803): a MutationObserver flattens any non-text
+  // child that appears under the title. Titles are always plain text in the
+  // data model; if anyone (paste, drag-drop, third-party JS, future feature)
+  // injects HTML, we strip it before the next paint and re-emit innerText.
+  // Note: this runs AFTER the browser parses inline handlers, so it's not a
+  // primary XSS defense on its own. Combined with the onPaste handler (which
+  // is the actual paste-vector mitigation), it ensures persisted state never
+  // contains rich content for the title.
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const flatten = () => {
+      if (!el) return;
+      if (el.children.length > 0) {
+        const text = el.innerText;
+        el.textContent = text;
+        setTitle(text);
+      }
+    };
+    const obs = new MutationObserver(flatten);
+    obs.observe(el, { childList: true, subtree: true });
+    return () => obs.disconnect();
+  }, []);
+
   function commitTitle(t: string) {
     if (t !== (page as { title?: string }).title) {
       updatePage((page as { id: string }).id, { title: t });

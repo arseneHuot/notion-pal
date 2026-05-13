@@ -205,6 +205,9 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
             e.stopPropagation();
             togglePageExpanded(page.id);
           }}
+          aria-label={expanded ? `Collapse ${page.title || "Untitled"}` : `Expand ${page.title || "Untitled"}`}
+          aria-expanded={expanded}
+          title={expanded ? "Collapse" : "Expand"}
           data-testid={`expand-${page.id}`}
         >
           {expanded ? (

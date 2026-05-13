@@ -6,11 +6,19 @@ export function InlineToolbar() {
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [active, setActive] = useState<Record<string, boolean>>({});
   const skipNextRef = useRef(false);
+  // Ref mirror of linkOpen so the selectionchange listener (which closes over
+  // the initial render's state) can read the current value (B-2810).
+  const linkOpenRef = useRef(false);
 
   useEffect(() => {
     function check() {
       if (skipNextRef.current) {
         skipNextRef.current = false;
+        return;
+      }
+      // If the link popover is up, keep the toolbar mounted even when focus
+      // moves to the URL input and the selection collapses (B-2810/B-2715).
+      if (linkOpenRef.current) {
         return;
       }
       const sel = window.getSelection();
@@ -74,11 +82,13 @@ export function InlineToolbar() {
       savedRangeRef.current = sel.getRangeAt(0).cloneRange();
     }
     setLinkUrl("");
+    linkOpenRef.current = true;
     setLinkOpen(true);
   }
 
   function commitLink(url: string) {
     if (!url) {
+      linkOpenRef.current = false;
       setLinkOpen(false);
       return;
     }
@@ -89,11 +99,48 @@ export function InlineToolbar() {
       sel?.addRange(savedRangeRef.current);
     }
     exec("createLink", url);
+    linkOpenRef.current = false;
     setLinkOpen(false);
   }
 
   function applyColor(color: string) {
-    exec("foreColor", color);
+    // Emit `<span style="color: …">` instead of `<font color>` (B-2630).
+    // `<font>` is deprecated HTML4. We also support clearing the color
+    // by passing an empty string — in that case we unwrap any color spans
+    // touching the selection.
+    skipNextRef.current = true;
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    if (!color) {
+      // Reset: walk the fragment and strip color from any span we own.
+      const editor = sel.anchorNode?.parentElement?.closest("[contenteditable]") as HTMLElement | null;
+      const contents = range.extractContents();
+      // Strip our own color spans (data-color), legacy <font color>, AND any
+      // span[style*="color"] left over from older saves — so the "default"
+      // option always reliably clears the selection's color.
+      contents.querySelectorAll('span[data-color], font, span[style*="color"]').forEach((node) => {
+        const parent = node.parentNode;
+        while (node.firstChild && parent) parent.insertBefore(node.firstChild, node);
+        parent?.removeChild(node);
+      });
+      range.insertNode(contents);
+      editor?.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      return;
+    }
+    const span = document.createElement("span");
+    span.setAttribute("data-color", "1");
+    span.style.color = color;
+    try {
+      range.surroundContents(span);
+    } catch {
+      // Selection crosses element boundaries — fall back to extract+wrap.
+      const frag = range.extractContents();
+      span.appendChild(frag);
+      range.insertNode(span);
+    }
+    const editor = sel.anchorNode?.parentElement?.closest("[contenteditable]") as HTMLElement | null;
+    editor?.dispatchEvent(new InputEvent("input", { bubbles: true }));
   }
 
   if (!open) return null;
@@ -196,7 +243,7 @@ export function InlineToolbar() {
             onChange={(e) => setLinkUrl(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") commitLink(linkUrl.trim());
-              if (e.key === "Escape") setLinkOpen(false);
+              if (e.key === "Escape") { linkOpenRef.current = false; setLinkOpen(false); }
             }}
             placeholder="https://…"
             className="bg-background border border-input rounded text-xs px-2 py-1 w-48"

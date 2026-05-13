@@ -9,7 +9,9 @@ const ALLOWED_TAGS = new Set([
 
 const ALLOWED_ATTR: Record<string, Set<string>> = {
   A: new Set(["href", "title", "target", "rel"]),
-  SPAN: new Set(["style"]),
+  // `data-color` is the marker the color tool sets so it can find and unwrap
+  // its own spans when the user clears the color (B-2630 fix).
+  SPAN: new Set(["style", "data-color"]),
 };
 
 const SAFE_URL_RE = /^(https?:|mailto:|tel:|\/|#)/i;

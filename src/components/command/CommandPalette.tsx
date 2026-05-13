@@ -151,7 +151,14 @@ export function CommandPalette() {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-24" onClick={() => setOpen(false)}>
-      <div className="bg-popover border border-border rounded-lg shadow-xl w-[600px] max-h-[60vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="bg-popover border border-border rounded-lg shadow-xl w-[600px] max-h-[60vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command palette"
+        data-testid="command-palette"
+      >
         <div className="flex items-center gap-2 p-3 border-b border-border">
           <Search className="size-4 text-muted-foreground" />
           <input
