@@ -6734,3 +6734,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Severity P2: blocks the user from using their own page. Either the banner shouldn't show (P is reachable, page is fine), or Restore should walk past non-trashed ancestors to flip trashed ones.
 - Fix sketch: `restorePageCascade` should walk the FULL ancestor chain unconditionally (not stop at first non-trashed), flipping any `isInTrash:true` along the way. Alternative: copy update — "An ancestor of this page is in Trash. [Restore ancestor]".
 
+
+### B-7604 — Sticky no-op restore banner when grandparent trashed but parent isn't — fixed (commit 80c8f88) — P2
+- Fix: `restorePageCascade` upward walk now traverses the full parentId chain, adding every trashed ancestor (even past non-trashed intermediaries) to the restore set. Verified live: grandparent trashed + parent intact + child intact → banner-restore click on child restores grandparent too.
