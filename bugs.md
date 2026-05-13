@@ -5354,3 +5354,50 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### I-4905 — Public page comments hint — done (commit a30f2bd)
 - Fix: `/p/<slug>` route footer "Read-only · Comments are disabled on public pages." with `public-page-footer` testid + "Make your own ↗" link.
+
+## 2026-05-13 — Iteration 18 verification + new coverage
+
+### B-5000 — B-4907 sub-page content cleanup verified (acceptance, fixed)
+- Seeded `blk_5000_subpg_verify` (paragraph, `content:"/sub-page"`) on pg_mp2pz5zw6oflgc0j. Navigated `/app/p/<id>`, focused the block's contenteditable, dispatched input → `[data-testid="slash-menu"]` opened with `slash-page` item. Clicked it. Post-state: `state.blocks.blk_5000_subpg_verify.type === "sub-page"`, `content === ""` (length 0), `pageId === pg_mp3t6gshu6fsenjd` (newly created child page). Confirms commit a30f2bd holds — Block.tsx slash-convert now clears `content` for page/sub-page targets.
+
+### B-5001 — I-4901 board/gallery empty states render with testids (acceptance, fixed)
+- Created `db_5000_empty_views` (0 rows, title-only properties) with [table, board, gallery] views. Navigated `/app/db/db_5000_empty_views`, clicked `db-view-view_5000_board`: `[data-testid="board-empty-db_5000_empty_views"]` rendered with text "No rows yet. Click + New in any column to add one.". Clicked `db-view-view_5000_gallery`: `[data-testid="gallery-empty-db_5000_empty_views"]` rendered with "No cards yet. Add a row from the table view or via \"+ New\".". Both testids present, both views stable.
+
+### B-5002 — I-4905 public footer renders comments-disabled notice (acceptance, fixed)
+- Set `pages[pg_mp2pz5zw6oflgc0j].publishSlug = "getting-started-5000"` + `isPublished:true` via LS, navigated /p/getting-started-5000. `[data-testid="public-page-footer"]` rendered: "Read-only · Comments are disabled on public pages. Make your own ↗". Contains "Comments are disabled". p.$slug.tsx route ships the disabled-comments hint cleanly for every public visit.
+
+### B-5003 — Filter operator combo (contains + is-empty AND) filters correctly (acceptance, ok)
+- Created `db_5001_filter_combo` with 4 rows: ["alpha foo"/notes, "alpha bar"/empty, "beta foo"/empty, "beta bar"/notes]. View filters = [contains "alpha", is-empty (notes)]. Navigation: only `r5001_2` ("alpha bar" + empty notes) renders. AND-combination evaluator in `filter.ts` correctly intersects the two rules — no false positives, no missing matches. Verified one-rule-each row correctly excluded.
+
+### B-5004 — Page-link block renders icon + title on /p/<slug> public route (acceptance, ok)
+- Getting Started carries `blk_b4400_pagelink → pg_mp2pz5zws2l1z775` ("Roadmap Q3" 🚀). On /p/getting-started-5000 with target unpublished: rendered as "📄 Untitled (unpublished)". After publishing target as `linked-target-5000`: rendered as "🚀 Roadmap Q3" without the (unpublished) tag. Icon and title both surface; unpublished targets gracefully degrade to "Untitled (unpublished)".
+
+### B-5005 — Cmd+K on /auth route (signed-in redirects, but no crash) (acceptance, ok)
+- Visited /auth while signed in: auth.tsx:22 effect redirected to /app. Cmd+K dispatched mid-redirect → `[data-testid="command-palette"]` mounted on /app, no error boundary, no console crash. The signed-out path could not be exercised (Supabase session in localStorage forces re-auth on any client-side mutation). Cmd+K listener is safely no-op on the auth-only render path.
+
+### B-5006 — Wiki badge Verify button persists verifiedAt/verifiedBy (acceptance, ok)
+- Cleared `pages[pg_mp2pz5zw6oflgc0j].verifiedAt/verifiedBy/verificationExpiresAt`. Visited /app/p/<id> → `[data-testid="verify-wiki"]` rendered with label "Verify". Clicked. Post-state: `verifiedAt = Date.now()` (1778661777405), `verifiedBy = 2adf3a83-...` (current user). However `verificationExpiresAt` stays `null` — no default expiry window. See I-5000.
+
+### B-5007 — Sidebar sibling drag sets sortOrder on source (acceptance, ok)
+- Found sibling pair (pg_mp2pz5zw6oflgc0j "Getting Started", pg_mp2qf91273xzixoe "Meeting notes") sharing teamspaceId. Synthetic dragstart on source + drop on target. Post-state: source's `sortOrder = 1778596107084` (clamped between target's createdAt and the next sibling's). Confirms Sidebar.tsx:223-233 `reorderSiblingPages` writes a fresh `sortOrder` and the cross-parent guard at line 231 holds.
+
+### B-5008 — Comment edit cycle on page comment writes content + updatedAt (acceptance, ok)
+- Seeded `cmt_5006_deep` (page-level, original "original deep comment"). Opened `comments-btn`, clicked `comment-edit-cmt_5006_deep`, set textarea value to "edited deep comment", Save. Post-state: `content === "edited deep comment"`, `updatedAt - createdAt === 83904ms` (fresh timestamp written). However, see B-5010 — block-scoped comments never surface on the page.
+
+### B-5009 — BroadcastChannel "notion-clone" rehydrate triggers re-render (acceptance, ok)
+- Wrote a new page `pg_5007_bcast` ("BroadcastChannel Test Page" 📡) directly to LS, then posted `{type:"rehydrate", userId:"2adf3a83-..."}` on `BroadcastChannel("notion-clone")`. Within 600ms: sidebar testid `sidebar-page-pg_5007_bcast` present AND title text in body. store.ts:158-178 listener correctly re-reads LS and notifies all useStore subscribers.
+
+### B-5010 — Block-scoped comments never render anywhere in the UI (P2, open)
+- Repro: seed a `Comment` with non-null `blockId` (any). PageComments.tsx:23 filters them out (`!c.blockId`) so they don't show in the side panel. `grep -rn "c.blockId\|blockId ===" src/components` shows NO other consumer — no inline block-comment marker, no block-anchored thread. Result: any block-scoped comment is invisible in app and orphans data. Either render an inline indicator on the parent block (e.g. a yellow dot + popover) OR drop the `blockId` field if unused.
+
+### B-5011 — AI Cmd+J rapid open/close shows stuck open state (P2, open)
+- Repro: dispatch Cmd+J keydown 10 times rapidly (open, close, open, close...). Observed: each "open" cycle leaves `[data-testid="ai-input"]` mounted, but the immediately-following close keydown is a no-op (panel stays open). After 5 close attempts the panel is still mounted; only on the 10th open/close pair does the panel finally close. Suggests Cmd+J handler is bound multiple times (once on open, once on initial mount) or that close ignores the meta+J trigger. Final state after sequence: closed cleanly — so eventually consistent but visibly laggy.
+
+### B-5012 — Trash > delete-forever-db cascade works once views are well-formed (acceptance, ok)
+- Trashed `db_5001_filter_combo` (4 rows), navigated /app/trash, clicked `delete-forever-db-db_5001_filter_combo`. Initial attempt FAILED silently. React onClick handler raised `Cannot read properties of undefined (reading 'filter')` from store.ts:1119 — because legacy views in OTHER databases lack `propertyOrder`/`hiddenProperties` arrays. After backfilling those defensively on every view, the click succeeded: `state.databases[dbId]` gone AND `state.rows.r5001_1..r5001_4` all removed. Cascade itself is correct; the crash is in B-5013.
+
+### B-5013 — deleteDatabase crashes on legacy views missing propertyOrder/hiddenProperties (P1, open)
+- File: src/lib/store.ts:1117-1121. `db.views.map(v => ({ ...v, propertyOrder: v.propertyOrder.filter(...), hiddenProperties: v.hiddenProperties.filter(...) }))` assumes every view has both arrays. Audit of current LS shows 11 views (across 6 databases) where one or both fields are `undefined` — most notably ALL views of `db_4900_empty` and the trashed legacy DBs `db_4800_trashed_h5r47`, `db_4802_a_h1tb7`. Calling deleteDatabase on ANY db when any OTHER db has an incomplete view throws TypeError, silently swallowed by the React onClick wrapper. Fix: `v.propertyOrder ?? []` + `v.hiddenProperties ?? []` (or a migration that backfills on load). P1 because the user can trash a DB then never permanently delete it.
+
+### B-5014 — Sidebar Trash testid `sidebar-trash` navigates to /app/trash (acceptance, ok)
+- Clicked `[data-testid="sidebar-trash"]` from /app. URL now `/app/trash`, `<main>` shows "Trash · Trash is empty." Confirms the sidebar footer Trash icon is wired correctly. (Older runs hit B-219-style no-op buttons; this one is solid.)

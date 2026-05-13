@@ -1100,24 +1100,29 @@ export function deleteDatabase(id: string) {
     const newDbs: typeof s.databases = {};
     for (const db of Object.values(s.databases)) {
       if (db.id === id) continue;
+      // Coalesce optional fields so we don't crash on legacy / synthetic
+      // databases that were persisted before `propertyOrder` /
+      // `hiddenProperties` were required (B-5012 / B-5013, P1).
+      const properties = Array.isArray(db.properties) ? db.properties : [];
+      const dbViews = Array.isArray(db.views) ? db.views : [];
       const droppedRelationIds = new Set<string>();
-      for (const p of db.properties) {
+      for (const p of properties) {
         if (p.type === "relation" && (p as Extract<typeof p, { type: "relation" }>).targetDatabaseId === id) {
           droppedRelationIds.add(p.id);
         }
       }
       const droppedRollupIds = new Set<string>();
-      for (const p of db.properties) {
+      for (const p of properties) {
         if (p.type === "rollup" && droppedRelationIds.has((p as Extract<typeof p, { type: "rollup" }>).relationPropertyId)) {
           droppedRollupIds.add(p.id);
         }
       }
       const toRemove = new Set([...droppedRelationIds, ...droppedRollupIds]);
-      const props = db.properties.filter((p) => !toRemove.has(p.id));
-      const views = db.views.map((v) => ({
+      const props = properties.filter((p) => !toRemove.has(p.id));
+      const views = dbViews.map((v) => ({
         ...v,
-        propertyOrder: v.propertyOrder.filter((pid) => !toRemove.has(pid)),
-        hiddenProperties: v.hiddenProperties.filter((pid) => !toRemove.has(pid)),
+        propertyOrder: (v.propertyOrder ?? []).filter((pid) => !toRemove.has(pid)),
+        hiddenProperties: (v.hiddenProperties ?? []).filter((pid) => !toRemove.has(pid)),
       }));
       newDbs[db.id] = { ...db, properties: props, views };
 

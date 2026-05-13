@@ -1699,3 +1699,20 @@ Priority: high / medium / low.
 
 ### I-4905 — Public published-page surface lacks a "Comments are disabled for public viewers" hint (low, open)
 - See B-4913. Comments are correctly hidden on /p/<slug>, but a reader who knows the same page on /app/p/... has a discussion may wonder why they can't see it (or expect a public commenting affordance like Notion's). Either render a tiny ghost note at the bottom ("Comments are only visible to workspace members") or surface a "Discuss this page" CTA that links back to the auth flow. Keeps the read-only contract while signalling intent.
+
+## 2026-05-13 — QA agent iteration I-5000
+
+### I-5000 — Wiki Verify button should set a default expiry (medium, open)
+- See B-5006. Clicking `verify-wiki` writes `verifiedAt` + `verifiedBy` but leaves `verificationExpiresAt = null`. The whole point of a wiki Verify is "this is fresh until X" — without an expiry the badge stays green forever. Default to 90 days (Notion's default) or expose a small "Verify for [30 / 60 / 90 / 180 days]" dropdown next to the button. Today the badge type already supports the field; only the click-handler needs to compute `Date.now() + 90 * 86400_000`.
+
+### I-5001 — deleteDatabase should defend against legacy views without propertyOrder/hiddenProperties (medium, open)
+- See B-5013. store.ts:1117-1121 dereferences `v.propertyOrder.filter` / `v.hiddenProperties.filter` on every other-DB view. 11 views in current LS (across 6 databases) have one or both as `undefined` — built from older code paths that didn't seed them. Calling `deleteDatabase` raises a TypeError that React's onClick wrapper swallows, leaving the trashed DB stuck. Two fixes: (1) inline guard `v.propertyOrder ?? []`, `v.hiddenProperties ?? []` in deleteDatabase; (2) one-shot migration on `loadFromStorage` to backfill both arrays on every view. Apply both belt + suspenders.
+
+### I-5002 — Block-scoped comments need a rendering surface (medium, open)
+- See B-5010. The `Comment` schema has a `blockId` field, the store happily persists block-scoped comments, but no component reads them. PageComments filters by `!c.blockId`. Either (a) render an inline yellow dot on the parent block when `comments.filter(c => c.blockId === block.id).length > 0` that opens a popover, OR (b) remove the unused field if block-anchoring isn't planned. Today the data is silently orphaned, which is the worst of both worlds (no UI but it's still in the persisted state).
+
+### I-5003 — Cmd+J AI panel should debounce repeated open/close keystrokes (low, open)
+- See B-5011. 10x rapid Cmd+J dispatch (open, close, open, close...) shows the panel stuck open until the sequence ends. Suggests the close-on-meta+J handler is missing or races with the open handler. Add a single toggleable `setUI({ aiPanelOpen: !ui.aiPanelOpen })` handler bound once, and ensure the keydown listener uses `useEffect` with `[aiPanelOpen]` so toggle is always idempotent. Cosmetic but a power-user annoyance.
+
+### I-5004 — Empty board/gallery testid copy could include "+ New" affordance (low, open)
+- See B-5001. Both empty-state placeholders display informative text but no clickable CTA. A user staring at "No cards yet. Add a row from the table view…" still has to find the `+ New` button elsewhere. Either link the empty-state CTA inline (e.g., `<button data-testid="board-empty-new-<id>">+ New</button>`) or replicate the toolbar's "+ New" inside the empty state. Today the testid works but the UI is dead-air.
