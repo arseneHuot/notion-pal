@@ -6206,3 +6206,70 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6402 — Form validation error stuck during edit — fixed (commit 3ccda8d)
 - Fix: onChange in the public form clears the error as soon as the user edits a field. Submit re-validates fresh.
+
+## 2026-05-13 — Iteration B-6500 testing pass
+
+### B-6401 re-verify — Recursive 5-level comments now render — fixed (passes)
+- Repro: injected L1→L2→L3→L4→L5 chain on `pg_b6500_cmt`, fired `open-comments`.
+- Observed: `comment-row-cmtL1` rendered + `reply-row-cmtL2/L3/L4/L5` all present. Full chain visible.
+- Status: B-6401 fix (commit 3ccda8d, `<CommentNode>` recursive renderer) holds across 5 levels.
+
+### B-6400 re-verify — Sequential color picks collapse to single span — fixed (passes)
+- Repro: selected `pick a color for this text`, applied red→blue→green→orange→purple via `ib-color-*` mousedown sequence on the inline toolbar.
+- Observed: editable.innerHTML ends as a SINGLE `<span data-color="1" style="color: rgb(147, 51, 234);">…</span>` — count=1, purple wins (last pick = visible).
+- Status: B-6400 fix (commit 3ccda8d, applyColor unwraps then re-wraps) holds.
+
+### B-6402 re-verify — Public form error clears on field edit — fixed (passes)
+- Repro: navigated to `/form/db_mp2qmu4d1va6knov/view_mp2ry265swv12c04`, hit submit empty → `public-form-error` "Name is required."
+- Observed: typing into the title input cleared the error immediately (form.$dbId.$viewId.tsx:249 `if (error) setError(null)` in onChange). Re-submit re-validates fresh.
+- Status: B-6402 fix (commit 3ccda8d) holds.
+
+### B-6500 — deleteComment cascade is only ONE level deep — orphans descendants (P2, open)
+- Repro: built L1→L2→L3→L4→L5 chain (+ new reply at L4). Clicked `comment-delete-cmtL2`.
+- Observed: only `cmtL2` AND `cmtL3` removed from `state.comments`. `cmtL4`, `cmtL5`, and the new reply remain in storage with `parentId="cmtL3"` (now nonexistent). DOM hides them (recursive renderer can't find their root parent), but the data leaks.
+- Cause: `store.ts:1692-1703 deleteComment` does `delete newC[id]` + a single for-loop dropping `parentId===id`. It never recurses, so grandchildren+ are stranded.
+- Expected: BFS down the tree (same shape as `restorePageCascade` at store.ts:649-674) — collect all transitive descendants and delete them in one setState. Today's behavior is the symmetric counterpart of the B-3404 page-trash cascade fix that never landed for comments.
+- Severity: P2 — invisible to user (recursive renderer naturally skips orphans), but storage grows monotonically and re-parenting / data export will expose stranded entries.
+
+### B-6501 — Reply created on a level-4 comment goes to level 5 (passes)
+- Repro: clicked `reply-cmtL4`, typed "Reply at level 5 from level 4", submitted.
+- Observed: new comment `cmt_mp4073tg87eg2gdl` persisted with `parentId=cmtL4`. Depth-walk from root = 5. `reply-row-<newId>` appears in DOM nested under L4.
+- Status: works as designed — recursive `<CommentNode>` accepts arbitrary depth from B-6401 fix.
+
+### B-6502 — Edit level-3 reply via comment-edit-cmtL3 (passes)
+- Repro: clicked `comment-edit-cmtL3`, replaced textarea value with "L3 reply EDITED", clicked Save.
+- Observed: `state.comments.cmtL3.content = "L3 reply EDITED"`, `editedAt` and `updatedAt` both set to a fresh timestamp. DOM `reply-row-cmtL3` now shows the new content. The recursive renderer wires Edit at every level, not just L1/L2.
+- Status: works as designed.
+
+### B-6503 — Public form: 1000-char title submits unchanged (passes)
+- Repro: navigated to the form route, typed 1000 'A' chars into the title input, submitted.
+- Observed: `public-form-thanks` rendered. Latest row's `values['prop_…title']` length = 1000 (verified `startsWith` + `endsWith` AAAAA). No truncation anywhere in the public-form pipeline.
+- Status: works as designed — no length cap. Note: there's also no max-length affordance (potential I-6500 candidate if product wants one).
+
+### B-6504 — Color picker: red then default round-trips cleanly (passes)
+- Repro: applied `ib-color-red` to selection → `<span data-color="1" style="color:rgb(220,38,38)">`. Then re-selected and applied `ib-color-default`.
+- Observed: editable.innerHTML reverts to plain `red then default test` — zero `span[data-color]` ancestors, zero residual color spans. Both ends of the color cycle work.
+- Status: works as designed — applyColor's no-color branch (InlineToolbar.tsx:115-157) unwraps both extracted descendants and surrounding ancestors.
+
+### B-6505 — Trash cascade restore on a 5-deep page tree (passes)
+- Repro: injected `pg_b6500_deep_root → c1 → c2 → c3 → c4` all `isInTrash=true`. Navigated to root, clicked `banner-restore`.
+- Observed: all 5 pages flip to `isInTrash=false` in a single setState. No intermediate state, no orphans, no UI flicker.
+- Status: works as designed — `restorePageCascade` BFS at store.ts:649-674 holds for depth=5.
+
+### B-6506 — AI textarea height resets after busy completes + fresh user typing (passes)
+- Repro: opened AI chat, set `ai-input` value to 7 newline-separated lines → grew to 148px. Pressed Enter to send → value cleared, height reset to 30px. Waited 1.5s for busy to clear. Typed `fresh`.
+- Observed: height stayed at 30px throughout. No stale auto-grow from the multi-line state, no "stuck tall" textarea.
+- Status: works as designed — the existing reset-on-send already covers this case.
+
+### B-6507 — Cmd+K palette: quoted query returns 0 hits (P3, open)
+- Repro: opened cmd-palette via `open-command-palette` event. Typed plain `test` → 10 page hits. Typed `'test'` → cmd-empty. Typed `"test"` → cmd-empty. Typed `""` → 0 hits, no empty state (UI between states). Typed `'` alone → 1 hit.
+- Observed: CommandPalette.tsx:102-114 tokenizes by whitespace and AND-matches each token verbatim against the lowercased haystack. A token like `'test'` (including the quotes) never substring-matches a page title that contains the unquoted word "test". So wrapping a known-matching word in quotes silently returns zero results.
+- Expected: either (a) strip leading/trailing quote chars from each token (`t.replace(/^['"]+|['"]+$/g,'')`), or (b) treat the FULL quoted span as an exact-phrase predicate (`includes(unquoted)`). Notion's palette tolerates `'word'` and `"word"` as equivalent to `word`.
+- Severity: P3 — easy to work around by removing quotes, but ranks as a "should just work" UX hiccup, especially for users pasting code-like phrases.
+
+### B-6508 — Cmd+K `""` (empty-pair quotes) returns 0 hits AND no empty-state UI (P3, open)
+- Repro: in command-input typed exactly `""` (two double quotes).
+- Observed: 0 `cmd-page-*` rows, 0 `cmd-empty` testid in DOM. The palette renders neither results nor the friendly "no matches" affordance — just the section headers (New Page, Calendar, etc.). Discovered while testing B-6507 above.
+- Expected: same as any other no-match query — render `cmd-empty` "No results" row. Cause is probably that `q.length>0` is true but the singleton token `""` isn't a `noiseQuery` (its length === 2 ≥ 2), so it enters AND-match, finds nothing, and the empty state hook is keyed on `noiseQuery` rather than "0 matching pages AND 0 default actions".
+- Severity: P3 — cosmetic, but a query that returns zero results should always say "No results."
+

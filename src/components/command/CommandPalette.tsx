@@ -99,7 +99,14 @@ export function CommandPalette() {
     // of unrelated pages (B-6205 / I-6201) — except when the WHOLE query
     // is a single char, in which case fall back to substring match on the
     // original query.
-    const rawTokens = q ? q.split(/\s+/).filter(Boolean) : [];
+    // Strip wrapping single/double quotes from tokens so `"test"` matches
+    // pages containing "test" (B-6507 / I-6501). The user's quoting intent
+    // is treated as "this is a literal phrase", but since our matcher is
+    // already substring-based on lowercase, the quote chars are noise.
+    const stripQuotes = (t: string) => t.replace(/^['"`]+|['"`]+$/g, "");
+    const rawTokens = q
+      ? q.split(/\s+/).map(stripQuotes).filter((t) => t.length > 0)
+      : [];
     const tokens = rawTokens.length > 1
       ? rawTokens.filter((t) => t.length >= 2)
       : rawTokens;

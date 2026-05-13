@@ -1972,3 +1972,20 @@ Priority: high / medium / low.
 
 ### I-6402 — Public form: live-clear validation error on field change (medium, open)
 - See B-6402. In `setValues`'s callback (form.$dbId.$viewId.tsx:236-244), also call `setError(null)` whenever `error` is currently set. Or wire `useEffect(() => setError(null), [values])`. This gives users immediate feedback that their input addressed the validation problem rather than leaving the stale error visible until next Submit.
+
+### I-6500 — Comment delete should cascade to FULL descendant tree (high, open)
+- See B-6500. `store.ts:1692-1703 deleteComment` only walks one level (drop parentId===id). For chains L1→L2→L3→L4→L5, deleting L2 leaves L4+L5+any new replies stranded with a dangling parentId.
+- Fix: replace the single for-loop with a BFS over `comments` to collect every transitive descendant, then drop them all in one setState — mirror the shape of `restorePageCascade` (store.ts:649-674). Today the recursive renderer hides orphans so the user can't see the leak, but storage grows monotonically and any future re-parenting/export will surface stale entries.
+
+### I-6501 — Cmd+K palette: strip surrounding quotes from query tokens (medium, open)
+- See B-6507. CommandPalette.tsx:102-105 tokenizes by whitespace and AND-matches each token verbatim. A user typing `'test'` or `"test"` (e.g. pasting a quoted phrase from chat) gets zero hits because the literal quotes are included in the substring search.
+- Fix: after `rawTokens = q.split(/\s+/)`, normalize each `t.replace(/^['"]+|['"]+$/g,'')`. Optionally, if the WHOLE query is wrapped in matching quotes, treat its inner as an exact-phrase substring (`hay.includes(inner)`) — that's the Notion search semantic.
+
+### I-6502 — Cmd+K palette: always render cmd-empty when 0 results (medium, open)
+- See B-6508. Typing `""` (or any token that AND-matches nothing) currently shows neither result rows NOR the empty-state row. The empty-state predicate seems gated on `noiseQuery` (single-char-token collapse) rather than on actual result-count.
+- Fix: render `cmd-empty` whenever `matchingPages.length === 0 && defaultActions.length === 0`, regardless of how the query failed. Keeps the palette's affordance consistent and tells the user "your query matched nothing" instead of leaving a blank panel.
+
+### I-6503 — Public form input: optional `maxLength` per Title property (low, open)
+- See B-6503. A 1000-char (or 100k-char) submission goes through unchanged, including persisting in `rows[id].values`. While there's no functional break, the title is the de-facto identity field; an explicit max (say 500 chars) prevents pathological abuse from a public form and clears one class of accidentally-pasted novel-as-title incidents.
+- Fix: optional `maxLength` field on property schema, defaulted off; PublicFormField input renders `maxLength={prop.maxLength}` when set. UI of submit also shows count near limit.
+

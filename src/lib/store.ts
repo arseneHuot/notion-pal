@@ -1692,12 +1692,22 @@ export function resolveComment(id: string) {
 export function deleteComment(id: string) {
   setState((s) => {
     const newC = { ...s.comments };
-    delete newC[id];
-    // Also drop any nested replies pointing at this comment so the comment
-    // pane doesn't render orphans.
-    for (const [cid, c] of Object.entries(newC)) {
-      if (c.parentId === id) delete newC[cid];
+    // Cascade-delete the entire reply sub-tree (B-6500). The previous
+    // single-level filter left grand-replies dangling with a `parentId`
+    // pointing at a deleted comment. BFS from the root id and remove
+    // everyone in the closure.
+    const toDelete = new Set<string>([id]);
+    const queue: string[] = [id];
+    while (queue.length > 0) {
+      const next = queue.shift()!;
+      for (const [cid, c] of Object.entries(newC)) {
+        if (c.parentId === next && !toDelete.has(cid)) {
+          toDelete.add(cid);
+          queue.push(cid);
+        }
+      }
     }
+    for (const cid of toDelete) delete newC[cid];
     return { ...s, comments: newC };
   });
 }
