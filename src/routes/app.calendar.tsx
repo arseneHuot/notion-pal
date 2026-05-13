@@ -179,7 +179,12 @@ function CalendarPage() {
                     e.preventDefault();
                     // Only reschedule when the event came from a `calendar` source
                     // — DB-row-derived events don't have a calendarEvents entry.
-                    if (id.startsWith("row-")) return;
+                    // Surface a toast so the user understands why the drop was
+                    // a no-op (B-5305).
+                    if (id.startsWith("row-")) {
+                      window.dispatchEvent(new CustomEvent("toast", { detail: "Reschedule database rows from the DB calendar view" }));
+                      return;
+                    }
                     moveCalendarEvent(id, k);
                   }}
                 >

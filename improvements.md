@@ -1752,3 +1752,27 @@ Priority: high / medium / low.
 
 ### I-5204 — Public form should mark person/files/relation fields with placeholder hints (low, open)
 - Even before I-5200 lands, a `placeholder="@username or email"` on person, `placeholder="https://… or paste link"` on files, and `placeholder="Row title or id"` on relation would give respondents a hint that this is a text-mode fallback. Zero-cost UX win.
+
+## 2026-05-13 — Test agent batch (I-5300 series)
+
+### I-5300 — DB property header drag-reorder (medium, open)
+- See B-5303. Adding `application/x-property-id` dataTransfer on `prop-header-<id>` plus a drop handler that rewrites `view.propertyOrder` would close the gap with Notion. Bonus: persist a workspace-level fallback property order so unhidden columns appear in the same place after reload.
+
+### I-5301 — Row detail drawer needs a comments panel (medium, open)
+- See B-5304. The drawer is the most natural "row as page" surface but never reads `state.comments`. Add a thin panel below the cells that filters by `rowId`. Same compose/resolve affordances as PageComments would be enough. Persisting comments at the row level also unlocks notification badges on table cells (a hover dot).
+
+### I-5302 — Calendar standalone should toast on drop refusal (low, open)
+- See B-5305. The silent refusal in app.calendar.tsx:182 is the only drag interaction in the app that lacks user feedback. Reuse the toast pattern from TableView's cross-DB refusal so users learn that DB-row events must be rescheduled from the database view.
+
+### I-5303 — Sidebar should expose a drop-to-orphan zone (low, open)
+- See B-5307. Today the only path to "orphan a page" is to manually clear `teamspaceId` via the page-options menu. A small drop area below the last teamspace (`data-testid="sidebar-orphan-zone"`) with a tooltip "Drop here to remove from teamspaces" would mirror Notion's "Move to private" affordance.
+
+### I-5304 — AI chat panel should show a "Thread cleared" toast after `ai-new-thread` (low, open)
+- Today the click silently empties the message list. A quick toast / inline "✨ New thread" confirmation gives reassurance that the click registered. Optional: keep a small "Restore last thread" link for 5 seconds in case of misclick.
+
+### I-5305 — Block highlight should fade after 3-5 seconds (low, open)
+- Hash-based highlight is sticky until a different hash arrives. After a reload (per B-5308) the highlight persists indefinitely, which is visually noisy long after the user has read the block. A CSS `animation: highlight-pulse 2s ease-out 1; animation-fill-mode: forwards;` (or a JS timer that clears the attribute) would feel less aggressive while still drawing the eye on jump.
+
+### I-5306 — Cmd+K results should show breadcrumb on deeply-nested sub-pages (low, open)
+- Per B-5309 the palette already finds level-4 children correctly. Today the item shows only the page title. Adding a "Engineering › L1 › L2 › L3 ›" prefix (or a small `data-testid="cmd-breadcrumb-<id>"` line under the title) would disambiguate sub-pages that share a title with another page's child.
+

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty, updateView, reorderDatabaseRows, getState as getStoreState } from "@/lib/store";
+import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty, updateView, reorderDatabaseRows, reorderDatabaseProperties, getState as getStoreState } from "@/lib/store";
 
 function databasesNow() {
   return Object.values(getStoreState().databases);
@@ -157,7 +157,28 @@ function PropertyHeader({ property, databaseId, viewId, sticky }: { property: Pr
   }
 
   return (
-    <th className={`border border-border px-2 py-1 text-left font-medium text-xs text-muted-foreground relative ${sticky ? "sticky left-0 bg-muted/60 z-[2]" : ""}`}>
+    <th
+      className={`border border-border px-2 py-1 text-left font-medium text-xs text-muted-foreground relative ${sticky ? "sticky left-0 bg-muted/60 z-[2]" : ""}`}
+      draggable={property.type !== "title"}
+      data-property-id={property.id}
+      onDragStart={(e) => {
+        if (property.type === "title") return;
+        e.dataTransfer.setData("application/x-property-id", property.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-property-id")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }
+      }}
+      onDrop={(e) => {
+        const sourceId = e.dataTransfer.getData("application/x-property-id");
+        if (!sourceId || sourceId === property.id) return;
+        e.preventDefault();
+        reorderDatabaseProperties(databaseId, sourceId, property.id);
+      }}
+    >
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-1 w-full text-left"

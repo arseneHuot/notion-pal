@@ -1284,6 +1284,41 @@ export function reorderSiblingPages(sourcePageId: string, targetPageId: string |
 }
 
 /**
+ * Reorder a database's `properties` array by moving the source property so
+ * it lands immediately before the target (or appended when target is null).
+ * Affects column order in every view that doesn't override via
+ * `view.propertyOrder` (B-5303 / I-5301).
+ */
+export function reorderDatabaseProperties(
+  databaseId: string,
+  sourcePropertyId: string,
+  targetPropertyId: string | null,
+) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db || !Array.isArray(db.properties)) return s;
+    const without = db.properties.filter((p) => p.id !== sourcePropertyId);
+    const source = db.properties.find((p) => p.id === sourcePropertyId);
+    if (!source) return s;
+    let nextProps: typeof db.properties;
+    if (!targetPropertyId) {
+      nextProps = [...without, source];
+    } else {
+      const idx = without.findIndex((p) => p.id === targetPropertyId);
+      if (idx === -1) {
+        nextProps = [...without, source];
+      } else {
+        nextProps = [...without.slice(0, idx), source, ...without.slice(idx)];
+      }
+    }
+    return {
+      ...s,
+      databases: { ...s.databases, [databaseId]: { ...db, properties: nextProps, updatedAt: Date.now() } },
+    };
+  });
+}
+
+/**
  * Reorder rows within a database by moving `sourceRowId` so that it lands
  * before `targetRowId`. If targetRowId is null, the source is appended.
  * B-3711 — DB row drag-reorder.

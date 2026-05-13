@@ -5488,3 +5488,57 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5210 — Public form fell back to text inputs for person/files/relation — fixed (commit a34a316)
 - Fix: form `fields` memo filters out `person`, `files`, and `relation` types in addition to the system-managed ones. Visitors no longer see broken plain-text widgets for those columns; form-builders should use select/text columns for any public-collectible reference.
+
+## 2026-05-13 — Test agent batch (B-5300 series)
+
+### B-5300 — B-5210 fix re-verified, person/files/relation hidden in /form (acceptance, ok)
+- Steps: injected `prop_b5300_person` (person), `prop_b5300_files` (files), `prop_b5300_relation` (relation, target db_mp2qmu4d1va6knov) into db_mp3lhvrxwl40mnbf. Cleared `hiddenProperties` on form view view_b4600_form_select to force eligibility. Navigated to `/form/db_mp3lhvrxwl40mnbf/view_b4600_form_select`.
+- Observed: rendered fields are `public-form-field-prop_mp3lhvrx69s5zskr` (status), `…92ucm92s` (multi-select), `…8mfpeiij` (date), `…qa_num` (number), `…qa_text_mp3lozu0` (text). Person/files/relation testids do NOT render. No fallback text inputs leak through.
+- Confirms the form-fields filter in form.$dbId.$viewId.tsx is correctly stripping the three reference types regardless of hiddenProperties state.
+
+### B-5301 — Move-to-teamspace cascades teamspaceId across 4-level hierarchy (acceptance, ok)
+- Steps: built L1→L2→L3→L4 chain in teamspace Engineering with parent links. Navigated to L1, clicked `page-opt-move-ts_mp2s8a5x6ku00yjn` (Test Teamspace).
+- Observed: all 4 pages now have `teamspaceId === ts_mp2s8a5x6ku00yjn`. L1's parentId is correctly nulled (it became the root in target). L2/L3/L4 still chain via parentId pointers. No descendant gets stranded in the source teamspace.
+- The move-to-teamspace cascade works as intended across deep hierarchies.
+
+### B-5302 — Multi-select cell editor preserves array shape across add+remove cycles (acceptance, ok)
+- Steps: seeded multi-select prop with 5 options (MSA…MSE), seeded row with all 5, removed 2 (MSB, MSD) via direct state write — UI rendered remaining 3 as pills. Then clicked the select cell, toggled MSD ON (added to array), toggled MSA OFF (removed from array). Final stored value: `["opt_b5300ms_C","opt_b5300ms_E","opt_b5300ms_D"]` with `isArray === true`.
+- Click-to-toggle behaviour is symmetric — adding and removing produce the same array, no duplicate ids, no null entries. Editor's `data-testid="select-option-<id>"` surface is stable and easy to drive from tests.
+
+### B-5303 — Database property drag-reorder is not implemented (P2, open)
+- File: src/components/database/views/TableView.tsx — `PropertyHeader` <th>/<button> has neither `draggable` nor `onDragStart/onDrop`; nowhere in TableView do property cells receive a `application/x-property-id` dataTransfer type. The store has no `reorderProperty` action (only `propertyOrder` array assignments at create-time).
+- Steps: hover any prop header in a DB → no grab cursor; the only way to reorder is to delete + re-add. Notion-parity expects drag-to-reorder.
+- Expected: add a small grip handle on `:focus-within`/`:hover` of `prop-header-<id>`, write `propertyOrder` on drop into the active view.
+
+### B-5304 — Row detail drawer has no comments surface (P2, open)
+- File: src/components/database/RowDetailDrawer.tsx — drawer renders `row-detail-title` plus property cells; no Comments section, no comment composer, no `comment-list` testid. `state.comments` schema exists and is keyed by blockId/pageId/rowId but the drawer never reads rows.
+- Steps: dispatched `open-row-detail` for a row, inspected drawer — only delete/close/title/cells testids present, zero "comment" mentions.
+- Expected: append a thin Comments panel below the cells (read `state.comments` filtered by `rowId === row.id`, render compose box). Without it, rows-as-pages cannot capture discussion.
+
+### B-5305 — Calendar standalone drops are silently refused for non-calendar events (P3, open)
+- File: src/routes/app.calendar.tsx:182. The drop handler bails on `if (id.startsWith("row-")) return;` — drag is allowed onto a day cell but the reschedule never happens AND no toast/warning fires. Source code already comments out the reasoning ("DB-row-derived events don't have a calendarEvents entry") but it never surfaces it to the user.
+- Steps: confirmed in source. Drag onto day cell with non-calendar id → silent no-op.
+- Expected: `window.dispatchEvent(new CustomEvent("toast", { detail: "Open the database to reschedule this row" }))` so users know the drag wasn't accepted (mirroring B-cross-DB-refusal pattern at TableView.tsx:70).
+
+### B-5306 — Wiki verification still does not capture expiry, no re-verify/revoke control (P3, open)
+- File: src/components/page/PageView.tsx:284-289. Re-confirms B-428/B-530/I-5000 are still open as of 2026-05-13. Clicking `verify-wiki` sets `verifiedAt` + `verifiedBy` only; `verificationExpiresAt` stays null. Once verified, the button disappears — no way to mark unverified or re-verify after edits.
+- Steps: navigated to a wiki page, observed source for verify branch. Badge reads "Verified" with no who/when/expiry shown.
+- Expected: persist a 90-day default `verificationExpiresAt`, render the verifier + date in the badge, expose "Unverify" / "Re-verify" actions. Tracked separately as long-standing UX gap.
+
+### B-5307 — Sidebar drag does not support cross-parent / orphan drop targets (P3, open)
+- File: src/components/layout/Sidebar.tsx:223-233. `onDrop` short-circuits when `sourcePage.parentId !== page.parentId || sourcePage.teamspaceId !== page.teamspaceId` — only same-parent reorder is wired. There is no empty-area drop zone, no "Other" header drop target, no "drag onto teamspace name" support.
+- Steps: source inspection confirms; no `application/x-sidebar-page-id` drop handler on the sidebar root, AddTeamspaceForm, or OrphanSection.
+- Expected: add drop zones on (a) teamspace headers to move into that teamspace, and (b) a dedicated `[data-testid="sidebar-orphan-zone"]` that clears `teamspaceId` and `parentId`. Today users must reach for the page-options menu.
+
+### B-5308 — Block highlight via #block-<id> survives full page reload (acceptance, ok)
+- Steps: navigated to `/app/p/pg_mp2pz5zw6oflgc0j#block-blk_5006_t1`. Verified `[data-block-highlight="1"]` appears with `data-block-id="blk_5006_t1"`. Triggered `location.reload()`; after reload, the highlight reappears with the same hash + element id.
+- The `hashchange` listener + initial-mount reader pair in PageView.tsx:39-66 work correctly across hard reloads. Bookmark + back/forward navigation are also safe.
+
+### B-5309 — Cmd+K command palette navigates to deeply-nested sub-page on match click (acceptance, ok)
+- Steps: dispatched `open-command-palette`, filled the input with "B5300 L4" (a level-4 descendant of the cascade test pages). Single result `cmd-page-pg_b5300_l4_mp3urq84` rendered. Clicked it; URL became `/app/p/pg_b5300_l4_mp3urq84`.
+- The palette correctly resolves descendants regardless of nesting depth — no filter limits results to root pages or first-level children.
+
+### B-5310 — AI chat `ai-new-thread` testid clears messages and rebuilds thread (acceptance, ok)
+- Steps: opened AI panel via `ai-btn`, observed 8 messages (`ai-msg-0`…`ai-msg-7`) in panel. Clicked `[data-testid="ai-new-thread"]`. Re-queried after the click — 0 messages remain.
+- The clear-thread button is correctly wired to `setMessages([])` and the testid is exposed at `src/components/ai/AIChat.tsx:275`. Persistence-across-reload is a separate concern (B-431).
+
