@@ -1517,3 +1517,26 @@ Priority: high / medium / low.
 
 ### I-4005 — Public form rendered required marker (low, open — dup of I-3900)
 - Confirmed again on QA Form DB: title input is required (server-side validated, "Name is required." error fires) but the `<label>` text is just "Name". Add a red `*` or "(required)" suffix when `prop.required` is true so users see it before submitting.
+
+## 2026-05-13 — QA agent iteration I-4100
+
+### I-4100 — Public form: Enter-in-text-input via synthetic keydown does not submit (low, open)
+- See B-4105. The form has `onSubmit` + `<button type="submit">`, so browsers auto-submit on Enter for real users. But QA automation that dispatches a synthetic `KeyboardEvent({key:"Enter"})` on the title input does NOT submit (no row created). This is HTML-spec correct (synthetic events skip native form-submit), but for testability, consider adding an explicit `onKeyDown` on each form input that calls `form.requestSubmit()` when key==="Enter" + the input is not a textarea. Same call site as B-3817 fix.
+
+### I-4101 — DB trash needs `trashedAt` stamp (medium, open)
+- See B-4108. `trashDatabase(dbId)` sets `isInTrash:true` but `trashedAt` remains null. Page trash sets both. Mirror the page logic in the database action: `db.trashedAt = Date.now()`. Restore can keep `trashedAt: null` (or delete the key). Without `trashedAt`, the trash UI cannot sort DBs by trash date or apply expiry.
+
+### I-4102 — Markdown export: sub-page block still empty placeholder (medium, open — dup of I-3903)
+- See B-4110. After the "richer bookmark export + pages threaded" commit, bookmark export now uses title/description. Sub-page emit is still empty. Suggested format: `### [<page.title>](<page.slug-or-id>.md)` per child block, optionally with an "Include subpages inline" toggle to recursively inline child blocks.
+
+### I-4103 — Sidebar page drag affordance (low, open)
+- See B-4112. Pages have `draggable=true` but `cursor: auto`. Add `cursor: grab` on hover and `cursor: grabbing` while dragging, plus a faint drag-grip icon (⋮⋮) that fades in on hover (mirroring `row-handle` behaviour). Closes discoverability gap.
+
+### I-4104 — Row-handle visibility on touch / no-hover devices (low, open)
+- See B-4112. `row-handle-<id>` is `opacity:0 group-hover:opacity-100`. Touch devices never fire hover, so the grip is permanently invisible — drag-to-reorder on tablet/phone is functionally broken even though the listeners exist. Show the grip permanently when `(hover: none)` matches, OR show it after a long-press.
+
+### I-4105 — Cmd+J for AI panel + visible shortcut hint (low, open)
+- See B-4119. Add a global `keydown` listener: if `(metaKey||ctrlKey) && key==='j'` → toggle AI panel. Also add `title="Ask AI (⌘J)"` to `sidebar-ai` button so the affordance is discoverable. Matches Notion's binding.
+
+### I-4106 — Palette empty-state testid (low, open)
+- See B-4117. The "No results" message renders but has no `data-testid`. Add `data-testid="cmd-empty"` so automation can assert the empty branch without scraping innerText.

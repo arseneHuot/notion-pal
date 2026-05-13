@@ -569,6 +569,7 @@ export interface NotionDatabase {
   updatedAt: number;
   createdBy: string;
   isInTrash: boolean;
+  trashedAt?: number | null;
 }
 
 // =========== TEAMSPACE & WORKSPACE ============

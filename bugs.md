@@ -4879,3 +4879,66 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4016 — Duplicate view from ViewMenu — fixed (commit eceb761) — closes I-4002
 - Fix: new store action `duplicateView(databaseId, viewId)` deep-clones the source view (filters, sorts, hiddenProperties, view-specific config) and appends "(Copy)" to the name. ViewMenu exposes a `view-duplicate-<viewId>` button right below Rename. Verified live: clicking duplicate on "All" creates "All (Copy)" with matching type; view count grows from 5 → 6.
+
+## 2026-05-13 — QA agent iteration I-4100
+
+### B-4100 — AI textarea acceptance (verifies B-3210/B-3806/B-3911/B-4012)
+- `[data-testid="ai-input"]` is a `<textarea rows=1>`. Placeholder: "Ask anything... (Shift+Enter for newline)". Multi-line value `line1\nline2\nline3` preserves `\n` (lines=3, hasNewlines=true). Auto-grows from default to 68px scrollHeight on 3 lines, caps at 160px maxHeight with `overflow-y: auto` on 10 lines (scrollHeight=208, clientHeight=158 — scrollable, no infinite expand). Shift+Enter keeps value unchanged (intercepted as newline). Enter alone clears the input and inserts `ai-msg-0` + `ai-msg-1` testids. B-3210 closed.
+
+### B-4101 — DB row drag-reorder acceptance (verifies B-3711/B-2805)
+- On `db_mp2qmu4d1va6knov` (7 rows) embedded in `pg_mp2pz5zws2l1z775`: every `tr` has `data-row-id`, `draggable=true`, `row-<id>` testid, and a child `row-handle-<id>` element. Simulated React-prop `onDragStart` on row idx 6 + `onDragOver` + `onDrop` on row idx 0 via a custom DataTransfer mock (with `types` getter). Result: source moves to idx 0, target shifts to idx 1, persisted to `databases[dbId].rows` order. B-3711 closed.
+
+### B-4102 — Sidebar page drag-reorder acceptance (verifies B-2908/B-3712/B-3616)
+- Sidebar pages render with `sidebar-page-<id>` testid + `data-page-id="<id>"` + `draggable=true`. Source `pg_mp2sab5dbg48iqyl` (createdAt 1778599611121) dragged onto target `pg_mp2pz5zw6oflgc0j` (createdAt 1778595731996, no sortOrder). After drop, source.sortOrder = 1778595731746 (250ms before target.createdAt), placing source before target in `sortOrder ?? createdAt` ordering. Same-teamspace constraint enforced. B-2908 closed.
+
+### B-4103 — Calendar event drag-reschedule acceptance (verifies B-2907/B-3513/B-3514)
+- On `/app/calendar`: 6 chips visible. `cal-event-evt_*` chips (source==="calendar") have `draggable=true`. `cal-event-row-row_*` chips (DB-derived) have `draggable=false`. Dragged `evt_mp3jrjay0hmfabnk` (2026-05-13 02:00) onto `[data-testid="day-2026-05-20"]`. Result: event.start moved to 2026-05-20, hour/minute preserved (todPreserved=true). B-2907 closed.
+
+### B-4104 — Mobile drawer acceptance (verifies B-3521/B-3522/B-4014)
+- With `matchMedia("(max-width: 768px)").matches=true` stubbed: setting `ui.sidebarOpen=true` then clicking `sidebar-inbox` navigates to `/app/inbox` AND flips `ui.sidebarOpen` to false (auto-close on route change). Re-opening + pressing Escape at window level also flips to false. The `sidebar-scrim` backdrop has className containing `md:hidden` (`md:hidden fixed inset-0 z-20 bg-black/40 cursor-default`). All three guarantees in place. B-3521 closed.
+
+### B-4105 — Public form: requestSubmit with Status + Number + Text fields (acceptance)
+- On `/form/db_mp3lhvrxwl40mnbf/view_qa_form_mp3ljwhb` (4 inputs: title, status select, score number, testnote text). Filled all 4 then called `form.requestSubmit()`. Row count went 4→5, new `row_mp3oabroazm5` persisted with `values: { prop_mp3lhvrx9qtr7nk5: "B-4105 Enter+Select submit", prop_mp3lhvrx69s5zskr: "opt_mp3lhvrxl3wh2v7y" (=In progress), prop_qa_num: 42, prop_qa_text_mp3lozu0: "hello from QA" }`. Success page shows "Thanks for submitting!". Select + number + text all correctly captured. Closes the multi-field acceptance from continuing coverage.
+
+### B-4106 — Comment edit on a resolved comment via show-resolved-toggle (acceptance for I-3802 + B-3906)
+- Posted "B-4106 pre-resolve comment" on `pg_mp2pz5zwikifg7r3` → got `cmt_mp3obm3nc7gi2vq3`. Clicked `resolve-<id>` → `resolved: true`, comment vanished from default view. Clicked `show-resolved-toggle` → comment reappeared, button label "Resolved". Clicked `comment-edit-<id>` → `comment-edit-input-<id>` + `comment-edit-save-<id>` + `comment-edit-cancel-<id>` rendered. Set value to "B-4106 EDITED while resolved" + saved → `comments[id].content` updated, `resolved` still true (edit preserves state). Clicked `resolve-<id>` again → flipped resolved back to false (toggle works both ways). Closes I-3802 + B-3906 (toggle + edit-while-resolved).
+
+### B-4107 — View duplicate action ships (acceptance for B-4016 / I-4002)
+- On `pg_mp2pz5zws2l1z775` table view: `view-menu-view_mp2qmu4djdr3pyti` now lists 4 items (rename / duplicate / delete / addprop). Clicking `view-duplicate-...` creates `v_mp3o96cqlkfu2o4q` named "All (Copy)". Deep-cloned: type=table, filters=[], sorts=[], hiddenProperties=[], propertyOrder=[same 4 props in same order], wrapCells=false — verified by JSON.stringify(omit({id,name})) match. Closes B-4016 / I-4002.
+
+### B-4108 — DB trash sets isInTrash but leaves `trashedAt: null` (P1, open)
+- Repro: on `pg_qa_db_uhgak1`, opened `db-actions-db_mp3jj2jnavmaxi0e`, clicked `db-trash-...`. After: `isInTrash=true` but `trashedAt=null` (still). After restore via `restore-db-<id>`, `isInTrash=false` and `trashedAt=null`. Expected: trash action stamps `trashedAt = Date.now()` so the 30-day expiry / sort-by-trashed-date can work. Without it, the trash list cannot sort or expire DB entries. Page trash (`isInTrash + trashedAt`) is correctly stamped — this gap is DB-specific.
+
+### B-4109 — Markdown export: rich bookmark renders title + description (acceptance for I-3902)
+- Exported `pg_qa_b4001_frln`. Output: `# B-4001 Bookmark Export\n\n[Doc](https://example.com)\n> Notes\n`. Bookmark with `bookmarkTitle="Doc"` + `bookmarkDescription="Notes"` exports as `[Doc](url)` with description on a blockquote line. Closes I-3902.
+
+### B-4110 — Markdown export: sub-page block still emits nothing (P2, open — re-confirms I-3903)
+- Exported `pg_qa_b4002_child_95kg` (has one `sub-page` block whose `pageRef=pg_qa_b4002_child_95kg`). Output is only `# B-4002 Child\n` — the sub-page block produces zero lines. Expected: at minimum a heading like `### [<child page title>](<child-slug>.md)` so the export preserves hierarchy. I-3903 stays open.
+
+### B-4111 — Cmd+K block-match scroll-into-view + ring highlight (acceptance for B-4013)
+- Opened palette → typed "orientation" → got `cmd-block-blk_mp2pz5zwsytlvger`. Clicked it: monkey-patched `Element.prototype.scrollIntoView` captured `{ behavior: "smooth", block: "center" }` call. Route navigated to `/app/p/pg_mp2pz5zw6oflgc0j`. Target block has classes `group/block relative flex items-start gap-1 py-0.5 ring-1 ring-blue-400`. Both scroll-into-view AND ring-blue-400 highlight verified.
+
+### B-4112 — Row-handle hidden until row hover; sidebar drag affordance missing (P3, open)
+- `row-handle-<id>`: classes `cursor-grab text-muted-foreground opacity-0 group-hover:opacity-100 mr-1 select-none`. Default `opacity:0` so the grip ⋮⋮ is invisible until the user hovers. Acceptable for desktop UX, but on touch / keyboard-only it's permanently invisible.
+- `sidebar-page-<id>` has `draggable=true` but `cursor: auto` — no visual cue (e.g. `cursor: grab` on hover) hints that drag is possible. Discoverability problem for sidebar reordering.
+
+### B-4113 — AI textarea: 20-line stress test (acceptance for B-3210 follow-up)
+- Set value to 20 newline-separated lines on `[data-testid="ai-input"]`. Result: `height: 160px` (capped at maxHeight), `clientHeight: 158`, `scrollHeight: 408`, `overflow-y: auto`. Scrollable, no infinite expand. B-3210 hardening confirmed.
+
+### B-4114 — Perf: 200-char insert into paragraph among 52 siblings (acceptance)
+- On `/app/p/pg_qa_perf_ibzb` (52 contenteditable paragraphs). Caret at end of one paragraph, `document.execCommand('insertText', false, 'X'.repeat(200))`. Synchronous insert: 12ms. Full settle (incl. zustand re-render): 412ms. Char-by-char typing (50 chars sequentially): avg 2.5ms, max 8ms, 0 frames exceeded 16ms budget. No jank observed.
+
+### B-4115 — Sidebar drag: cross-teamspace drop is correctly rejected (acceptance)
+- Source `pg_mp2sab5dbg48iqyl` (teamspace `ts_mp2pz5zwqdkgmzis`) dragged onto target `pg_mp2pz5zws2l1z775` (teamspace `ts_mp2pz5zwvod19q0j`). Result: source teamspaceId unchanged, sortOrder unchanged. Same-teamspace constraint from B-2908 fix is honoured — cross-teamspace moves require the explicit `movePage` action. Closes safety check.
+
+### B-4116 — Calendar: DB-derived chip drop is no-op even with forced onDragStart (acceptance)
+- Chip `cal-event-row-row_mp3nmhann55g` (DB-derived; `draggable=false` in DOM). Manually invoked onDragStart props, then onDragOver + onDrop on `day-2026-05-25`. Result: `rows[rowId].values` unchanged (date prop `prop_mp3lhvrx8mfpeiij` still "2026-05-13"). Drop target rejects non-event-calendar drops correctly. Hardens B-2907.
+
+### B-4117 — Cmd+K palette empty state (acceptance)
+- Typed "asdkfjlasdjflkadjflk" into palette input. Dialog text: "⌘KNo results". Zero `cmd-page-*` and zero `cmd-block-*` rendered. Empty state copy is present, though not via a dedicated `cmd-empty` testid (which automation would need).
+
+### B-4118 — Create page from sidebar `ts-new-Private` works (acceptance)
+- Clicked `ts-new-Private`. Result: store page count 115 → 116, new `pg_mp3oixbhfao8wrfw` with `teamspaceId: ts_mp2pz5zwqdkgmzis` (=Private), `parentId: null`, `createdBy: <currentUser>`. Route navigated to `/app/p/<new>`. Cleanup: trashed via `page-opt-trash` — got `isInTrash:true` AND `trashedAt:1778653789059` (page trash correctly stamps trashedAt, unlike DB trash per B-4108).
+
+### B-4119 — Cmd+J does not open AI panel (P3, open)
+- Pressed `Cmd+J` on document — `ai-input` did NOT appear. Pressed `Cmd+K` — palette opened. Only Cmd+K is wired as a global shortcut. The `sidebar-ai` button "Ask AI" has no `title`/`aria-label` advertising a shortcut, and no global keydown listener picks up Cmd+J. Notion's "Ask AI" lives on Cmd+J (Mac) / Ctrl+J — add to taste. P3 because the AI is also reachable via sidebar click.

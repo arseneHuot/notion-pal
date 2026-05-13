@@ -291,7 +291,10 @@ function DatabaseMenu({ databaseId }: { databaseId: string }) {
           </button>
           <button
             onClick={() => {
-              updateDatabase(databaseId, { isInTrash: true });
+              // Stamp `trashedAt` so the Trash route can sort by recency and
+              // future cleanup jobs can age-out databases (B-4108 mirrors the
+              // page-trash flow).
+              updateDatabase(databaseId, { isInTrash: true, trashedAt: Date.now() } as Partial<NotionDatabase>);
               setOpen(false);
               toast("Database moved to Trash", "info");
             }}
