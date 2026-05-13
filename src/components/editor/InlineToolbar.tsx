@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from "react";
-import { Bold, Italic, Strikethrough, Code, Link as LinkIcon, Sparkles } from "lucide-react";
+import { Bold, Italic, Strikethrough, Code, Link as LinkIcon, Sparkles, Underline } from "lucide-react";
 
 export function InlineToolbar() {
   const [open, setOpen] = useState(false);
@@ -198,6 +198,15 @@ export function InlineToolbar() {
         data-testid="ib-italic"
       >
         <Italic className="size-3.5" />
+      </button>
+      <button
+        onMouseDown={(e) => { e.preventDefault(); exec("underline"); }}
+        className={`p-1.5 rounded hover:bg-accent ${active.underline ? "bg-accent" : ""}`}
+        title="Underline (Cmd+U)"
+        aria-label="Underline"
+        data-testid="ib-underline"
+      >
+        <Underline className="size-3.5" />
       </button>
       <button
         onMouseDown={(e) => { e.preventDefault(); exec("strikeThrough"); }}

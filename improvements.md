@@ -1351,3 +1351,38 @@ Priority: high / medium / low.
 
 ### I-3212 — Restore: clear `trashedAt` and any soft-delete metadata (low, open)
 - See B-3221. Restoring should be the symmetric inverse of trashing — clear `trashedAt`, `trashedBy`, etc.
+
+
+### I-3400 — Defensive guards in view-menu render path (high, open)
+- See B-3400. The crash "Cannot read properties of undefined (reading 'includes')" suggests an array-typed view field (filters?, hiddenProperties?, sortBy?) is undefined for some views. Add `?.includes(...)` or default to `[]` at the menu code path and in migration / seed defaults.
+- Bonus: wrap the view-options popover in an ErrorBoundary so a single bad view doesn't blow up the page.
+
+### I-3401 — Numbered-list block should render semantic `<ol><li>` (low, open)
+- The markdown shortcut `1. ` correctly converts the block to a numbered list (data-placeholder="List"), but the rendered output is a div, not `<ol><li>`. Hurts screen reader semantics and copy-paste fidelity to outside surfaces.
+
+### I-3402 — Expand block-handle menu (high, open)
+- See B-3403. Add menu items: Duplicate, Turn into, Copy link, Move to, Comment, Color. Notion parity. Keyboard shortcut hints visible (e.g. Duplicate ⌘D).
+
+### I-3403 — Comment edit + delete + reply (high, open)
+- See B-3404. Each comment needs `comment-edit-<id>` and `comment-delete-<id>` testids and the corresponding actions. Optional: reply threads with `comment-reply-<id>`.
+
+### I-3404 — Cmd+/ keybinding for slash menu (medium, open)
+- See B-3405. Bind global keydown listener: if Cmd+/ in a contenteditable, open slash menu at caret. Compatible with current `/` character path.
+
+### I-3405 — Cmd+] / Cmd+[ / Tab / Shift+Tab indentation (high, open)
+- See B-3406. Indent/outdent the current block, nesting it under the previous sibling.
+
+### I-3406 — Cmd+Shift+H toggles heading 1 ↔ paragraph (medium, open)
+- See B-3407. Pressing Cmd+Shift+H on a paragraph promotes to H1; pressing again demotes back to paragraph. Useful for keyboard-only workflow.
+
+### I-3407 — Expose filter/sort/group via dedicated buttons in DB toolbar (high, open)
+- Currently the entry to filter/sort/group is the view-menu (which crashes — B-3400). Even when fixed, splitting these into top-level `[data-testid="filter-btn"]`, `[data-testid="sort-btn"]`, `[data-testid="group-btn"]` matches Notion's UI and avoids hiding the core DB controls behind a single overflow.
+
+### I-3408 — Add `ib-underline` to inline toolbar + Cmd+U binding (low, open)
+- See B-3412. Underline is conventional (Notion has it). Add to toolbar between italic and strike, wire Cmd+U.
+
+### I-3409 — Add ErrorBoundary around the view-options popover (high, open)
+- See B-3400 / B-3417. The crash escapes to the global error boundary, kicking the user out of the entire page. Wrap the view-menu render with a local ErrorBoundary so a malformed view degrades to a "View options unavailable" message instead of blowing up the page.
+
+### I-3410 — Stress-test Cmd+K at 1k pages (medium, open)
+- Workspaces with many pages need to keep search latency low. Add an automated benchmark that seeds 1k pages and measures filter latency under a target (e.g. ≤80 ms). Without this, we can't catch a regression that only manifests at scale.

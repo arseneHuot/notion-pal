@@ -4113,3 +4113,125 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3221 — restore-DB didn't clear `trashedAt` — fixed (commit b002171)
 - Fix: TrashPage's restore-db click now passes `{isInTrash: false, trashedAt: null}` to `updateDatabase`, matching the page-restore behaviour.
+
+
+## Batch 24 — verification pass (2026-05-13)
+
+### B-3218 — DB cell testids — re-verified fixed (P1, fixed)
+- Navigated to `/app/p/pg_qa_dbb_3106` (the QA-all-types DB). Counted 52 cells in DOM.
+- Confirmed presence of: cell-formula-*, cell-rollup-*, cell-files-*, cell-verification-*, cell-unique-id-*, cell-created-time-*, cell-last-edited-time-*, cell-created-by-*, cell-last-edited-by-*.
+- All formula variants render (formula, formula2, formula3, formula4). Closes I-3210.
+
+### B-3217 — AI panel aria-labels — re-verified fixed (P3, fixed)
+- `close-ai` has `aria-label="Close AI chat"` and `title="Close"`.
+- `ai-send` has `aria-label="Send message"` and `title="Send"`. Closes I-3209.
+
+### B-3205 / B-3206 — P0 crash regressions — re-verified holding (P0, fixed)
+- Navigated /app/home → /app/p/pg_qa_dbb_3106 → /app/calendar → /app/trash.
+- No window.error fired. Pages render cleanly. No regression observed.
+
+### B-3221 — Restore DB clears `trashedAt` — code-level fix verified (P3, fixed)
+- Could not exercise via localStorage injection: store is hydrated from Supabase (per-user keys in localStorage are empty after auth), so injected DBs do not surface in the UI.
+- Per the commit b002171 diff (TrashPage restore-db click now passes `{isInTrash:false, trashedAt:null}`), the symmetric inverse is satisfied.
+- Recommend wiring an E2E that exercises the live Supabase path next time we have a fresh DB to trash.
+
+### B-3400 — view-menu click crashes DB page (P0, open) — REGRESSION
+- Repro: navigate `/app/p/pg_qa_dbb_3106`, click `[data-testid="view-menu-v_b"]`.
+- Observed: page replaced with global error boundary: "This page didn't load… Cannot read properties of undefined (reading 'includes')". 100% reproducible across reloads.
+- Expected: a view-options menu (rename, delete, filter, sort) should pop open without crashing.
+- Severity: P0 — entire DB page becomes unrecoverable until reload; users cannot edit view settings, configure filters, or change view names.
+- Likely cause: a property of the view (filters? sortBy? hiddenProperties?) is `undefined` and the menu code does `something.includes(...)` on it.
+
+### B-3214 — empty form submit still creates row (P2, open — unchanged)
+- Repro: navigate `/form/db_dates_test/v_form`, click `[data-testid="public-form-submit"]` without filling any field.
+- Observed: success message "Thanks for submitting!" appears immediately; row is created in db_dates_test.
+- Expected: client-side validation should block submission of all-empty required fields, OR title should be enforced as required (matches I-3207).
+
+### B-3215 — keystroke mutation perf — re-measured fixed (P2, fixed)
+- Re-ran the typing experiment on `block-content-blk_*` with a MutationObserver attached to document.body.
+- Observed: 2 mutations per keystroke for 3 consecutive keypresses (h, i, s). Down from 20 prior to fix; meets the ≤20 target with margin.
+
+### B-3210 — AI input still single-line `<input type=text>` (P2, open — unchanged)
+- `[data-testid="ai-input"]` is `<INPUT type="text">` with no rows attr. Shift+Enter cannot insert newlines.
+- See I-3204.
+
+### B-3212 — relation→rollup type-change not testable here (P2, info)
+- No visible UI surface to change a property's type. The prop-header menu only exposes `prop-rename-*`, `prop-delete-*`, and (for relation) `rel-target-*` / `rel-dual-*`. No `prop-type-*` selector found anywhere in DOM.
+- Implication: B-3212 cannot regress because there is no end-user path to flip type. Still file I-3205 as a missing feature.
+
+### B-3401 — Slash menu /math item exists but `/equation` does not (P3, open)
+- Repro: type `/` in an empty block, look for slash items.
+- Observed slash items include: `slash-math` (no `slash-equation`). User testing expected `/equation` per the brief — current label is /math (the rendered name in the menu reads "Math").
+- Expected: provide both aliases or rename to /equation to match Notion's convention. Minor naming issue, but discoverability suffers.
+
+### B-3402 — Markdown shortcut "1. " converts block but data-placeholder reads "List" (P3, info)
+- Repro: in an empty block, type `1` then `.` then space.
+- Observed: block's `data-placeholder` becomes "List" (it's now a numbered list block); list rendering works.
+- Note: This is success, not a bug — recorded for tracking. No `<ol>` is used; the renderer uses a custom list block. If the user expects an HTML `<ol>` for accessibility / copy-paste fidelity, see I-3401.
+
+### B-3403 — Block handle menu only exposes Delete (no Duplicate / Turn into) (P2, open)
+- Repro: navigate to any page with blocks. Hover a paragraph block, click `handle-<id>`.
+- Observed: only `menu-delete-<id>` appears. No `menu-duplicate-<id>`, no `menu-turn-into-<id>`, no `menu-copy-link-<id>`, no `menu-color-<id>`.
+- Expected (Notion parity): handle menu should include Delete, Duplicate, Turn into (block type submenu), Copy link, Move to, Comment, Color.
+- Severity: P2 — block manipulation is the core editor surface. Forces users to retype or restructure manually.
+
+### B-3404 — Comments lack edit/delete affordances (P2, open)
+- Repro: open `comments-btn` on a page, type into `comment-input`, click `post-comment`. Comment posts inline.
+- Observed: posted comment has no `comment-edit-*` or `comment-delete-*` testids; no visible edit/delete buttons.
+- Expected: each posted comment row should allow author to edit and delete; admins to delete others'.
+- Severity: P2 — once posted, comments are immutable; common typos cannot be fixed.
+
+### B-3405 — Cmd+/ does not open slash menu from keyboard (P3, open)
+- Repro: focus an editable block, press Cmd+/.
+- Observed: no menu opens; the `slash-menu` testid is not added to the DOM.
+- Expected: Cmd+/ should toggle the same slash menu that `/` opens (Notion compat). The current implementation only triggers slash menu on `/` character input.
+
+### B-3406 — Cmd+] / Cmd+[ keyboard indent has no effect (P3, open)
+- Repro: focus an editable text block, press Cmd+] or Cmd+[.
+- Observed: no change to block marginLeft/paddingLeft; no nesting occurs.
+- Expected: indent/outdent the current block (Notion: Tab and Shift+Tab also do this).
+
+### B-3407 — Cmd+Shift+H reported but cannot be verified — block already H1 (P3, info)
+- Repro: focus H1 block; press Cmd+Shift+H.
+- Observed: tag stays H1 (idempotent for H1, but does not toggle off to paragraph). Could not verify on a non-heading block in this session due to focus issues.
+
+### B-3408 — Filter/sort/group UI unreachable due to view-menu P0 crash (P1, blocked)
+- See B-3400. The view-menu is the entry point to filter/sort/group config and currently crashes. As a result, B-3208 / B-3209 (DB filter/sort operator coverage) cannot be exercised.
+- Severity: P1 — blocks an entire feature area until B-3400 is fixed.
+
+### B-3409 — Synced block source-content edits propagate (P0 acceptance, fixed/works)
+- Repro: `/app/p/pg_mp33cd7d01u4huok` has a SOURCE synced block and a REFERENCE block sharing `blk_syncedchild_1778627070687`. Edited the source by appending `_X3400`.
+- Observed: both source and reference rendered the same updated text immediately. Behaviour is correct.
+
+### B-3410 — pmenu-trash works end-to-end (P1 acceptance, fixed/works)
+- Repro: clicked `pmenu-trash-pg_mp3avk3u6v0vm679` from sidebar. Page disappeared from sidebar. Navigated `/app/trash` — page listed with timestamp + Restore + Delete. Clicked Restore — page returned.
+- No errors observed.
+
+### B-3411 — Comment post works (P3 acceptance)
+- Posting via `comment-input` + `post-comment` succeeds; comment renders in the side panel. (Edit/delete is missing — see B-3404.)
+
+### B-3412 — Inline toolbar missing underline (P3, open)
+- Repro: select text in any block, observe inline toolbar.
+- Observed: `ib-bold, ib-italic, ib-strike, ib-code, ib-link, ib-color, ib-ai`. No underline button.
+- Expected: Notion ships Cmd+U underline. Either add `ib-underline` or wire Cmd+U keyboard shortcut.
+- Severity: P3 — accessibility convention gap.
+
+### B-3413 — Settings dark mode toggle works + persists across navigation (acceptance)
+- Repro: settings → click `dark-btn`. `documentElement.classList` adds `dark`; body bg goes oklch(0.129…). Navigate to `/app/home` — dark stays on.
+- Behaviour is correct.
+
+### B-3414 — URL cell sanitizes `javascript:` (acceptance partial)
+- Repro: set `cell-url-r_b1-p_qa_url_3106` to `javascript:alert(1)` and blur.
+- Observed: value is stored as plain text; no `<a href="javascript:...">` rendered in the cell. Effective XSS surface is suppressed.
+- Note: did not verify `<svg onload>` / `<iframe srcdoc>` paths in this session as those require public-page render path.
+
+### B-3415 — Cmd+K spotlight works + 62ms type-to-results latency (acceptance)
+- Repro: Cmd+K opens `command-input` dialog. Typing "meeting" filters list in 62 ms across the user's current pages/dbs (~30 entries). Adequate.
+- Did not stress at 1k pages — workspace doesn't have that many.
+
+### B-3416 — Comment input + post round-trip (acceptance)
+- See B-3411.
+
+### B-3417 — `view-menu-v_b` crash on fresh load (P0 regression, open) — confirms B-3400
+- After full page reload + login, clicking `view-menu-v_b` still triggers the same global error boundary "Cannot read properties of undefined (reading 'includes')". 100% reproducible.
+- Severity: P0.

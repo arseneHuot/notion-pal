@@ -330,21 +330,28 @@ function ViewMenu({ databaseId, viewId }: { databaseId: string; viewId: string }
           <FilterControls databaseId={databaseId} viewId={viewId} />
           <div className="border-t border-border my-1" />
           <div className="px-3 py-1 text-[10px] uppercase text-muted-foreground">Properties</div>
-          {db.properties.map((p) => (
-            <label key={p.id} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent">
-              <input
-                type="checkbox"
-                checked={!view.hiddenProperties.includes(p.id)}
-                onChange={() => {
-                  const hidden = view.hiddenProperties.includes(p.id)
-                    ? view.hiddenProperties.filter((x) => x !== p.id)
-                    : [...view.hiddenProperties, p.id];
-                  updateView(databaseId, viewId, { hiddenProperties: hidden });
-                }}
-              />
-              <span className="flex-1">{p.name}</span>
-            </label>
-          ))}
+          {(db.properties ?? []).map((p) => {
+            // Views written before the hiddenProperties field landed (or after
+            // a malformed import) can have it as undefined; treat that as the
+            // empty array so the entire ViewMenu doesn't crash trying to call
+            // `.includes` on undefined (B-3400).
+            const hidden = view.hiddenProperties ?? [];
+            return (
+              <label key={p.id} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-accent">
+                <input
+                  type="checkbox"
+                  checked={!hidden.includes(p.id)}
+                  onChange={() => {
+                    const nextHidden = hidden.includes(p.id)
+                      ? hidden.filter((x) => x !== p.id)
+                      : [...hidden, p.id];
+                    updateView(databaseId, viewId, { hiddenProperties: nextHidden });
+                  }}
+                />
+                <span className="flex-1">{p.name}</span>
+              </label>
+            );
+          })}
           <div className="border-t border-border my-1" />
           <AddPropertyMenuItem databaseId={databaseId} viewId={viewId} close={() => setOpen(false)} />
         </div>
