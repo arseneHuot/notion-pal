@@ -230,7 +230,20 @@ function PublicFormPage() {
             {visibleFields.map((p) => (
               <div key={p.id} data-testid={`public-form-field-${p.id}`}>
                 <label className="block text-xs font-medium mb-1">{p.name}</label>
-                <PublicFormField property={p} value={values[p.id]} onChange={(v) => setValues((cur) => ({ ...cur, [p.id]: v }))} />
+                <PublicFormField
+                  property={p}
+                  value={values[p.id]}
+                  onChange={(v) =>
+                    setValues((cur) => ({
+                      ...cur,
+                      // Functional updates: when the field passes a callback,
+                      // run it against the latest stored value so rapid
+                      // synchronous clicks (multi-select toggle, etc.) don't
+                      // collapse to the last click (B-5506).
+                      [p.id]: typeof v === "function" ? (v as (prev: unknown) => unknown)(cur[p.id]) : v,
+                    }))
+                  }
+                />
               </div>
             ))}
             <button
@@ -248,7 +261,7 @@ function PublicFormPage() {
   );
 }
 
-function PublicFormField({ property, value, onChange }: { property: Property; value: unknown; onChange: (v: unknown) => void }) {
+function PublicFormField({ property, value, onChange }: { property: Property; value: unknown; onChange: (v: unknown | ((prev: unknown) => unknown)) => void }) {
   if (property.type === "text" || property.type === "title") {
     return (
       <input
@@ -311,7 +324,15 @@ function PublicFormField({ property, value, onChange }: { property: Property; va
             <button
               type="button"
               key={o.id}
-              onClick={() => onChange(active ? selected.filter((id) => id !== o.id) : [...selected, o.id])}
+              onClick={() =>
+                // Functional updater so rapid synchronous toggles compose
+                // correctly even before React commits the previous click
+                // (B-5506).
+                onChange((prev) => {
+                  const cur = Array.isArray(prev) ? (prev as string[]) : [];
+                  return cur.includes(o.id) ? cur.filter((id) => id !== o.id) : [...cur, o.id];
+                })
+              }
               className={`text-xs rounded px-2 py-1 border ${active ? "bg-primary text-primary-foreground border-primary" : "bg-background border-input hover:bg-accent"}`}
             >
               {o.name}

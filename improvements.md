@@ -1800,3 +1800,39 @@ Priority: high / medium / low.
 ### I-5406 — AI markdown renderer should support ordered/unordered list nesting (low, open)
 - B-5404 confirms top-level `- item` works. Trying multi-level indent (e.g. `- a\n  - b`) currently flattens to a single-level list — the bullet regex matches both but the second never becomes a child `<li>`. Implementing depth via leading-space count would close the gap with most chat-assistant renderers.
 
+
+## 2026-05-13 — Test agent batch (I-5500 series)
+
+### I-5500 — Public form multi-select needs functional setState (medium, open)
+- See B-5506. `form.$dbId.$viewId.tsx:314` reads `selected` from the closure when computing the next array. Rapid clicks (or a script playback at submission speed) overwrite each other and only the last option ID survives.
+- Fix: pass a function to `onChange`: `onChange((prev) => active ? (prev as string[]).filter(id => id !== o.id) : [...(prev as string[] ?? []), o.id])`. Then thread `setValues((cur) => ({...cur, [p.id]: typeof v === "function" ? v(cur[p.id]) : v}))` so the parent applies functional updaters. Closes a real regression risk for any tester clicking quickly or using automation.
+
+### I-5501 — Cmd+K could optionally index page icon glyphs (low, open)
+- See B-5501. The palette only searches title + block content. Searching "🚀" returns nothing even when two pages have that exact emoji. Optional behavior: include `p.icon` in the haystack ONLY when the query is a single grapheme cluster (so typing "the" still doesn't match a page whose title contains an emoji). Low-priority — icons are mostly decorative.
+
+### I-5502 — `prop-header-<id>` testid should match the actual drag handle (low, open)
+- See B-5504. Today the inner `<button data-testid="prop-header-...">` is `draggable:false`; the drag target is the wrapping `<th data-property-id="...">`. Tests that target the button to simulate drag will fail silently. Move the testid onto the `<th>` (or add a second testid like `prop-header-handle-<id>` on the th). Currently relying on `data-property-id="<id>"` works but is undocumented.
+
+### I-5503 — Restore parent page should optionally cascade child restore prompt (low, open)
+- See B-5509. After trashing child then parent, restoring the parent only un-trashes the parent — the child stays in trash because `restorePageCascade` only descends to in-trash children whose parent was just restored AND whose `parentId` matches. Wait: it does descend (store.ts:649-674), so this should work. Edge case: if child was trashed BEFORE parent (different `trashedAt` timestamps), user mental model expects child to come back together. Add a toast offering "Restore N child pages too?" when there are dangling trashed children.
+
+### I-5504 — AI chat scroll container could pin scrollbar visibility on overflow (low, open)
+- B-5502 shows the panel scrolls correctly. On macOS the overlay scrollbar fades after a second — users may not realize content extends. A subtle persistent scrollbar (`scrollbar-width: thin` / `scrollbar-color`) or a `box-shadow: inset 0 -8px 6px -6px rgba(0,0,0,.1)` fade hint on the bottom edge would discoverability win.
+
+### I-5505 — `/columns` slash text input retains the typed query inside the block content (low, open)
+- During B-5507 testing I noticed that typing `/2 columns` into a paragraph and clicking `slash-columns-2` leaves the typed text in the block when the conversion path crosses certain components (Reading list page had a pre-existing columns block; my typed `/2 columns` text persisted as `content` on the columns block until I cleared it manually). The slash handler should clear the originating text before swapping the type. The fresh-block path on Welcome page worked correctly.
+
+### I-5506 — Trash should batch-empty UI even with zero items (low, open)
+- B-5505 confirmed the empty placeholder appears. UX nit: there's no affordance to "empty all" from /app/trash even when items are present. A small "Empty trash" button (with double-confirm) above the list would mirror Notion and save N clicks for large cleanups.
+
+### I-5507 — Public form should show selected count for multi-select (low, open)
+- The current UX (B-5506) toggles option pills via active class. When 3+ options are selected, there's no compact summary ("3 selected") — only the inline pill highlights. Adding a small "3 of N selected" caption under the field label would help respondents confirm their state at a glance.
+
+### I-5508 — Synced-block ref count should appear in source's UI (low, open)
+- B-5508 perf bench used 100 refs of one source. The source synced-block has no indication of how many refs point at it. Adding a small "100 refs" badge next to the source (computed by scanning `state.blocks` for `type:"synced-block-ref" && sourceId===this.id`) helps users understand the blast radius of an edit before they make it.
+
+### I-5509 — Auth page should hide the AI keyboard shortcut hint (low, open)
+- B-5503 confirmed Cmd+J is inert on /auth (good). If we ever add a "?" keyboard-shortcuts overlay, it should be gated on AppShell so /auth doesn't advertise shortcuts that don't work. Pre-emptive guard documented here for I-5500 series.
+
+### I-5510 — Comment resolve toggle could show inline "Resolved by <user>" timestamp (low, open)
+- B-5510 confirms persistence. The "Resolved" button label is the only signal that the action stuck. Adding a tiny "Resolved 2 minutes ago" caption inside the comment row (using `updatedAt`) would communicate when/who without needing to hover. Mirrors Notion's resolved-by-user surface.

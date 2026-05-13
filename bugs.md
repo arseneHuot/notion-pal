@@ -5600,3 +5600,52 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5408 — Orphan comments after permanent page delete — fixed (commit d83c6da)
 - Fix: `permanentlyDeletePage` rebuilds `state.comments` and drops any comment pointing at a deleted page OR a deleted block. Verified end-to-end with 2 comments on a synthetic trashed page.
+
+## 2026-05-13 — Test agent batch (B-5500 series)
+
+### B-5500 — B-5408 comment cascade re-verified (acceptance, ok)
+- Steps: injected `pg_b5500_cascadetest` (`isInTrash:true`) with comments `cmt_b5500_a` and `cmt_b5500_b` (both `pageId` scoped, `blockId:null`), plus a non-trashed `pg_b5500_live` with one paragraph block `blk_b5500_live` and a block-scoped comment `cmt_b5500_block` (`blockId:"blk_b5500_live"`).
+- Step 1: clicked `delete-forever-pg_b5500_cascadetest` at /app/trash. After: `state.pages.pg_b5500_cascadetest` gone, both `cmt_b5500_a`/`cmt_b5500_b` removed from `state.comments`, `cmt_b5500_block` untouched.
+- Step 2: trashed `pg_b5500_live` (set `isInTrash:true`+reload), clicked `delete-forever-pg_b5500_live`. After: page gone, `blk_b5500_live` gone, `cmt_b5500_block` removed. B-5408 fix (d83c6da) cascades both page-scoped and block-scoped comments correctly.
+
+### B-5501 — Cmd+K does NOT filter by emoji icon glyph (acceptance, ok)
+- Steps: at /app, dispatched `open-command-palette`, set `command-input` value to "🚀". Pages have icons 🚀 (Roadmap Q3, Project brief).
+- Observed: palette renders `cmd-empty` ("No results"). Sanity check: query "roadmap" returns Roadmap Q3 page + block-match. CommandPalette.tsx:56-59 only matches against `p.title.toLowerCase()` and block `stripHtml(content).toLowerCase()` — no `p.icon` in the haystack.
+- Expected: documented limitation. Could be desirable behavior (emojis are decoration, not searchable text). Tracking as I-5501 in case product wants to support it.
+
+### B-5502 — AI panel scroll container exceeds viewport at 12 messages (acceptance, ok)
+- Steps: seeded `notion-clone:ai-chat:<uid>` with 12 alternating user/assistant messages (~75 chars each), reloaded, clicked `sidebar-ai`.
+- Observed: `[data-testid^="ai-msg-"]` count=12. The scroll container (`flex-1 overflow-y-auto p-3 space-y-3 min-h-[200px]`, AIChat.tsx:289) reports `scrollHeight=1068`, `clientHeight=521`, `canScroll=true`, `overflowY: auto`. The browser's overlay scrollbar appears on hover/scroll; functional scroll works end-to-end. No layout overflow or chrome breakage.
+
+### B-5503 — Cmd+J on /auth route does NOT open AI panel (acceptance, ok)
+- Steps: cleared `sb-isuqldoryaqznbhkfmsa-auth-token`, navigated to /auth (rendered email/password form). Dispatched `keydown {key:"j", metaKey:true}` at the window.
+- Observed: no `[data-testid="ai-input"]` present before or after. `sidebar-ai` absent (AppShell only mounts under `/app`). The AIChat component is rendered inside AppShell only, so its `keydown` listener can't fire outside `/app`. Correct gating.
+
+### B-5504 — Property header drag-reorder via `prop-header` flow re-verified (acceptance, ok)
+- Steps: at /app/db/db_mp3lhvrxwl40mnbf, the inner `[data-testid="prop-header-<id>"]` `<button>` is `draggable:false`; the wrapping `<th data-property-id="<id>" draggable={type !== "title"}>` is the drag source (TableView.tsx:160-181). Synthesized `dragstart`+`dragover`+`drop` on the wrapping `<th>` for Score (prop_qa_num) → Tags (prop_mp3lhvrx92ucm92s).
+- Observed: properties reordered from [Name, Tags, Status, Date, Score, TestNote] → [Name, Score, Tags, Status, Date, TestNote]. Restored via reverse drag. The `prop-header-` button itself isn't the drag handle but its parent th is — a small affordance gap worth flagging.
+
+### B-5505 — Trash empty-state appears after last item permanently deleted (acceptance, ok)
+- Steps: planted `pg_b5503_lastone` (`isInTrash:true`, only trashed item in workspace). At /app/trash, `[data-testid="trash-empty"]` was absent. Clicked `delete-forever-pg_b5503_lastone`.
+- Observed: `trash-empty` element materialised immediately (no reload required), text "Trash is empty." rendered. TrashPage.tsx:22 computes `empty` from both `trashedPages` and `trashedDbs` and the empty placeholder is gated on the union — correct.
+
+### B-5506 — Public form multi-select with 3 options serialises correctly when paced (P3, open)
+- Steps: visited /form/db_mp3lhvrxwl40mnbf/view_b4600_form_select. Tags has 3 options after seeding `opt_b5505_third`. Clicked each option button back-to-back synchronously (no awaits) → only the LAST clicked option ended up in `row.values[tagsProp]`.
+- Re-ran with ~120ms gaps between clicks (one React render cycle per click): all 3 option IDs `[Important, Idea, Urgent]` end up in `row.values["prop_mp3lhvrx92ucm92s"]`.
+- Cause: form.$dbId.$viewId.tsx:314 — multi-select `onClick={() => onChange(active ? selected.filter(...) : [...selected, o.id])}` reads `selected` from the closure at render time. Three rapid synchronous clicks all see `selected=[]` and overwrite with a single-id array each time. Functional update form would fix it.
+
+### B-5507 — Slash /2 /3 /4 columns commands all create correct columnIds count (acceptance, ok)
+- Steps: at Welcome page, created three fresh paragraph blocks `blk_b5507_coltest`, `blk_b5507_col2`, `blk_b5507_col4`. Filled each with `/2 columns`, `/3 columns`, `/4 columns` respectively, fired input event, clicked the corresponding `slash-columns-{2,3,4}` testid in the menu.
+- Observed: each block converts to `type:"columns"` with `columns:N` and exactly N entries in `columnIds`. The lazy materialiser at Block.tsx:1506-1538 fills `columnIds` with N fresh column children on first render.
+
+### B-5508 — Synced-block ref scrolling 100 refs is smooth (~60 fps) (acceptance, ok)
+- Steps: created page `pg_b5508_syncperf` with one `synced-block` source (single paragraph child) + 100 `synced-block-ref` blocks. Navigated to the page; measured `requestAnimationFrame` cadence while programmatically scrolling top→bottom over 1.5s in 30 steps.
+- Observed: 89 frames in 1.25s, avg 16.49ms, 0 frames > 33ms. DOM node count after full hydration: 6054. No layout thrash or React perf warnings. The ref-render path in Block.tsx:1333-1370 reads the source's children once per ref via `useStore` but doesn't appear to cause render storms.
+
+### B-5509 — Child→trash then parent→trash cascade keeps both rows in trash (acceptance, ok)
+- Steps: created `pg_b5509_parent` and `pg_b5509_child` (`parentId:pg_b5509_parent`). Trashed child via page-options → "Delete" — `child.isInTrash:true`, parent untouched. Then trashed parent the same way. Both rows show in /app/trash, each with their own `delete-forever-<id>` button.
+- Observed: `deletePage` (store.ts:620-647) cascades to non-trashed children only (`if (p.parentId === pid && !p.isInTrash)`). Since the child was already trashed, it's skipped in the second cascade but retains its earlier `trashedAt`. Restoring parent would not auto-restore child (separate `restorePageCascade` path); flagging as I-5503.
+
+### B-5510 — Comment resolve toggle persists across reload (acceptance, ok)
+- Steps: seeded `cmt_b5510_resolve` on /app/p/pg_mp2pz5zwikifg7r3 (Welcome). Opened comments panel via `comments-btn`, clicked `resolve-cmt_b5510_resolve` (false → true). Hard-reloaded the tab.
+- Observed: post-reload `state.comments.cmt_b5510_resolve.resolved === true`. With the default panel filter (showResolved off), the comment is hidden — clicking `show-resolved-toggle` reveals it, button label reads "Resolved" (not "Resolve"). `resolveComment` (store.ts:1671-1678) writes through to the persisted store correctly.
