@@ -6737,3 +6737,10 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7604 — Sticky no-op restore banner when grandparent trashed but parent isn't — fixed (commit 80c8f88) — P2
 - Fix: `restorePageCascade` upward walk now traverses the full parentId chain, adding every trashed ancestor (even past non-trashed intermediaries) to the restore set. Verified live: grandparent trashed + parent intact + child intact → banner-restore click on child restores grandparent too.
+
+### Final P3 sweep (commit dd67763)
+- **B-7200** — color picker popover gets `data-state="open"` + `ib-color-picker` testid for E2E waitFor.
+- **B-7404** — `moveCalendarEvent` detects DST-gap drift and toasts the new wall-clock time.
+- **B-7601** — `blockToMarkdown` accepts the same alias map as the renderer (paragraph→text, etc.).
+- **B-7602** — Cmd+K palette normalises all whitespace (newlines/tabs) to spaces before tokenising. Multi-line paste matches.
+- **B-7603** — Public form date input min/max clamps year to 4 digits; 5+-digit input is discarded.
