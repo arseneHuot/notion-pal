@@ -4598,3 +4598,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Repro: navigated to a page with a heading-2, selected 2 chars. Toolbar appears with all 8 expected actions. Consistent with prior B-3504 / I-3408 acceptance.
 - Severity: closes inline-toolbar verification sub-task.
 
+
+### B-3707 / B-3404 — Comment Edit + Delete with testids — fixed (commit f51cc36) — closes I-3700
+- Fix: PageComments.tsx exposes `comment-edit-<id>`, `comment-delete-<id>`, `comment-edit-input-<id>`, `comment-edit-save-<id>`, `comment-edit-cancel-<id>` on both top-level comments AND replies. Edit opens an inline textarea with the existing content; Save commits via a new `updateComment` store action that records `editedAt`. Edited comments render "(edited)" next to their timestamp. Verified end-to-end: posted a comment, clicked Edit, modified text, clicked Save → DOM shows the new text + "(edited)" tag.
+
+### B-3704 — Hidden columns unhide chip — fixed (commit f51cc36) — closes I-3702
+- Fix: InlineDatabase header now renders a `hidden-cols-chip-<viewId>` line whenever the active view has any `hiddenProperties`. Shows count + first three names + a "Show all" link (`unhide-all-<viewId>`) that clears `hiddenProperties` on the view. Restores discoverability for the new prop-header Hide action.
