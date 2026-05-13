@@ -393,7 +393,15 @@ function UniqueIdCell({ row, property, database }: { row: DatabaseRow; property:
 }
 
 function FormulaCell({ row, property, database }: { row: DatabaseRow; property: Property; database: NotionDatabase }) {
-  const expr = (property as { expression?: string }).expression ?? "";
+  // Accept either `expression` (canonical) or `formula` (alias used by some
+  // older seeds and the Notion API) — B-3107 / I-3101.
+  const expr =
+    (property as { expression?: string }).expression ??
+    (property as { formula?: string }).formula ??
+    "";
+  if (!expr.trim()) {
+    return <span className="text-xs text-muted-foreground italic" title="Set an expression for this formula property">—</span>;
+  }
   const result = evaluateFormula(expr, row, database);
   return <span className="text-xs font-mono">{String(result ?? "")}</span>;
 }

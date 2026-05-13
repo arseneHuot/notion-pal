@@ -113,18 +113,46 @@ export function InlineToolbar() {
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     const range = sel.getRangeAt(0);
     if (!color) {
-      // Reset: walk the fragment and strip color from any span we own.
-      const editor = sel.anchorNode?.parentElement?.closest("[contenteditable]") as HTMLElement | null;
-      const contents = range.extractContents();
-      // Strip our own color spans (data-color), legacy <font color>, AND any
-      // span[style*="color"] left over from older saves — so the "default"
-      // option always reliably clears the selection's color.
-      contents.querySelectorAll('span[data-color], font, span[style*="color"]').forEach((node) => {
+      // Reset has two cases (B-3111):
+      // 1. Selection is entirely INSIDE a colored ancestor — walk up from
+      //    the range's common ancestor and unwrap that span. Crucially,
+      //    `selectNodeContents(span)` makes anchorNode === span itself, so
+      //    `anchorNode.parentElement` skips the span. The reliable starting
+      //    point is `range.commonAncestorContainer`.
+      // 2. Selection spans nested colored fragments — strip them from
+      //    the extracted contents.
+      const COLOR_SEL = 'span[data-color], font, span[style*="color"]';
+      const toElement = (n: Node | null): Element | null =>
+        !n ? null : n.nodeType === Node.ELEMENT_NODE ? (n as Element) : n.parentElement;
+      const editor = toElement(sel.anchorNode)?.closest("[contenteditable]") as HTMLElement | null;
+      const unwrap = (node: Element) => {
         const parent = node.parentNode;
         while (node.firstChild && parent) parent.insertBefore(node.firstChild, node);
         parent?.removeChild(node);
-      });
+      };
+      // Case 1: collect every colored ancestor of either range end and the
+      // range's common ancestor. Walk up to (but not through) the editor.
+      const starts: (Element | null)[] = [
+        toElement(range.startContainer),
+        toElement(range.endContainer),
+        toElement(range.commonAncestorContainer),
+      ];
+      const ancestors: Element[] = [];
+      for (const start of starts) {
+        let cur: Element | null = start;
+        while (cur && cur !== editor && cur !== document.body) {
+          if (cur.matches?.(COLOR_SEL) && !ancestors.includes(cur)) {
+            ancestors.push(cur);
+          }
+          cur = cur.parentElement;
+        }
+      }
+      // Case 2: strip from extracted contents BEFORE reinsertion.
+      const contents = range.extractContents();
+      contents.querySelectorAll(COLOR_SEL).forEach((node) => unwrap(node as Element));
       range.insertNode(contents);
+      // Now unwrap any ancestors collected in case 1.
+      ancestors.forEach((node) => unwrap(node));
       editor?.dispatchEvent(new InputEvent("input", { bubbles: true }));
       return;
     }

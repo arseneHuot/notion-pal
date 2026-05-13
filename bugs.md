@@ -3827,3 +3827,116 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3011 — Cmd+K palette: surface block snippets — fixed (commit 005ce79) — closes I-3005
 - Fix: queries ≥ 2 chars now produce a "Block matches" group with up to 5 snippets formatted as `"…<excerpt>…  ·  <page>"`. Clicking the result navigates to the parent page and scrolls + briefly ring-highlights the matched block via its `data-block-id` attribute. Verified: searching "OKR" returns two entries from the OKRs / OKRs (Copy) pages plus the regular Pages group.
+
+
+## 2026-05-13 ~16:30 — QA agent verification batch (B-3100s)
+
+### B-3100 — B-3022 trash crash on synthetic trashed DB — verified FIXED (P1, fixed)
+- Repro: inject `{id:'db_synth_trash_3100', isInTrash:true, properties:{...}, views:[...]}` (no `rows` array) into `state.databases` for active workspace, navigate to /app/trash.
+- Observed: route renders Trash heading; row appears as "Untitled database — 0 rows — Restore — Delete". No ErrorBoundary, no console error.
+- Expected: graceful render with "0 rows". PASS.
+
+### B-3101 — B-3023 / I-3000 calendar day-add aria-labels — verified FIXED (P3, fixed)
+- Repro: visit /app/calendar, query `[data-testid^="day-add-"]`.
+- Observed: 35/35 buttons have aria-label e.g. "Add event on 27 avril" and title="Add event". Locale-aware via toLocaleDateString.
+- Expected: 35/35 labeled. PASS.
+
+### B-3102 — B-3009 / I-3003 ib-color aria-label — verified FIXED (P3, fixed)
+- Repro: open page with editable block, select text, inspect `[data-testid="ib-color"]`.
+- Observed: aria-label="Text color" and title="Text color".
+- Expected: parity with other ib-* buttons. PASS.
+
+### B-3103 — B-3026 / I-3004 ib-link-apply via .click() — verified FIXED (P3, fixed)
+- Repro: open ib-link popover, set input value via native setter, dispatch input event, call `apply.click()`.
+- Observed: anchor `<a href="https://example.com/test3100">…</a>` wraps selection; popover closes.
+- Expected: programmatic .click() commits link. PASS.
+
+### B-3104 — B-3011 / I-3005 Cmd+K block snippets + scroll-into-view — verified FIXED (P2, fixed)
+- Repro: open palette, type "o" (1 char) → no "Block matches" group. Type "orientation" → group surfaces with `cmd-block-blk_…` testid and snippet "¶…ome! Here's a quick orientation. EXTRA · TestColor". Click → palette closes, block element gets `ring-1 ring-blue-400`, scrollIntoView called on the exact `[data-block-id]` element.
+- Expected: ≥2 char threshold, snippet group, click navigates & highlights. PASS on all counts.
+
+### B-3105 — Trash cascade 3-deep root→mid→leaf — works (P2, fixed/info)
+- Repro: synth 3 pages (root with childIds:[mid], mid with childIds:[leaf]+parentId, leaf with parentId), reload, click `pmenu-trash-root`. Check store; navigate /app/trash, click `restore-root`. Recheck store.
+- Observed: trash sets isInTrash:true and identical trashedAt timestamp on all three; restore from root clears isInTrash on all three.
+- Expected: cascading trash & restore. PASS.
+
+### B-3106 — All 22 database property types render an appropriate cell editor (P2, fixed/info)
+- Repro: inject new props of types text/number/select/multi-select/status/date/url/email/phone/checkbox/formula/files/person/created-time/created-by/last-edited-time/last-edited-by/unique-id/verification/button/rollup into db_b (array push), set view visibleProperties to all, reload, render `/app/p/<page>` with `database-inline` block.
+- Observed: 23 columns render; each cell uses its dedicated data-testid (cell-text-, cell-number-, cell-date-, cell-checkbox-, cell-person-, etc.). created-time / last-edited-time / created-by / last-edited-by gracefully show "Invalid Date" / "—" when row lacks the metadata. unique-id auto-numbers (1, 2). Verification toggles to "Unverified". Button cell renders a button.
+- Expected: every type renders. PASS.
+
+### B-3107 — Formula cell shows "#ERR: Unexpected end" when `formula.formula` field is missing — but works with `formula.expression` (P3, open)
+- Repro: create a formula property with `{formula:'prop("Title")'}` only. Cell renders #ERR. Add `{expression: same string}` (or set both) — works.
+- Observed: parser appears to read `expression` (or treats missing as empty). The error string "Unexpected end" is also user-unfriendly for an empty expression.
+- Expected: a) accept `formula` as an alias for `expression`, b) render a friendlier "—" or "(empty formula)" placeholder when no expression is set.
+
+### B-3108 — Formula evaluator handles prop refs, arithmetic, if, concat, format — works (P2, fixed/info)
+- Repro: add formulas `prop("Title")`, `prop("QA_number") * 2`, `if(prop("QA_number") > 10, "high", "low")`, `concat(prop("Title"), " · ", format(prop("QA_number")))` (set both `.formula` and `.expression`). Row values: Title="B item 1", QA_number=21.
+- Observed: cells display "B item 1", "42", "high", "B item 1 · 21" respectively.
+- Expected: correct evaluation across operators. PASS.
+
+### B-3109 — Slash menu filter coverage is weak for plural keywords (P3, open)
+- Repro: open empty block, type `/database` or `/data`. Only `slash-db-table` surfaces.
+- Observed: `slash-db-board`, `slash-db-calendar`, `slash-db-gallery`, `slash-db-list`, `slash-db-timeline` don't match keyword "database" or "data".
+- Expected: typing "database" / "data" filters to ALL `slash-db-*` items. Likely filter only matches the visible item title, not synonyms.
+- Filter for "head" works perfectly (h1/h2/h3/toggle-h1/h2/h3), filter for "code" returns code-only — good baseline; gap is the database family.
+
+### B-3110 — Markdown shortcuts all functional (P2, fixed/info)
+- Repro: on fresh empty block, type each of `# `, `## `, `### `, `* `, `[] `, `> `, ```` ``` `` ```` (with trailing space). After each, store block.type checked.
+- Observed: heading-1, heading-2, heading-3, bullet-list, todo, quote, code respectively.
+- Expected: per spec. PASS.
+
+### B-3111 — Inline toolbar `ib-color-default` does NOT unwrap colored span (P2, open)
+- Repro: select text, apply `ib-color-red` (renders `<span data-color="1" style="color: rgb(220,38,38)">…</span>`). Reselect span content, open ib-color popover, click `ib-color-default`.
+- Observed: span remains in DOM with red color & data-color attribute. No change after multiple attempts (with mousedown+mouseup+click).
+- Expected: clicking "default" should unwrap the span (or set data-color="default" without inline style). Currently leaves the inline color in place.
+
+### B-3112 — Synced block content propagates to refs — works (P2, fixed/info)
+- Repro: synced-block `blk_mp33cd7dwqtkopvq` has 50 refs across pages. Mutated child block's `content` field → reload → navigate to OKRs page.
+- Observed: all 50 `[data-block-id^="blk_perfref_"]` show the new text. (Note: mutating the source block's own `content` does not propagate because synced blocks render via `children`, not via the source's own content; only child mutations propagate.)
+- Expected: refs reflect source children mutations. PASS.
+
+### B-3113 — AI chat user input does NOT preserve newlines or render markdown in user bubble (P2, open)
+- Repro: send multiline markdown message (`# H1\n## H2\n> quote\n- list\n  - nested\n\`\`\`js\nconst x=...\n\`\`\``) via ai-input.
+- Observed: user bubble HTML is `<div class="whitespace-pre-wrap"># H1## H2### H3...```Inline `code`</div>` — newlines stripped to empty string when text crosses through input.value (because ai-input is `<input type="text">`, not textarea).
+- Expected: either accept multi-line via Shift+Enter into a textarea, OR auto-convert `\n` literals during display.
+- Side issue: assistant reply mangles the user prompt when extracting structure (drops "const" from code fence).
+
+### B-3114 — AI chat input is `<input type="text">` not `<textarea>` (P3, open)
+- Repro: query `[data-testid="ai-input"].tagName === 'INPUT'` and `.type === 'text'`.
+- Observed: single-line input. Cannot enter newlines naturally. Pasting multi-line text strips newlines per single-line input semantics. This is the root cause of B-3113.
+- Expected: a multi-line composer (textarea or contenteditable) like ChatGPT / Claude.
+
+### B-3115 — Mobile sidebar open/close toggle works at 600x900 (P2, fixed/info)
+- Repro: resize viewport to 600x900. Aside auto-collapses; `open-sidebar` button visible; click → aside slides in (width 256, left 0, `close-sidebar` button appears); click close-sidebar → aside hidden, open-sidebar back.
+- Expected: collapsible mobile drawer. PASS.
+
+### B-3116 — Page-options menu does NOT include "History" / version history (P2, open) — feature gap
+- Repro: click `page-options`. Menu items: Remove from favorites, Duplicate, Turn into wiki, Word count, Copy link, Export as Markdown, Print/save as PDF, Move to teamspace, Move to Trash. No "Page history" or "Version history".
+- Observed: page schema HAS a `history` field (array, present on all pages). Field is populated by some flow but no UI to view/restore versions.
+- Expected: a "Page history" menu item that opens a list of saved versions with a restore button.
+
+### B-3117 — Relations do NOT auto-create back-relations (P2, open) — feature gap
+- Repro: db_b has `B→C` relation property pointing to db_c. r_b1 has value `[r_c1]`. Inspect db_c.properties — only Title and `C→A` (separate relation to db_a). No `C→B` back-relation property; r_c1.values lacks any reference to r_b1.
+- Observed: directional relations only. Notion creates symmetric back-relations automatically when you add a relation.
+- Expected: either auto-create the inverse property, OR add a "Show on related database" toggle in the relation property options.
+
+### B-3118 — `row-open-*` buttons exist but don't open a row detail drawer (P1, open)
+- Repro: on `/app/p/pg_mp33cd7d01u4huok` inline DB table, click `[data-testid="row-open-r_dt1"]`. No drawer/dialog appears.
+- Observed: button click is a no-op (no DOM mutation). Both `[data-testid="row-detail"]` and `[role="dialog"]` queries return null after click.
+- Expected: open a row detail side-panel showing all properties (especially useful for hidden/many properties).
+
+### B-3119 — Cmd+K block-match threshold of ≥2 chars confirmed across queries (P2, fixed/info)
+- Repro: open palette, sweep queries: "" (0c), "a" (1c), "ab" (2c), "abc" (3c), "OKR" (3c), "orient" (6c), "page" (4c).
+- Observed: blocks count was 0/0/1/0/2/1/3 (only ≥2 chars surface blocks; "abc" had no matches, so 0 is expected). Pages count was 10/10/2/0/2/1/4 (default 10 when query is empty).
+- Expected: ≥2 char threshold for block group. PASS.
+
+### B-3120 — Public form roundtrip confirmed (P2, fixed/info)
+- Repro: visit /form/db_dates_test/v_form, fill p_dt="QA_FORM_3119" + p_dn=999, click public-form-submit.
+- Observed: row count 9→10, last row has `values:{p_dt:"QA_FORM_3119", p_dn:999}, createdBy:"public-form"`. "Thanks for submitting!" message shown.
+- Expected: roundtrip writes host's localStorage. PASS.
+
+### B-3121 — 50 DOM mutations within 220ms after one keystroke (P3, info)
+- Repro: focus an editable block, attach MutationObserver to document.body (subtree+childList+attributes+characterData), call `document.execCommand('insertText', false, 'q')`, sleep 220ms.
+- Observed: 50 mutations recorded. Total elapsed 236ms (mostly setTimeout overhead).
+- Expected: indicates React re-renders cascading through siblings on every keystroke. Not jank but worth investigating memo placement on sibling Block components (probably a `useStore` selector that returns a new object each time).

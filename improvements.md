@@ -1281,3 +1281,32 @@ Priority: high / medium / low.
 ### I-3008 — Calendar event chip drop targets (medium, open) — restates I-2804 calendar slice
 - See B-3014. Chips already have `draggable="true"`. Need to add `onDragOver={(e)=>e.preventDefault()}` and `onDrop={(e)=>rescheduleRow(chipId, day)}` to each `cal-add-*` cell. Smallest delta of the three.
 
+
+## 2026-05-13 ~17:00 — QA agent verification batch
+
+### I-3100 — Slash menu filter should index synonyms / item descriptions (medium, open)
+- See B-3109. Typing "database" only matches `slash-db-table` even though `slash-db-board`, `slash-db-gallery`, `slash-db-list`, `slash-db-calendar`, `slash-db-timeline` are conceptually databases. Index the description text plus an aliases array (e.g. `aliases: ['database', 'data', 'db']`) into the filter function.
+
+### I-3101 — Inline-color "default" swatch should unwrap colored span (medium, open)
+- See B-3111. Currently `ib-color-default` leaves the wrapping `<span data-color="1" style="color:rgb(220,38,38)">` intact. Fix: detect default selection → replace the span with its text contents (`span.replaceWith(...span.childNodes)` or `document.execCommand('removeFormat')`-style cleanup limited to color spans only).
+
+### I-3102 — AI chat composer should be a multi-line textarea / contenteditable (high, open)
+- See B-3113/B-3114. Replace `<input type="text">` with a `<textarea>` (or contenteditable div) that supports Enter for newline + Cmd/Ctrl+Enter to send. Newlines should be preserved in the user bubble (whitespace-pre-wrap already styled). Markdown rendering in user bubble is a nice-to-have.
+
+### I-3103 — Add "Page history" / version history UI (medium, open)
+- See B-3116. `page.history: []` field exists on every page but no UI to view/restore. Add menu item under page-options that opens a side panel listing snapshots with timestamps and a "Restore" button per entry.
+
+### I-3104 — Relation property: auto-create symmetric back-relation property (medium, open)
+- See B-3117. When user creates `B→C` relation on db_b, optionally auto-add a `C→B` (or `Related to B`) property on db_c that mirrors the link. Either always on, or a checkbox "Show on related database" in the relation property options (Notion mirrors this exactly).
+
+### I-3105 — Wire `row-open-*` to a row detail side-panel/drawer (high, open)
+- See B-3118. Buttons exist (`row-open-r_dt1` etc.) but click is no-op. Implement a side-drawer that displays all row properties — covers the use case of editing many properties when columns overflow, hidden, or rolled up.
+
+### I-3106 — Markdown export: serialize tables, blockquotes, and code-fence body cleanly (low, open)
+- Observed during B-3113 testing: AI assistant tries to digest user's markdown but loses code-fence content ("const x" became " x = "a";"). The same gap may exist in the markdown export from page-options. Audit code-fence and blockquote serializers for whitespace/parsing accuracy.
+
+### I-3107 — Better "empty formula" placeholder (low, open)
+- See B-3107. When a formula property has empty expression, cell shows "#ERR: Unexpected end" which leaks parser internals. Render "—" or "(set formula)" instead, and accept both `formula.expression` and `formula.formula` as input fields.
+
+### I-3108 — Memoize Block list rendering to reduce sibling re-renders (medium, open)
+- See B-3121. A single keystroke triggers 50 mutations across the page body. Likely the BlockList component re-renders all children when one block mutates because the selector returns a new array reference. Wrap individual Block components in React.memo + use shallowEqual selectors per block.

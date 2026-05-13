@@ -451,7 +451,14 @@ export const SLASH_COMMANDS: SlashCommand[] = [
 export function filterSlash(query: string): SlashCommand[] {
   const q = query.toLowerCase().trim();
   if (!q) return SLASH_COMMANDS;
-  return SLASH_COMMANDS.filter(
-    (cmd) => cmd.label.toLowerCase().includes(q) || cmd.aliases.some((a) => a.includes(q)),
-  );
+  // Match label, any alias (substring), OR the command's category (so typing
+  // "database" surfaces every db-* variant — B-3109 / I-3106). Also fuzzy on
+  // the description so plurals like "databases" still surface their entries.
+  return SLASH_COMMANDS.filter((cmd) => {
+    if (cmd.label.toLowerCase().includes(q)) return true;
+    if (cmd.aliases.some((a) => a.includes(q))) return true;
+    if (cmd.category?.toLowerCase().includes(q)) return true;
+    if (cmd.description?.toLowerCase().includes(q)) return true;
+    return false;
+  });
 }
