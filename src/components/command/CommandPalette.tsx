@@ -92,7 +92,11 @@ export function CommandPalette() {
   }, [open]);
 
   const items = useMemo(() => {
-    const q = query.toLowerCase().trim();
+    // Collapse all whitespace (newlines from a pasted multi-line block,
+    // tabs, etc.) to single spaces before tokenising (B-7602). Without
+    // this a paste like `OKR\nstatus` failed to match either token
+    // because the entire raw string was treated as one token.
+    const q = query.toLowerCase().replace(/\s+/g, " ").trim();
     // Word-order-insensitive matching (B-4204). Split the query into tokens
     // and require all tokens to appear (in any order) in the haystack.
     // Drop single-character tokens to avoid "C O M M" exploding to dozens

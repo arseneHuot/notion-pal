@@ -290,8 +290,22 @@ function PublicFormField({ property, value, onChange }: { property: Property; va
     return (
       <input
         type="date"
+        // Clamp the year to 4 digits — `<input type="date">` happily accepts
+        // `99999-01-01` but downstream date parsers throw or wrap (B-7603 /
+        // I-7603). min/max set the browser-native bounds; an extra onChange
+        // guard trims pasted out-of-range values.
+        min="1000-01-01"
+        max="9999-12-31"
         value={(value as string) ?? ""}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v && /^\d{5,}-/.test(v)) {
+            // Discard 5+-digit-year input entirely; user gets a fresh blank.
+            onChange("");
+            return;
+          }
+          onChange(v);
+        }}
         className="w-full bg-background border border-input rounded px-2 py-1 text-sm"
       />
     );

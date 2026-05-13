@@ -61,6 +61,22 @@ export function pageToMarkdown(page: Page, blocks: Record<string, Block>, pages:
 
 function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number, pages: Record<string, Page> = {}, visited: Set<string> = new Set()): string {
   const indent = "  ".repeat(depth);
+  // Backwards-compat aliases for foreign block types so imports / hand-
+  // injected blocks export to readable Markdown instead of an HTML comment
+  // (B-7601 / I-7604). Mirrors Block.tsx's renderer alias map.
+  const aliases: Record<string, string> = {
+    paragraph: "text",
+    "bulleted-list": "bullet-list",
+    bullet: "bullet-list",
+    "numbered-list-item": "numbered-list",
+    "header-1": "heading-1",
+    "header-2": "heading-2",
+    "header-3": "heading-3",
+  };
+  const rawType: string = (b as { type: string }).type;
+  if (rawType in aliases) {
+    return blockToMarkdown({ ...(b as object), type: aliases[rawType] } as Block, blocks, depth, pages, visited);
+  }
   switch (b.type) {
     case "heading-1":
       return `# ${htmlToInlineMarkdown((b as { content?: string }).content ?? "")}`;

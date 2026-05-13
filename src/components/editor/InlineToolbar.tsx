@@ -370,6 +370,8 @@ function ColorPicker({ onPick }: { onPick: (color: string) => void }) {
         <div
           className="absolute top-full left-0 mt-1 bg-popover border border-border rounded shadow-lg p-1 grid grid-cols-5 gap-0.5"
           onMouseDown={(e) => e.preventDefault()}
+          data-state="open"
+          data-testid="ib-color-picker"
         >
           {COLORS.map((c) => (
             <button

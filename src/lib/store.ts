@@ -1947,8 +1947,19 @@ export function moveCalendarEvent(id: string, dayKey: string) {
         minutes = prev.getMinutes();
       }
     }
-    const next = new Date(y, m - 1, d, hours, minutes).getTime();
-    return { ...s, calendarEvents: { ...s.calendarEvents, [id]: { ...e, start: next } } };
+    let nextDate = new Date(y, m - 1, d, hours, minutes);
+    // DST-gap guard (B-7404): on a spring-forward day the requested wall
+    // clock time may not exist (e.g. 02:30 → JS Date silently lifts to
+    // 03:30). Detect the drift and surface a toast so the user notices
+    // the event landed at a different time than expected.
+    if (typeof window !== "undefined" && nextDate.getHours() !== hours) {
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const actual = `${pad(nextDate.getHours())}:${pad(nextDate.getMinutes())}`;
+      window.dispatchEvent(new CustomEvent("toast", {
+        detail: `Event moved across DST — time shifted to ${actual}`,
+      }));
+    }
+    return { ...s, calendarEvents: { ...s.calendarEvents, [id]: { ...e, start: nextDate.getTime() } } };
   });
 }
 
