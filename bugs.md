@@ -5191,3 +5191,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4611 — Cross-DB row drop duplicates rowId into target DB (P1, open)
 - Two inline DB blocks on same page: `db_mp3jj2jnavmaxi0e` (row `row_mp3jk8zuxoypboda`, DB-A) and `db_mp3lhvrxwl40mnbf` (DB-B). Dispatched HTML5 dragstart on `row-handle-row_mp3jk8zuxoypboda` then drop on `row-row_mp3lkcn7xf38` (a DB-B row). After: DB-B's `rows` array gained `row_mp3jk8zuxoypboda` at position 0 (count 8→9), DB-A's `rows` unchanged (still references the same id), and `rows[row_mp3jk8zuxoypboda].databaseId` still points to DB-A. Result: same row id is referenced by two databases — DB-B now displays a "phantom" row whose values belong to a row owned by DB-A; deleting from one DB leaves the orphan in the other. `TableView.tsx:63-67` calls `reorderDatabaseRows(databaseId=TARGET_DB, sourceId, row.id)` without checking that the source row's `databaseId` matches the target. `store.ts:1226-1247` `reorderDatabaseRows` happily splices into any DB's rows array. Should be a no-op when `s.rows[sourceRowId].databaseId !== databaseId`.
+
+### B-4611 — Cross-DB row drag duplicated row id — fixed (commit dc8f930) — P1
+- Fix: `reorderDatabaseRows` now bails when `state.rows[sourceRowId].databaseId !== databaseId`. Cross-DB drops are a no-op instead of corrupting state.
+
+### B-4607 — Public form ignored view.hiddenProperties — fixed (commit dc8f930)
+- Fix: form `fields` memo now also drops any prop listed in `view.hiddenProperties`. Form builder's Hide column now removes the field from public submission.
+
+### B-4604 — Orphan pages invisible — fixed (commit dc8f930)
+- Fix: Sidebar gains an "Other" section listing pages with no teamspaceId AND no parentId. Sorted by `sortOrder ?? createdAt`. Testid `sidebar-other-section`.
