@@ -4876,3 +4876,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3521 / B-3522 / B-4014 — Mobile sidebar UX — fixed (commit bf30b92)
 - Fix: app.tsx now watches `useRouterState.location.pathname` and auto-closes the sidebar drawer on route change when `matchMedia("(max-width: 768px)").matches`. Added a global keydown listener so Escape closes the drawer on mobile. The drawer infrastructure (sidebar-scrim backdrop + max-md:absolute overlay + open-sidebar hamburger) was already in place — this adds the missing auto-close + Escape behaviours.
+
+### B-4016 — Duplicate view from ViewMenu — fixed (commit eceb761) — closes I-4002
+- Fix: new store action `duplicateView(databaseId, viewId)` deep-clones the source view (filters, sorts, hiddenProperties, view-specific config) and appends "(Copy)" to the name. ViewMenu exposes a `view-duplicate-<viewId>` button right below Rename. Verified live: clicking duplicate on "All" creates "All (Copy)" with matching type; view count grows from 5 → 6.
