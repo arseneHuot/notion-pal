@@ -9,6 +9,56 @@ interface Message {
   sources?: { pageId: string; title: string }[];
 }
 
+/** Minimal Markdown renderer for assistant messages. Supports fenced code
+ *  blocks (```lang), inline code, **bold**, *italic*, and links. */
+function MarkdownText({ text }: { text: string }) {
+  const parts: React.ReactNode[] = [];
+  // Split on triple-backtick fences first.
+  const fenceRe = /```([\w-]*)\n?([\s\S]*?)```/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let idx = 0;
+  while ((m = fenceRe.exec(text)) !== null) {
+    if (m.index > last) parts.push(<InlineText key={idx++} text={text.slice(last, m.index)} />);
+    parts.push(
+      <pre key={idx++} className="bg-card border border-border rounded p-2 my-1 overflow-x-auto text-xs">
+        <code className="font-mono">{m[2]}</code>
+      </pre>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<InlineText key={idx++} text={text.slice(last)} />);
+  return <div className="whitespace-pre-wrap">{parts}</div>;
+}
+
+function InlineText({ text }: { text: string }) {
+  // Parse inline marks. Order: links → bold → italic → inline code.
+  // We build a parts array of React nodes.
+  const out: React.ReactNode[] = [];
+  const tokenRe = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  while ((m = tokenRe.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m[2] !== undefined) out.push(<strong key={i++}>{m[2]}</strong>);
+    else if (m[3] !== undefined) out.push(<em key={i++}>{m[3]}</em>);
+    else if (m[4] !== undefined) out.push(<code key={i++} className="bg-muted/80 px-1 rounded font-mono text-xs">{m[4]}</code>);
+    else if (m[5] !== undefined && m[6] !== undefined) {
+      const href = m[6];
+      const safe = /^(https?:|mailto:|#|\/)/i.test(href) ? href : "#";
+      out.push(
+        <a key={i++} href={safe} target="_blank" rel="noopener noreferrer" className="underline">
+          {m[5]}
+        </a>,
+      );
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return <>{out}</>;
+}
+
 function aiChatStorageKey(userId: string | null | undefined): string {
   // Namespaced per-user so threads don't leak across accounts on the same
   // browser (B-1802). Falls back to a "guest" bucket when no user is set.
@@ -92,14 +142,24 @@ export function AIChat() {
       .slice(0, 3);
 
     let answer = "";
+    // Recognise simple code-asking prompts so we can demo code-block rendering.
+    const wantsCode = /(\bcode\b|\bsnippet\b|\bsample\b|\bpython\b|\bjavascript\b|\bts\b|\bsql\b)/i.test(question);
     if (matches.length === 0) {
       answer = `I couldn't find anything specific in your workspace about "${question}". Here are some ideas:\n\n- Create a new page to capture this\n- Try a more specific search\n- Browse Recents from Home`;
+      if (wantsCode) {
+        const lang = /python/i.test(question) ? "python" : /javascript|\bjs\b/i.test(question) ? "javascript" : /\bsql\b/i.test(question) ? "sql" : "";
+        answer += `\n\nHere's a starter snippet:\n\n\`\`\`${lang}\n${lang === "python" ? "def hello():\n    print('Hello from NotionClone')" : lang === "sql" ? "SELECT * FROM pages WHERE title ILIKE '%notion%'" : "function hello() { console.log('Hello from NotionClone'); }"}\n\`\`\``;
+      }
     } else {
       answer = `Based on your workspace, here's what I found about "${question}":\n\n`;
       matches.forEach((m, i) => {
         answer += `${i + 1}. **${m.p.title || "Untitled"}** — ${m.p.icon ?? "📄"} (relevance ${Math.round(m.score)})\n`;
       });
       answer += `\nWould you like a summary of any of these?`;
+      if (wantsCode) {
+        const lang = /python/i.test(question) ? "python" : /javascript|\bjs\b/i.test(question) ? "javascript" : /\bsql\b/i.test(question) ? "sql" : "";
+        answer += `\n\nQuick code template:\n\n\`\`\`${lang}\n${lang === "python" ? "# adjust to your data\nprint('found ' + str(${matches.length}) + ' results')" : "// adjust to your data\nconsole.log(`found ${matches.length} results`)"}\n\`\`\``;
+      }
     }
     return { answer, sources: matches.map((m) => ({ pageId: m.p.id, title: m.p.title || "Untitled" })) };
   }
@@ -148,7 +208,11 @@ export function AIChat() {
         {messages.map((m, i) => (
           <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : ""}`} data-testid={`ai-msg-${i}`} data-role={m.role}>
             <div className={`rounded-lg px-3 py-2 text-sm max-w-[85%] ${m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"}`}>
-              <div className="whitespace-pre-wrap">{m.content}</div>
+              {m.role === "assistant" ? (
+                <MarkdownText text={m.content} />
+              ) : (
+                <div className="whitespace-pre-wrap">{m.content}</div>
+              )}
               {m.sources && m.sources.length > 0 && (
                 <div className="mt-2 text-xs">
                   <div className="opacity-70">Sources:</div>

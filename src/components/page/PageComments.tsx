@@ -1,17 +1,32 @@
 import { useMemo, useState } from "react";
 import { useStore, addComment, resolveComment, deleteComment } from "@/lib/store";
 import { useAuth } from "@/hooks/use-auth";
-import { X, Send, Check } from "lucide-react";
+import { X, Send, Check, MessageSquare } from "lucide-react";
+import type { Comment } from "@/lib/types";
 
 export function PageComments({ pageId, open, onClose }: { pageId: string; open: boolean; onClose: () => void }) {
   const comments = useStore((s) => s.comments);
   const { user } = useAuth();
   const [text, setText] = useState("");
   const [showResolved, setShowResolved] = useState(false);
+  // Track which top-level comment we're currently replying to.
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+
+  // Top-level page comments + their nested replies.
   const pageComments = useMemo(
-    () => Object.values(comments).filter((c) => c.pageId === pageId && !c.blockId && (showResolved || !c.resolved)),
+    () => Object.values(comments).filter((c) => c.pageId === pageId && !c.blockId && !c.parentId && (showResolved || !c.resolved)),
     [comments, pageId, showResolved],
   );
+  const repliesByParent = useMemo(() => {
+    const m: Record<string, Comment[]> = {};
+    for (const c of Object.values(comments)) {
+      if (c.pageId !== pageId || !c.parentId) continue;
+      (m[c.parentId] ??= []).push(c);
+    }
+    for (const list of Object.values(m)) list.sort((a, b) => a.createdAt - b.createdAt);
+    return m;
+  }, [comments, pageId]);
 
   if (!open) return null;
 
@@ -33,37 +48,76 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
         {pageComments.length === 0 && (
           <div className="text-xs text-muted-foreground italic">No comments yet.</div>
         )}
-        {pageComments.map((c) => (
-          <div key={c.id} className={`rounded border border-border p-2 ${c.resolved ? "opacity-50" : ""}`}>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="size-6 rounded-full bg-primary/10 grid place-items-center text-xs">
-                {c.authorAvatar ?? (c.authorId === user?.id ? user?.avatar : "👤")}
+        {pageComments.map((c) => {
+          const replies = repliesByParent[c.id] ?? [];
+          const isReplying = replyTo === c.id;
+          return (
+            <div key={c.id} className={`rounded border border-border p-2 ${c.resolved ? "opacity-50" : ""}`}>
+              <CommentRow comment={c} user={user} />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={() => resolveComment(c.id)}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  data-testid={`resolve-${c.id}`}
+                >
+                  <Check className="size-3" /> {c.resolved ? "Resolved" : "Resolve"}
+                </button>
+                <button
+                  onClick={() => setReplyTo(isReplying ? null : c.id)}
+                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  data-testid={`reply-${c.id}`}
+                >
+                  <MessageSquare className="size-3" /> {isReplying ? "Cancel" : `Reply${replies.length ? ` (${replies.length})` : ""}`}
+                </button>
+                <button
+                  onClick={() => deleteComment(c.id)}
+                  className="text-xs text-destructive hover:underline"
+                >
+                  Delete
+                </button>
               </div>
-              <span className="text-xs font-medium">
-                {c.authorName ?? (c.authorId === user?.id ? user?.name : "Someone")}
-              </span>
-              <span className="text-xs text-muted-foreground ml-auto">
-                {new Date(c.createdAt).toLocaleString()}
-              </span>
+              {replies.length > 0 && (
+                <div className="mt-2 pl-3 border-l border-border space-y-2">
+                  {replies.map((r) => (
+                    <div key={r.id} className="text-sm" data-testid={`reply-row-${r.id}`}>
+                      <CommentRow comment={r} user={user} />
+                      <button
+                        onClick={() => deleteComment(r.id)}
+                        className="text-xs text-destructive hover:underline mt-1"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {isReplying && (
+                <div className="mt-2 pl-3 border-l border-border">
+                  <textarea
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Reply…"
+                    className="w-full bg-background border border-input rounded px-2 py-1 text-sm min-h-[44px] resize-none"
+                    data-testid={`reply-input-${c.id}`}
+                  />
+                  <button
+                    onClick={() => {
+                      if (!replyText.trim()) return;
+                      addComment({ pageId, content: replyText, parentId: c.id });
+                      setReplyText("");
+                      setReplyTo(null);
+                    }}
+                    disabled={!replyText.trim()}
+                    className="mt-1 text-xs bg-primary text-primary-foreground rounded px-2 py-1 disabled:opacity-50"
+                    data-testid={`reply-submit-${c.id}`}
+                  >
+                    Post reply
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="text-sm whitespace-pre-wrap">{c.content}</div>
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={() => resolveComment(c.id)}
-                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                data-testid={`resolve-${c.id}`}
-              >
-                <Check className="size-3" /> {c.resolved ? "Resolved" : "Resolve"}
-              </button>
-              <button
-                onClick={() => deleteComment(c.id)}
-                className="text-xs text-destructive hover:underline"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="p-3 border-t border-border">
         <textarea
@@ -87,6 +141,25 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
           <Send className="size-3" /> Post
         </button>
       </div>
+    </div>
+  );
+}
+
+function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<typeof useAuth>["user"] }) {
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-1">
+        <div className="size-6 rounded-full bg-primary/10 grid place-items-center text-xs">
+          {comment.authorAvatar ?? (comment.authorId === user?.id ? user?.avatar : "👤")}
+        </div>
+        <span className="text-xs font-medium">
+          {comment.authorName ?? (comment.authorId === user?.id ? user?.name : "Someone")}
+        </span>
+        <span className="text-xs text-muted-foreground ml-auto">
+          {new Date(comment.createdAt).toLocaleString()}
+        </span>
+      </div>
+      <div className="text-sm whitespace-pre-wrap">{comment.content}</div>
     </div>
   );
 }

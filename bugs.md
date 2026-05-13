@@ -2500,7 +2500,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: open page comments → click Show resolved.
 - Observed: works but no `show-resolved` testid, hard to automate.
 
-### B-1716 — Comment reply has no UI affordance (P2, open)
+### B-1716 — Comment reply has no UI affordance (P2, fixed)
 - Steps: /app/p/pg_mp36jcskpab8tj6g → comments → existing comment from batch 27 shows.
 - Observed: only `resolve-<id>` and a top-level `comment-input`. Posting from `comment-input` creates a new top-level comment with `parentId=null`, not a reply.
 - Expected: each comment has a "Reply" button → opens scoped input → new comment's `parentId` = thread head.
@@ -2988,7 +2988,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: `/app/calendar` → switch `main select` to "week" → inspect `[data-testid="week-day-2026-05-13"]`.
 - Observed: the colored chip `<div>` ("Wed event") inside the day cell has no `draggable` attribute. 7 week-day cells render, 1 event chip; no drag handlers in the WeekStrip path.
 
-### B-2216 — Comment-input has no reply / thread testids; data model lacks threading (P2, open)
+### B-2216 — Comment-input has no reply / thread testids; data model lacks threading (P2, fixed)
 - Steps: open `comments-btn` panel on any page; query `[data-testid*="comment"]`. Examine `localStorage.comments[*]`.
 - Observed: only `comment-input`, `post-comment`, `close-comments`, `comments-btn`. All `comments[*]` rows have `parentId: null` and there is no `threadId` field. Source: `src/components/page/PageComments.tsx` has no `parentId` references. Threaded replies still unimplemented (last batches B-2050+).
 
