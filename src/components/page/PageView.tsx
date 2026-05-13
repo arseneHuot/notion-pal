@@ -20,9 +20,16 @@ export function PageView({ pageId }: { pageId: string }) {
   // Detect whether any ancestor is in trash (B-402).
   const ancestorInTrash = useMemo(() => {
     if (!page) return false;
+    // Bounded walk against cyclic parentId (B-8001). Without the seen-set,
+    // a corrupt cycle would peg the render thread before normalizeState's
+    // cycle-breaker even runs.
     let cur = page.parentId ? allPages[page.parentId] : null;
-    while (cur) {
+    const seen = new Set<string>([page.id]);
+    let safety = 0;
+    while (cur && !seen.has(cur.id) && safety < 100) {
       if (cur.isInTrash) return true;
+      seen.add(cur.id);
+      safety += 1;
       cur = cur.parentId ? allPages[cur.parentId] : null;
     }
     return false;
@@ -132,12 +139,17 @@ export function PageView({ pageId }: { pageId: string }) {
     // copy and offer "Open parent" as an escape hatch.
     let trashedAncestor: typeof page | null = null;
     {
+      // Bounded walk — same cycle protection as ancestorInTrash above.
       let cur = page.parentId ? allPages[page.parentId] : null;
-      while (cur) {
+      const seen = new Set<string>([page.id]);
+      let safety = 0;
+      while (cur && !seen.has(cur.id) && safety < 100) {
         if (cur.isInTrash) {
           trashedAncestor = cur;
           break;
         }
+        seen.add(cur.id);
+        safety += 1;
         cur = cur.parentId ? allPages[cur.parentId] : null;
       }
     }

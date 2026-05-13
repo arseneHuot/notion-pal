@@ -260,6 +260,11 @@ export interface PageVersion {
   savedAt: number;
   savedBy: string;
   snapshot: { title: string; blocks: Record<string, Block> };
+  /** Set when `restoreVersion` auto-captures the pre-restore state so the
+   *  user has a forward escape hatch (B-8000). UI can tag these versions
+   *  with the `label` to distinguish from manual saves. */
+  autoSnapshot?: boolean;
+  label?: string;
 }
 
 export interface PermissionRule {

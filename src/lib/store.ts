@@ -134,6 +134,28 @@ function normalizeState(parsed: AppState): AppState {
       if (p.parentId && !pages[p.parentId]) patch.parentId = null;
       if (Object.keys(patch).length) parsed.pages[pid] = { ...p, ...patch };
     }
+    // B-8001 — detect cycles in the parentId chain and break them by
+    // setting `parentId = null` on whichever node closes the cycle.
+    // Without this, breadcrumb / ancestor walkers in render code can
+    // infinite-loop the main thread and brick the app (corrupt imports
+    // or a buggy movePage can produce A→C→B→A chains). One pass over
+    // all pages; per-node walk is bounded by `seen`.
+    for (const [pid, p] of Object.entries(parsed.pages)) {
+      if (!p || !p.parentId) continue;
+      let cur = parsed.pages[p.parentId];
+      const seen = new Set<string>([pid]);
+      while (cur && cur.parentId && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        cur = parsed.pages[cur.parentId];
+      }
+      // If we landed on a node that's already in `seen`, the chain loops.
+      // Cut the offender's parentId so the cycle is broken at THIS page,
+      // not somewhere midchain (preserves as much of the user's intent
+      // as possible).
+      if (cur && seen.has(cur.id)) {
+        parsed.pages[pid] = { ...p, parentId: null };
+      }
+    }
   }
   if (parsed.comments) {
     const comments = parsed.comments;
@@ -1927,11 +1949,29 @@ export function saveSnapshot(pageId: string) {
 }
 
 export function restoreVersion(pageId: string, versionId: string) {
+  const user = _state.currentUser;
   setState((s) => {
     const page = s.pages[pageId];
     if (!page) return s;
     const version = page.history.find((v) => v.id === versionId);
     if (!version) return s;
+    // B-8000 — auto-snapshot the CURRENT page state before restoring so
+    // the user can roll forward. Without this the restore is silently
+    // destructive: any unsaved edits or new blocks evaporate with no
+    // way back. We push the auto-snapshot at the head of `history` and
+    // tag it so the UI can show it as "Before restore <timestamp>".
+    const preRestoreBlocks: Record<string, Block> = {};
+    for (const id of page.blocks) {
+      if (s.blocks[id]) preRestoreBlocks[id] = s.blocks[id];
+    }
+    const autoSnapshot = {
+      id: uid("ver"),
+      savedAt: Date.now(),
+      savedBy: user?.id ?? "system",
+      snapshot: { title: page.title, blocks: preRestoreBlocks },
+      autoSnapshot: true,
+      label: `Before restore ${new Date().toLocaleString()}`,
+    };
     const newBlocks = { ...s.blocks };
     for (const oldBlockId of page.blocks) {
       delete newBlocks[oldBlockId];
@@ -1939,6 +1979,7 @@ export function restoreVersion(pageId: string, versionId: string) {
     for (const [bid, b] of Object.entries(version.snapshot.blocks)) {
       newBlocks[bid] = b;
     }
+    const history = [autoSnapshot, ...page.history].slice(0, 50);
     return {
       ...s,
       blocks: newBlocks,
@@ -1946,6 +1987,7 @@ export function restoreVersion(pageId: string, versionId: string) {
         ...s.pages,
         [pageId]: {
           ...page,
+          history,
           title: version.snapshot.title,
           blocks: Object.keys(version.snapshot.blocks),
           updatedAt: Date.now(),

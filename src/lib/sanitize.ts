@@ -90,5 +90,18 @@ function walk(root: Node) {
         }
       }
     }
+
+    // B-8002 — if an <a> tag ended up without an `href` after sanitization
+    // (e.g. pasted `<a href="javascript:..">` was stripped), unwrap it.
+    // Empty link shells confuse screen readers, hover-style as fake links,
+    // and accumulate noise on copy-paste round-trips. Same strategy as the
+    // "strip tag but keep text" branch for disallowed tags.
+    if (tag === "A" && !el.hasAttribute("href")) {
+      const parent = el.parentNode;
+      if (parent) {
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        parent.removeChild(el);
+      }
+    }
   }
 }

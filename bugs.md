@@ -6900,3 +6900,44 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7904 — Sidebar sortOrder collapse self-heals — fixed — P3
 - `reorderSiblingPages` detects collapse (`newOrder === tgtOrd || newOrder === prevOrd || !isFinite(newOrder)`) and repacks the entire sibling list at uniform 1000-unit gaps, with the source inserted at the requested index. Single O(siblings) pass, only triggers at the failure point. Future midpoint inserts then have full headroom again.
+
+
+## 2026-05-13 — B-8000 history/breadcrumb/editor sweep
+
+### B-8000 — `restoreVersion` is silently destructive: current state is overwritten with no backup snapshot — P1 — open
+- Repro: open `/app/p/<pageId>`, click `history-btn`, click `snapshot-now` (saves "original" version). Modify the page — change title, edit a block, add a NEW block. Click `history-btn` again, click the restore button for the original version.
+- Result: title reverts, the modified block content reverts, the newly-added block is **permanently deleted from `state.blocks`**. `page.history` is still `[original]` — no auto-snapshot of the "modified" state was created before the overwrite, so the user has **no path back** to the work they just lost. No confirm dialog either; one click and the work is gone.
+- Verified live: seeded `pg_v8000_history_test` with `blk_v8000_h1: "ORIGINAL content"`, saved snapshot, modified `blk_v8000_h1.content = "MODIFIED content"`, appended `blk_v8000_new: "BRAND NEW block"`. Clicked `restore-<verId>`. Post-restore storage: `blk_v8000_h1.content === "ORIGINAL content"`, `state.blocks.blk_v8000_new === undefined`, `page.history.length === 1` (unchanged). Modified state irrecoverable.
+- Root cause: `restoreVersion` in `src/lib/store.ts:1929-1956` does `delete newBlocks[oldBlockId]` for every current block before writing the snapshot blocks, with no `saveSnapshot()` call beforehand and no confirm gate in `PageHistoryDialog.tsx:36-43`.
+- Severity P1: silent data loss with one click. Especially bad because the affordance lives in the page-options menu where a power-user might click "restore" thinking they're just *previewing* the old version (no preview UI exists — see I-8001).
+- Fix sketch: in `restoreVersion`, before mutating `newBlocks`, push the CURRENT state into `page.history` as an automatic snapshot (`savedBy: user.id, autoSnapshot: true`). Also: add a confirm dialog in `PageHistoryDialog` ("Restore will replace your current page content. A backup snapshot will be saved automatically. Continue?") — even with the auto-snapshot, the user should consent.
+
+### B-8001 — Breadcrumb walks `parentId` chain with no cycle guard — entire app freezes on cyclic parent — P1 — open
+- Repro: inject three pages A, B, C where A.parentId=C, B.parentId=A, C.parentId=B (or any chain that loops back). Navigate to `/app/p/<A>`.
+- Result: TopBar breadcrumb logic at `src/components/layout/TopBar.tsx:34-39` does `while (p) { breadcrumbs.unshift(...); p = pages[p.parentId]; }` with no `seen` set and no depth cap. Loops forever. Main thread pegged, page never finishes initial render, "Loading workspace…" splash sticks indefinitely. Tab becomes unresponsive — preview_eval, even bare `'ping'`, times out 30s+. Required hard refresh to recover.
+- Verified live: seeded `pg_v8001_a/b/c` with that exact cycle via storage write + StorageEvent, navigated to `/app/p/pg_v8001_a`. Browser hung. Screenshot shows the "Loading workspace…" splash. All subsequent preview_eval calls timed out.
+- Severity P1: any data import that produces a cyclic parentId chain (corrupted backup, malicious shared workspace JSON, a future bug in `movePage` itself) bricks the user's entire workspace — they can't reach Settings, Trash, anything. They'd need to clear localStorage manually to recover.
+- Root cause: only the immediate "dangling parentId" case is healed by `normalizeState` (`src/lib/store.ts:134`). It doesn't detect cycles.
+- Fix sketch:
+  1) Make the TopBar walk bounded with a `seen` Set + max depth (e.g. 100) — drop into "Untitled page" fallback if a cycle is detected. Defends in render layer.
+  2) `normalizeState` should run a one-pass cycle detector over `pages` (DFS, track visited per traversal) and set `parentId = null` on any node that participates in a cycle. Belt-and-suspenders against bad imports. Same hazard probably exists in Sidebar's nested-children render — audit those too.
+
+### B-8002 — Sanitizer keeps `<a>` tags with no `href` after stripping unsafe URLs (dead inline links) — P3 — open
+- Repro: paste HTML containing `<a href="javascript:alert(1)">link</a>` into any text block. The sanitizer strips the `href` (correct) but keeps the empty `<a>link</a>` tag (`afterHtml: "Abtnstyled<a>data-link</a><a>leadingspace</a>"` after a multi-payload paste).
+- Result: dead anchors pollute the HTML. They still render the link-blue color on hover, and copy-paste round-trip produces ever-more meaningless `<a>` shells. Also: a screen reader announces them as links, even though they don't navigate.
+- Severity P3: cosmetic + minor a11y. No XSS — `sanitizeHtml` correctly drops the unsafe `href`.
+- Fix sketch: in `src/lib/sanitize.ts`, after the per-attribute pass, if an `<a>` ended up with no `href` attribute, unwrap it (replace with its text children). Same logic as the "strip the tag but keep its text content" branch for unknown tags.
+
+
+## 2026-05-13 — B-8000 batch fixes (P1 data-integrity)
+
+### B-8000 — restoreVersion auto-snapshots current state + confirm gate — fixed — P1
+- `restoreVersion` (store.ts) now captures the pre-restore page state into a new `PageVersion` (tagged `autoSnapshot: true`, labelled "Before restore <timestamp>") and pushes it at the head of `page.history` *before* swapping blocks. Users always have a forward escape hatch — Undo by clicking the Auto entry.
+- `PageHistoryDialog` (page/PageHistoryDialog.tsx) wraps the Restore button click in a `window.confirm` so the user sees "Restore will replace … An automatic snapshot will be saved first" before any data swap. Auto snapshots also render with an amber `Auto` badge so users can tell them apart.
+
+### B-8001 — Cyclic parentId chains no longer hang the app — fixed — P1
+- `normalizeState` runs a one-pass cycle detector over `pages`: for each page, walk its parent chain with a `seen` set; if the walk lands on a previously-visited node, break the cycle by setting that page's `parentId = null`. Durable on-disk healing. Verified live: poisoned cycle (X→Y→X) → after `StorageEvent` rehydrate, X.parentId === null, Y.parentId === X. The previously-bricking `/app/p/pg_v8001_a` URL now renders normally (breadcrumb `Private / A`).
+- Defense in depth at the render layer: `TopBar.tsx`, `PageView.tsx` (`ancestorInTrash` + ancestor-trash banner walker), and `Block.tsx` (`BreadcrumbEl`) all now walk with a `seen` Set + 100-step safety cap. Even if normalizeState misses a case, no walker can infinite-loop the main thread.
+
+### B-8002 — Sanitizer unwraps `<a>` tags after href is stripped — fixed — P3
+- `src/lib/sanitize.ts`: after per-attribute sanitization, if an `<a>` ends up without an `href`, unwrap it (replace the element with its text children). Same strategy as the "strip-tag-keep-text" branch for disallowed tags. Verified: `<a href="javascript:alert(1)">bad</a>` → `bad`. Safe links untouched (still gain `rel="noopener noreferrer" target="_blank"`).

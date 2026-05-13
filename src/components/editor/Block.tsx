@@ -1239,8 +1239,15 @@ function TocEl({ block, pageId }: { block: Block; pageId: string }) {
 function BreadcrumbEl({ block, pageId }: { block: Block; pageId: string }) {
   const pages = useStore((s) => s.pages);
   const path: { id: string; title: string; icon: string | null }[] = [];
+  // Bounded walk so a cyclic parentId chain can't infinite-loop the
+  // renderer (B-8001). normalizeState should heal cycles on read; this is
+  // the defense-in-depth render-time guard.
   let p = pages[pageId];
-  while (p) {
+  const seen = new Set<string>();
+  let safety = 0;
+  while (p && !seen.has(p.id) && safety < 100) {
+    seen.add(p.id);
+    safety += 1;
     path.unshift({ id: p.id, title: p.title || "Untitled", icon: p.icon });
     p = p.parentId ? pages[p.parentId] : (null as never);
   }

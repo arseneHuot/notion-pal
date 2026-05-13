@@ -2353,3 +2353,47 @@ Priority: high / medium / low.
 
 ### I-7906 — Filter values UI should allow clearing via × or null — P3 — open
 - Once a filter is set (e.g. `pName is "Alpha"`), the only way to "ignore" it is to click the × remove button entirely. Setting the value to empty string changes semantics (no rows match because no name === "" in the db). Suggestion: empty value should behave as "this filter is inactive" for `is`/`is-not`/`contains`/etc. and skip the row check.
+
+
+## 2026-05-13 — I-8000 history/breadcrumb/db/settings sweep
+
+### I-8000 — Page history dialog has no diff / preview UI — restore is a blind overwrite — P2 — open
+- Companion to B-8000. `PageHistoryDialog.tsx` lists versions with just a timestamp + the snapshot's title. There's no way to:
+  - Preview the version content side-by-side with the current state
+  - See a diff (added blocks / removed blocks / edited content) before restoring
+  - View a single version without restoring it (a "Read-only preview" mode)
+- Suggestion: clicking a version row should open an inline preview (right pane) showing the snapshot title + each block rendered read-only. A "Restore this version" button at the top of that pane is the only restore affordance, separating "browse" from "destructive restore". Bonus: a simple "+ N blocks added, − M blocks removed" badge per version computed by diffing block ID sets.
+
+### I-8001 — Auto-snapshots on destructive actions (restore, bulk-delete, large paste) — P2 — open
+- Companion to B-8000. Right now `saveSnapshot` is only triggered by an explicit user click. Several user actions are silently destructive and would benefit from auto-snapshots:
+  - Before `restoreVersion` (mandatory — see B-8000 fix)
+  - Before deleting a block group via slash-command "/delete page" or similar bulk ops
+  - Before pasting a large HTML payload that replaces existing selection
+  - Before an AI-generated content rewrite (when implemented)
+- Each auto-snapshot tagged `autoSnapshot: true, reason: "before-restore"` so the history list can show the "Auto" badge — keeps the snapshot list browsable without polluting it visually.
+
+### I-8002 — `normalizeState` should detect & break cyclic parentId chains, not just dangling ones — P1 — open
+- Companion to B-8001. `src/lib/store.ts:122-137` only fixes the "parentId points to a missing page" case. It doesn't run a cycle check. A cycle silently bricks the entire workspace via the breadcrumb walker. Even with the TopBar render-layer fix from B-8001, the durable on-disk cleanup belongs in `normalizeState`.
+- Suggestion: per-page DFS over `parentId` with a `visited` set. If the walk revisits the start node, set `parentId = null` on the cycle root (or every page in the cycle) and log a console.warn so QA can detect bad imports. Belt-and-suspenders against the bug (B-8001) and any future bug in `movePage` / `updatePage` that lets a user create a cycle through legitimate UI.
+
+### I-8003 — Database table needs an aggregations footer row (count / sum / avg / min / max) — P2 — open
+- Focus-list item ("Database aggregations row count / sum / formulas"). Confirmed: there is NO footer row at all in `src/components/database/views/TableView.tsx` — grep for `footer|tfoot|aggregat` returns nothing.
+- Suggestion: an optional `<tfoot>` (or per-column footer cell) that lets the user pick a calc function per column from a small menu. Functions: `none` / `count` / `count-empty` / `count-not-empty` / `count-unique` / `sum` / `average` / `min` / `max` / `median` / `range` for number; `count` / `count-empty` / `count-not-empty` / `count-checked` / `count-unchecked` / `percent-checked` for checkbox; `earliest` / `latest` / `range` for date. Persist per-view in `view.aggregations: { [propertyId]: AggregationFn }`.
+- The internals already have a `count` / `sum` / `average` / `min` / `max` / `earliest` / `latest` machinery for **rollup** properties in `TableView.tsx:429`; the same function set should power table footers.
+
+### I-8004 — Sanitizer should unwrap orphan empty inline tags (`<a>`, `<span>`, `<code>`) after attribute cleanup — P3 — open
+- Companion to B-8002. After the sanitizer strips unsafe attributes (href, style), it can leave behind shell tags that contribute nothing structurally. Cosmetic noise, plus a screen reader announces the empty `<a>` as a link.
+- Suggestion: after the per-attribute pass, walk one more time and unwrap (replace-with-children) any `<a>` with no `href`, any `<span>` with no `style` AND no `data-color`, any `<code>` with no text content (rare). Keep the children, drop the shell.
+
+### I-8005 — Command palette should support type-ahead jump (typing a letter selects the next item starting with it) — P3 — open
+- Focus-list item ("Cmd+K palette deep keyboard nav"). Currently typing in the palette filters items by substring. There's no "jump-to" affordance like a native list: pressing `s` should highlight the next item starting with `s` (Settings) rather than filter the entire list down to only `s`-substring matches.
+- This is more relevant once the palette grows beyond ~30 items: a power-user wants to type a single key, not seven, to get to Settings.
+- Suggestion: in addition to filter mode (current), accept Home/End for jump-to-first/last, and PageDown/PageUp for ±10 items.
+
+### I-8006 — Undo/redo (Cmd+Z / Cmd+Shift+Z) does not exist in the app — P2 — open
+- Focus-list item ("Undo/redo edge cases"). Grep for `undo\|redo` in `src/lib/` returns nothing. There is no app-level undo system. Native contenteditable undo works inside a single block for typing, but: deleting a block, moving a block, deleting a row, renaming a page, dragging in the sidebar — none of these are undoable.
+- Suggestion: an `undoStack` / `redoStack` in the store that captures the last N state diffs. Bind to `Cmd+Z` / `Cmd+Shift+Z`. The page-history snapshot system can be the per-page coarse-grained alternative (especially with B-8000's auto-snapshot on restore), but the action-grained undo is the standard editor expectation.
+
+### I-8007 — Hidden affordance: Workspace switcher and "create new workspace" don't exist in the UI — P2 — open
+- Focus-list item ("Multi-workspace switching"). `state.workspaces` is keyed by id and the store has `currentWorkspaceId`, but there is no UI to switch workspaces or create another. The header chip in Sidebar.tsx shows the current workspace name but no dropdown.
+- Suggestion: clicking the header chip opens a popover listing all workspaces the user belongs to + a "Create workspace" affordance. `setCurrentWorkspaceId(id)` action already exists implicitly via setState; expose it as a `switchWorkspace(id)` helper and bind to the menu items.

@@ -32,8 +32,17 @@ export function TopBar() {
   const teamspaces = useStore((s) => s.teamspaces);
   const breadcrumbs: { id: string; title: string; icon: string | null; kind?: "teamspace" }[] = [];
   if (page) {
+    // Walk the parentId chain with a `seen` set + depth cap so a cyclic
+    // chain (corrupt import, broken move) can't infinite-loop the render
+    // thread and brick the entire app (B-8001). `normalizeState` should
+    // have already broken any cycle on read, but this is the defense-in-
+    // depth layer in case the data lands here unhealed.
     let p: typeof page | null = page;
-    while (p) {
+    const seen = new Set<string>();
+    let safety = 0;
+    while (p && !seen.has(p.id) && safety < 100) {
+      seen.add(p.id);
+      safety += 1;
       breadcrumbs.unshift({ id: p.id, title: p.title || "Untitled", icon: p.icon });
       p = p.parentId ? pages[p.parentId] : null;
     }

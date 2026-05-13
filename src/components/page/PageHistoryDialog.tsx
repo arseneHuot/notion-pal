@@ -29,11 +29,31 @@ export function PageHistoryDialog({ page, open, onClose }: { page: Page; open: b
           {page.history.map((v) => (
             <div key={v.id} className="border border-border rounded p-2 flex items-center justify-between">
               <div>
-                <div className="text-sm font-medium">{new Date(v.savedAt).toLocaleString()}</div>
-                <div className="text-xs text-muted-foreground">{v.snapshot.title || "Untitled"}</div>
+                <div className="text-sm font-medium flex items-center gap-2">
+                  {new Date(v.savedAt).toLocaleString()}
+                  {/* B-8000 — distinguish auto-captured pre-restore snapshots
+                      so users know which ones are their forward escape hatch. */}
+                  {v.autoSnapshot && (
+                    <span className="text-[10px] uppercase tracking-wider bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 rounded px-1.5 py-0.5">
+                      Auto
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground">{v.label ?? (v.snapshot.title || "Untitled")}</div>
               </div>
               <button
                 onClick={() => {
+                  // B-8000 — destructive action. Confirm before overwriting
+                  // the current page state. `restoreVersion` now auto-saves a
+                  // pre-restore snapshot too, but the user should consent
+                  // before any data swap (especially because there's no
+                  // diff/preview UI yet — see I-8000).
+                  const ok = window.confirm(
+                    "Restore will replace the current page content with this version.\n\n" +
+                    "An automatic snapshot of your current state will be saved first so you can roll back.\n\n" +
+                    "Continue?"
+                  );
+                  if (!ok) return;
                   restoreVersion(page.id, v.id);
                   onClose();
                 }}
