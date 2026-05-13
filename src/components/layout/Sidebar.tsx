@@ -73,7 +73,7 @@ export function Sidebar() {
           {favoritesExpanded && (
             <div className="mt-1 space-y-0.5">
               {favorites.map((p) => (
-                <PageItem key={p.id} page={p} depth={0} />
+                <PageItem key={p.id} page={p} depth={0} testidPrefix="sidebar-fav" />
               ))}
             </div>
           )}
@@ -186,7 +186,7 @@ function TeamspaceSection({ teamspace, expanded, onToggle, onNewPage }: { teamsp
   );
 }
 
-function PageItem({ page, depth }: { page: Page; depth: number }) {
+function PageItem({ page, depth, testidPrefix = "sidebar-page" }: { page: Page; depth: number; testidPrefix?: string }) {
   const navigate = useNavigate();
   const allPages = useStore((s) => s.pages);
   const expanded = useStore((s) => s.ui.expandedPages[page.id]);
@@ -208,7 +208,7 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
         style={{ paddingLeft: depth * 12 + 6 }}
         draggable
         data-page-id={page.id}
-        data-testid={`sidebar-page-${page.id}`}
+        data-testid={`${testidPrefix}-${page.id}`}
         onDragStart={(e) => {
           e.stopPropagation();
           e.dataTransfer.setData("application/x-sidebar-page-id", page.id);

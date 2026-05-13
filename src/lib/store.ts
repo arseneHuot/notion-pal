@@ -711,6 +711,27 @@ export function permanentlyDeletePage(id: string) {
       delete newPages[pid];
     }
 
+    // Strip page-link / sub-page blocks in OTHER pages that point at any of
+    // the deleted pages (B-4808). The simplest correct fix is to delete the
+    // dangling links — they'd otherwise render as "Sub-page" with a dead
+    // href and confuse users.
+    for (const [bid, b] of Object.entries(newBlocks)) {
+      if (!b) continue;
+      if (b.type === "page-link" || b.type === "sub-page") {
+        const linked = (b as Extract<Block, { type: "page-link" | "sub-page" }>).pageId;
+        if (linked && pagesToDelete.has(linked)) {
+          delete newBlocks[bid];
+          // Remove the dangling block id from its parent page's `blocks`
+          // array so the renderer doesn't try to look it up.
+          for (const [opid, op] of Object.entries(newPages)) {
+            if (op.blocks?.includes(bid)) {
+              newPages[opid] = { ...op, blocks: op.blocks.filter((x) => x !== bid) };
+            }
+          }
+        }
+      }
+    }
+
     return { ...s, pages: newPages, blocks: newBlocks };
   });
 }
