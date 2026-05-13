@@ -28,28 +28,72 @@ function MarkdownText({ text }: { text: string }) {
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<InlineText key={idx++} text={text.slice(last)} />);
-  return <div className="whitespace-pre-wrap">{parts}</div>;
+  return <div className="whitespace-pre-wrap space-y-1">{parts}</div>;
 }
 
+/** Lightweight block-level renderer that recognises `-`/`*` bullets and
+ *  `N.` numbered lists between fenced code blocks. */
 function InlineText({ text }: { text: string }) {
-  // Parse inline marks. Order: links → bold → italic → inline code.
-  // We build a parts array of React nodes.
+  // First handle leading-line list markers.
+  const lines = text.split(/\n/);
+  const blocks: React.ReactNode[] = [];
+  let listItems: { ordered: boolean; lines: string[] } | null = null;
+  let key = 0;
+  const flushList = () => {
+    if (!listItems) return;
+    const items = listItems.lines.map((l, idx) => <li key={idx}><InlineMarks text={l} /></li>);
+    blocks.push(
+      listItems.ordered
+        ? <ol key={`l${key++}`} className="list-decimal pl-5 my-1">{items}</ol>
+        : <ul key={`l${key++}`} className="list-disc pl-5 my-1">{items}</ul>,
+    );
+    listItems = null;
+  };
+  for (const line of lines) {
+    const bullet = /^\s*[-*]\s+(.*)$/.exec(line);
+    const numbered = /^\s*\d+\.\s+(.*)$/.exec(line);
+    if (bullet) {
+      if (!listItems || listItems.ordered) {
+        flushList();
+        listItems = { ordered: false, lines: [] };
+      }
+      listItems.lines.push(bullet[1]);
+    } else if (numbered) {
+      if (!listItems || !listItems.ordered) {
+        flushList();
+        listItems = { ordered: true, lines: [] };
+      }
+      listItems.lines.push(numbered[1]);
+    } else {
+      flushList();
+      blocks.push(line === "" ? <br key={`b${key++}`} /> : <div key={`p${key++}`}><InlineMarks text={line} /></div>);
+    }
+  }
+  flushList();
+  return <>{blocks}</>;
+}
+
+function InlineMarks({ text }: { text: string }) {
+  // Parse inline marks. Order: links → bold → italic (with `_` alt) →
+  // inline code.
   const out: React.ReactNode[] = [];
-  const tokenRe = /(\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
+  const tokenRe = /(\*\*([^*]+)\*\*|__([^_]+)__|\*([^*]+)\*|_([^_]+)_|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
   while ((m = tokenRe.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index));
     if (m[2] !== undefined) out.push(<strong key={i++}>{m[2]}</strong>);
-    else if (m[3] !== undefined) out.push(<em key={i++}>{m[3]}</em>);
-    else if (m[4] !== undefined) out.push(<code key={i++} className="bg-muted/80 px-1 rounded font-mono text-xs">{m[4]}</code>);
-    else if (m[5] !== undefined && m[6] !== undefined) {
-      const href = m[6];
+    else if (m[3] !== undefined) out.push(<strong key={i++}>{m[3]}</strong>);
+    else if (m[4] !== undefined) out.push(<em key={i++}>{m[4]}</em>);
+    else if (m[5] !== undefined) out.push(<em key={i++}>{m[5]}</em>);
+    else if (m[6] !== undefined) out.push(<code key={i++} className="bg-muted/80 px-1 rounded font-mono text-xs">{m[6]}</code>);
+    else if (m[7] !== undefined && m[8] !== undefined) {
+      const href = m[8];
       const safe = /^(https?:|mailto:|#|\/)/i.test(href) ? href : "#";
       out.push(
         <a key={i++} href={safe} target="_blank" rel="noopener noreferrer" className="underline">
-          {m[5]}
+          {m[7]}
         </a>,
       );
     }

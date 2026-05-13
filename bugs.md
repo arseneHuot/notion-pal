@@ -3116,3 +3116,103 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: prompts "hello world response" and "show me a python code snippet" → both produce the `Based on your workspace, here's what I found about "<query>": 1. <strong>X</strong> — icon (relevance N)…` template.
 - Observed: same as B-2217; the markdown-code-block path (B-2401) is a band-aid that injects a python `print()` template when "code" is in the query.
 
+## 2026-05-13 04:50 — Test agent batch 26
+
+### B-2500 — AI code snippet renders the real `{matches.length}` value (P2, fixed — closes B-2403)
+- File: AI assistant render path.
+- Steps: `/app/p/pg_mp33cd7d01u4huok` → `sidebar-ai` → `ai-new-thread` → input "show me python code" → `ai-send`.
+- Observed: assistant message contains `<pre>` with `print(f'found {3} results')` — the `${matches.length}` template-literal leak is gone and the real workspace-hit count is substituted (3 hits in this run). Now uses Python f-string syntax.
+
+### B-2501 — `page-opt-move-<teamspaceId>` items added to page-options menu and work end-to-end (P2, fixed — closes B-2409)
+- File: page-options popover in `PageView`.
+- Steps: `/app/p/pg_mp33cd7d01u4huok` → `page-options` → menu now lists 3 extra rows: `page-opt-move-ts_mp33cd7d0vluy2hb` (🔒 Private), `page-opt-move-ts_mp33cd7d93hf4pw9` (⚙️ Engineering), `page-opt-move-ts_mp33cd7dj3ceg3gi` (🤝 Shared).
+- Observed: clicking `page-opt-move-ts_mp33cd7d93hf4pw9` flips `pages["pg_mp33cd7d01u4huok"].teamspaceId` from `ts_mp33cd7d0vluy2hb` → `ts_mp33cd7d93hf4pw9` in localStorage. UI sidebar also re-groups under Engineering immediately.
+
+### B-2502 — `db-view-count-<viewId>` badges added on view tabs; show "N" or "K/N" when filtered (P3, fixed — closes B-2410 / B-2417)
+- File: database view-tab strip.
+- Steps: `db_dates_test` → 7 rows total; Main view (`v_dates_test`) has filter "Tags contains blue" cutting to 3 rows.
+- Observed: tab text now `▦ Main` + `3/7` for the filtered view; the other 5 views render `7` (no filter). All 6 views expose `db-view-count-v_<id>` testids. Filter-active state is now visible at a glance.
+
+### B-2503 — XSS via raw HTML in text-block `content` (P0, fixed) — critical
+- Files: text-block renderer (uses `innerHTML`/`dangerouslySetInnerHTML` instead of escaping). Demonstrable on `pg_edge_export` block `b_text_html`.
+- Steps: set `blocks["b_text_html"].content = '<img src=x onerror="window.__XSS_TRIGGERED=1">PAYLOAD'` in localStorage → reload `/app/p/pg_edge_export`.
+- Observed: rendered DOM contains `<img src="x" onerror="window.__XSS_TRIGGERED=1">PAYLOAD` and `window.__XSS_TRIGGERED` evaluates to `1` (handler fired). Any user typing HTML in a text block (or whose content syncs across collaborators) can run arbitrary JS in another user's session. Sanitize at render time (`dompurify` or simple text-only render with whitelisted `<b>/<i>/<s>/<code>/<a>` produced by the toolbar).
+
+### B-2504 — Synced source block does NOT render its own `content` field; only its children render (P2, open)
+- File: synced-block source render path.
+- Steps: `blocks["blk_mp33cd7dwqtkopvq"]` is `type:"synced-block"` with `content:"UPDATED 1778626232897"` and one child `blk_syncedchild_1778627070687`. Visit `/app/p/pg_mp33cd7d01u4huok`.
+- Observed: `[data-testid="synced-source-blk_mp33cd7dwqtkopvq"]` shows only `"SYNCED BLOCK (SOURCE)\ncopy id\nLIVE-MIRROR-1778627431314"` — the child's `content` field renders, but the source block's own `content` "UPDATED 1778626232897" is invisible. Either drop the field at the data layer or render it (Notion synced source can hold inline text). 0 `synced-ref-blk_mp33cd7dwqtkopvq` mirror containers were also found when visiting the page that uses it as a source — refs may have been re-keyed.
+
+### B-2505 — AI markdown rendering: bullet/numbered lists do NOT render as `<ul>`/`<ol>` (P2, open — extends B-2402)
+- Steps: `sidebar-ai` → `ai-new-thread` → send `- first\n- second\n- third bullet list`.
+- Observed: response keeps the `- ` markers in plain `whitespace-pre-wrap` text; no `<ul>`/`<ol>` is emitted. Same for numbered lists (assistant's own response uses `1. **X** — …` and renders the digit literally, not as `<li>`).
+
+### B-2506 — AI markdown: `_underscore italic_` does not render as `<em>` (P3, open — extends B-2505)
+- Steps: send `tell me with *italic* and _underscore italic_ words`.
+- Observed: `*italic*` → `<em>italic</em>` (works). `_underscore italic_` → rendered literally with `_` characters. Underscore-flavoured emphasis is unsupported.
+
+### B-2507 — Real-time collab via `storage` event does NOT refresh page title (P2, open)
+- Steps: in one tab, mutate `state.pages[pageId].title` in localStorage then dispatch `new StorageEvent("storage", {...})` (simulates other tab writing). Re-check `[data-testid="page-title"]` and sidebar row.
+- Observed: localStorage value updates but UI does not re-render. Page title and sidebar still show old text. Zustand `persist` middleware is not subscribing to cross-tab `storage` events, so opening two tabs of the same workspace yields stale views until manual reload. Either enable `persist`'s cross-tab sync or manually `window.addEventListener("storage", rehydrate)`.
+
+### B-2508 — Sidebar pages still un-draggable (P2, open — extends B-2405 / B-2213)
+- Steps: `/app` → query `aside [draggable="true"]` → 0 elements; 22 sidebar rows are click-only.
+- Observed: no progress this batch. Pages cannot be reordered or re-parented via DnD.
+
+### B-2509 — Calendar week-view event chips still un-draggable AND empty (P2, open — extends B-2406)
+- Steps: `/app/calendar` → switch select to `week` → 7 `week-day-2026-05-1X` cells render, **0** event chips appear (the 3 `calendarEvents` rows have no `.date` field, so they cannot be placed on any day).
+- Observed: even ignoring drag, the week-view shows no events at all because all events were created without a `date` value. Defect compounds: data-shape gap + missing DnD.
+
+### B-2510 — Database table rows still un-draggable (P2, open — extends B-2407)
+- Steps: `/app/p/pg_mp33cd7d01u4huok` → db_dates_test table view → `tbody tr` count 4; 0 `tr[draggable="true"]`, 0 `row-handle-*`.
+- Observed: no row reorder UX.
+
+### B-2511 — Gallery cards still un-draggable (P2, open — extends B-2408)
+- Steps: `db_dates_test` gallery view → 7 `gallery-card-*` cards; `.draggable === false` for every one.
+- Observed: same as last batch.
+
+### B-2512 — Slash menu still gated on physical keystroke (P2, open — extends B-2020)
+- Steps: focus a `[contenteditable="true"]` element → dispatch `KeyboardEvent('keydown', {key:'/'})` and `document.execCommand('insertText','/')`.
+- Observed: `[data-testid="slash-menu"]` does NOT appear. Programmatic keystrokes can't open the menu, blocking E2E coverage.
+
+### B-2513 — Inline-formatting toolbar present, but Bold button click does nothing (P2, open)
+- Files: `InlineToolbar` (recent commit "Add inline formatting toolbar"). Buttons: `ib-bold`, `ib-italic`, `ib-strike`, `ib-code`, `ib-link`, `ib-color`, `ib-ai`.
+- Steps: on `/app/p/pg_mp349of8lvv9kk0m`, programmatically set a selection of 3 chars on the H1 contenteditable; the toolbar appears at `(281, 128)` (visible). Click `[data-testid="ib-bold"]`.
+- Observed: block `innerHTML` is unchanged (`"/Meeting notes"` before and after); no `<strong>` wrapper added. Either the toolbar's bold handler relies on `document.execCommand("bold")` (deprecated, requires non-collapsed Selection at click time and DOM focus the click consumes) or the selection is lost when the toolbar gains focus. Toolbar UI exists but does not actually wrap selection in formatting.
+
+### B-2514 — Public form `<select>` for select-type properties uses `option.value=<id>`; if the form is filled via API/automation, name-based fills silently drop (P3, info)
+- Steps: 32-field submission test. Setting `select.value = "Red"` (option name) leaves it at empty string; setting `select.value = "o1"` (option id) works.
+- Observed: `p_big_2, _9, _12, _19, _22, _29` (all 6 select fields) submitted as `""` despite "filled" automation, while same-batch multi-selects (`o1` button click) succeeded. Documenting because batch-25's earlier "form submit works" report did not exercise selects. Real users see correct UI (option text); only programmatic fills are affected.
+
+### B-2515 — Edge-export page only renders 2 of 9 blocks (image, video, table, button, code, ToC, breadcrumb missing) (P2, open)
+- Steps: `/app/p/pg_edge_export` → page has 9 blocks per store; only `b_callout_no_emoji` and `b_text_html` produce a `block-content-*` element. `[data-testid="plus-b_<id>"]` wrappers exist for the missing 7, but their renderers emit no inner content.
+- Observed: empty image / video / table / button / ToC / breadcrumb / code-no-lang blocks render only the `+ Add block` plus-button row with no body. No fallback "Image" placeholder, no empty-state. Users see "phantom" blocks they cannot interact with.
+
+### B-2516 — Settings page has only 3 testids (P3, info)
+- Steps: `/app/settings`.
+- Observed: `settings-signout`, `settings-darkmode`, `settings-export`. No `settings-workspace`, `settings-profile`, `settings-billing`, `settings-language`, etc. Surface is sparse; appropriate for an MVP but flag for roadmap.
+
+### B-2517 — AI link parser leaves trailing `)` and rewrites disallowed URLs to `#` (P3, info — safe behavior)
+- Steps: send `[XSS](javascript:alert(1))` to AI.
+- Observed: rendered HTML emits `<a href="#" ...>XSS</a>)` — `javascript:` URL is correctly rejected (escaped to `#`), preventing XSS. But the trailing closing-paren character is leaked into the body, and there's no visible UI hint that the link was disabled. Acceptable but not great.
+
+### B-2518 — AI input is HTML-escaped before quoting (P3, info — good)
+- Steps: send `<img src=x onerror="window.__AI_XSS=1">`.
+- Observed: response contains `&lt;img src=x onerror="window.__AI_XSS=1"&gt;`; `window.__AI_XSS` stays at `0`. AI assistant's prompt-echo is safe (contrast with B-2503 block render which is unsafe).
+
+### B-2519 — Inbox refresh on resolve works (P3, info — closes B-2210 / I-2201)
+- Steps: `/app/inbox` shows `inbox-resolve-cmt_mp3brkgorfagvv78` from prior batch's threaded reply. Click it.
+- Observed: row disappears from the DOM immediately; `comments["cmt_mp3brkgorfagvv78"].resolved` flips to `true` in localStorage. No reload needed — the regression in B-2210 is gone.
+
+### B-2520 — Command palette still lacks `role="dialog"` (P3, open — confirms B-2414 still applies)
+- Steps: open command palette via `[data-testid="sidebar-search"]`.
+- Observed: 8 base `cmd-*` items render; no `role="dialog"`, no `aria-modal`. Same status as batch 25.
+
+### B-2521 — Public-form select value persistence works at user-level but stores option IDs (not names) (P3, info)
+- Same submission as B-2514 / B-2412. Server-side stored `values.p_big_3 = ["o1"]` for multi-select and `values.p_big_2 = "o1"` (when filled correctly by clicking the actual option) → opening the row in the table renders the colored "Red" chip correctly.
+- Observed: data model uses option IDs, UI maps to names — consistent with Notion. Documenting because it interacts with the export path (CSV export of "o1" instead of "Red" if the exporter doesn't dereference).
+
+### B-2522 — Persisted `state` not split per workspace (P3, info)
+- Steps: `Object.keys(localStorage)` shows 10 `notion-clone:user:<uuid>` keys (multiple test accounts), each carrying a full `{pages, blocks, databases, rows, ...}` snapshot. Switching the auth token loads the right one.
+- Observed: per-user persistence is fine, but no per-workspace persist key — if a user has multiple workspaces, the entire `workspaces` map lives in one blob. Minor scaling concern.
+

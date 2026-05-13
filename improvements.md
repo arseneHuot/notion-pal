@@ -1116,3 +1116,43 @@ Priority: high / medium / low.
 
 ### I-2214 — Timeline grid virtualization (medium, open)
 - See B-2418. With 360 bars per 7-row db, pages with multiple inline timeline views render thousands of divs. Virtualize day cells / clip to viewport.
+
+
+## 2026-05-13 04:50 — Test agent batch 26
+
+### I-2500 — Sanitize text-block HTML at render time (high, open) — security
+- See B-2503. Today the text-block renderer pours `block.content` directly into the DOM via `dangerouslySetInnerHTML`, allowing `<img src=x onerror=...>` and similar payloads to execute arbitrary JS. Either (a) pipe through DOMPurify with an allowlist of `<b>/<i>/<s>/<code>/<a>/<u>/<mark>`, (b) render plain text and let the inline toolbar produce structured spans instead of HTML strings, or (c) move to a TipTap/ProseMirror-style schema so user input is never raw HTML. Same fix should cover block titles, page titles, and synced-block content (B-2504).
+
+### I-2501 — Render synced-source `content` field (medium, open)
+- See B-2504. Either treat synced-source like a normal block (render its inline `content`) or drop the field at the data layer. Today it's silently dropped on render, which surprises authors who type into a synced-block from another mirror.
+
+### I-2502 — Real markdown rendering in AI assistant (`<ul>`, `<ol>`, `_em_`, fenced code, headings) (medium, open)
+- See B-2505 / B-2506. Replace the regex-based pretty-printer with `marked` or `markdown-it` (each ~30 KB) so `- bullets`, `1. numbered`, `_underscore italic_`, headings, blockquotes, and fenced code render structurally. Today only `**bold**`, `*italic*`, `[link](url)` and one prompt-gated `<pre>` are wired.
+
+### I-2503 — Cross-tab realtime sync via storage event subscription (medium, open)
+- See B-2507. Zustand's `persist` middleware does not by default rehydrate when another tab writes localStorage. Add `useStore.persist.rehydrate()` inside a `window.addEventListener("storage", e => { if (e.key === STORAGE_KEY) … })` so two tabs of the same workspace stay in sync without reload. This unlocks the "real-time collab simulation" path that's currently broken.
+
+### I-2504 — Wire calendar-event `date` field so events appear on the week/month grid (medium, open)
+- See B-2509. All 3 seeded `calendarEvents.*` rows have no `.date` value; the week-view therefore renders 0 chips. Either backfill via seed (`date: today`) or fix the chip-renderer to fall back to `createdAt` when `date` is missing.
+
+### I-2505 — Block drag handles for in-page reordering (medium, open)
+- A separate need from sidebar / table / gallery DnD: page blocks themselves have `plus-<id>` and `block-content-<id>` wrappers but no drag handle. Notion's hover-handle on each block is the single most-used in-page interaction; add `drag-handle-<blockId>` + reorder helpers wired to `pages[].blocks` array order.
+
+### I-2506 — Inline-format toolbar Bold/Italic etc. need to actually mutate selection (high, open)
+- See B-2513. The toolbar shows up at the right position but `ib-bold` click does nothing — the selection is presumably lost when the button gains focus. Use `mousedown` instead of `click` (so the selection isn't blurred) and update the block's content (likely calling `document.execCommand("bold")` or, better, directly mutating block-content with a span wrapper). Without this, the whole feature added in commit 80e6fc6 is decorative.
+
+### I-2507 — Empty-state UX for un-configured blocks (image / video / table / button / ToC / breadcrumb / code-no-lang) (low, open)
+- See B-2515. On `pg_edge_export`, 7 of 9 blocks render as blank rows. Each should display a placeholder ("Upload image", "Embed video URL", "Add table data") and an action button that opens the relevant config UI, so authors can complete the block instead of being faced with an invisible row.
+
+### I-2508 — Surface the link-was-disabled state in AI assistant output (low, open)
+- See B-2517. When the AI markdown link parser rewrites `javascript:` to `#`, render with a tooltip/strike-through so users notice their malformed/unsafe link was neutered. Also strip the trailing `)` left in the body.
+
+### I-2509 — Public form: validate select fills against option IDs (low, open)
+- See B-2514. Today only the form's `<option value="o1">Red</option>` IDs are accepted. Either accept name-based values on submit (`db.properties[i].options.find(o => o.name === v)?.id`) or render the option `value` attribute with the human name. Mostly affects automation / API form-fillers, not real users.
+
+### I-2510 — Persisted-store key per workspace (low, open)
+- See B-2522. The whole `workspaces` map is stored under one user key. With many workspaces (Notion-scale) this single blob grows unbounded. Consider sharding by workspaceId so switching workspaces only loads the relevant subtree.
+
+### I-2511 — Settings: add `settings-workspace`, `settings-profile`, `settings-billing`, `settings-language` testids (low, open)
+- See B-2516. Settings page currently exposes only `settings-signout`, `settings-darkmode`, `settings-export`. Add canonical sub-section testids for E2E coverage as those screens land.
+

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { Block, BlockType } from "@/lib/types";
 import { useStore, createBlock, updateBlock, deleteBlock, reorderBlocks, createPage, createDatabase, insertBlock } from "@/lib/store";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { SlashMenu } from "./SlashMenu";
 import { filterSlash, type SlashCommand } from "@/lib/slash-commands";
 import { InlineDatabase } from "@/components/database/InlineDatabase";
@@ -306,16 +307,16 @@ function useEditable(
   const [slashPos, setSlashPos] = useState({ x: 0, y: 0 });
   const pageBlocks = useStore((s) => s.pages[pageId]?.blocks ?? []);
 
-  // Initialize content. Sync DOM whenever the stored content diverges from
-  // the DOM and the editor isn't currently focused (so external state changes
-  // — version restores, slash transformations, undo — apply without
-  // clobbering the live cursor).
+  // Initialize content. Sanitize before writing to the DOM so a malicious
+  // payload (pasted clipboard HTML, imported JSON, etc.) can't execute
+  // arbitrary scripts via `<img onerror>` or similar (B-2503 / P0).
   useEffect(() => {
     if (!ref.current) return;
-    const content = (block as { content?: string }).content ?? "";
+    const raw = (block as { content?: string }).content ?? "";
+    const safe = sanitizeHtml(raw);
     const isFocused = document.activeElement === ref.current;
-    if (ref.current.innerHTML !== content && !isFocused) {
-      ref.current.innerHTML = content;
+    if (ref.current.innerHTML !== safe && !isFocused) {
+      ref.current.innerHTML = safe;
     }
   }, [block.id, (block as { content?: string }).content, (block as { updatedAt?: number }).updatedAt, block.type]);
 
@@ -335,7 +336,9 @@ function useEditable(
   function onInput(e: React.FormEvent<HTMLDivElement>) {
     const text = e.currentTarget.innerHTML;
     const plain = e.currentTarget.innerText;
-    updateBlock(block.id, { content: text } as Partial<Block>);
+    // Always store sanitized HTML so a pasted clipboard payload can't
+    // round-trip through the store and execute later (B-2503).
+    updateBlock(block.id, { content: sanitizeHtml(text) } as Partial<Block>);
 
     // Detect slash
     if (plain.startsWith("/")) {
@@ -570,7 +573,7 @@ function useEditable(
         span.className = "bg-muted px-1 rounded text-xs font-mono";
         try {
           range.surroundContents(span);
-          updateBlock(block.id, { content: ref.current?.innerHTML ?? "" } as Partial<Block>);
+          updateBlock(block.id, { content: sanitizeHtml(ref.current?.innerHTML ?? "") } as Partial<Block>);
         } catch {
           // Selection crosses boundaries
         }
