@@ -5995,3 +5995,66 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6104 — Block-anchor missing check used DOM-only — fixed (commit 51a8cbb)
 - Fix: PageComments reads `useStore(s => s.blocks)[blockId]` to determine whether the target block exists. Cross-page block references (block on page A, comment surfaced on page B) no longer false-positive as "missing".
+
+### B-6200 — Cmd+K block-only page anchor — VERIFIED (fixed)
+- Repro: injected page `pg_b6200_plain` titled "PlainTitle" + block `blk_b6200_uniquezqt` (content "...UNIQUEZQT..."). Cmd+K, typed "UNIQUEZQT", clicked `cmd-page-pg_b6200_plain`.
+- Observed: `location.hash === "#block-blk_b6200_uniquezqt"` exactly as spec'd. B-6103 fix holds. ✅
+- Status: works as designed.
+
+### B-6201 — Cross-page block-anchor chip enabled but click stays on current page (P2, open)
+- Repro: page A `pg_b6201_A` contains block `blk_b6201_anchor`. Comment on page B `pg_b6201_B` carries `blockId: blk_b6201_anchor`. Opened comments pane on B.
+- Observed: chip `comment-block-anchor-cmt_b6201_xp` is NOT disabled, NOT "(missing)" — B-6104 fix holds. BUT clicking the chip just sets `#block-blk_b6201_anchor` on page B's URL — does NOT navigate to page A. Block is never scrolled into view because it does not live on page B.
+- Cause: PageComments.tsx onClick uses current-page-relative hash. The store-existence check (B-6104 fix) gates the disable, but the click handler doesn't resolve `blocks[bid].parentId` and navigate cross-page.
+- Expected: clicking a cross-page anchor should `navigate('/app/p/' + block.parentId + '#block-' + bid)`. Without that, the "not missing" state is misleading.
+
+### B-6202 — NC1 multi-block search — title row top, block row anchored (passes)
+- Steps: created title-match page `pg_b6202_titlematch` ("MULTIWORDQTR titled") and block-match page `pg_b6202_blockhost` ("OtherTitle" with block containing "MULTIWORDQTR"). Cmd+K "MULTIWORDQTR".
+- Observed: 2 rows. Top row = title page (clicked → bare nav, no hash). Second row = block-host page (clicked → `#block-blk_b6202_match`).
+- Status: works as designed (B-6103 fix generalizes).
+
+### B-6203 — AI textarea Enter key bypasses busy-disable on send button (P2, open)
+- Repro: opened AI panel, typed "Testing busy state b6203", clicked `ai-send`. While `ai-send.disabled===true`, typed "Spam while busy" and dispatched Enter on the textarea.
+- Observed: a second user message was queued and a second assistant reply was generated. Send button correctly shows disabled, but Enter handler ignores the busy flag. Result: rapid Enter spam during reply streaming queues unbounded sends.
+- Cause: AIChat textarea onKeyDown only checks `e.key==='Enter' && !shift` and calls `send()`; it doesn't gate on `isBusy`.
+- Expected: same disabled gate as the button — early-return when busy.
+
+### B-6204 — Comment block anchor for deleted block (passes)
+- Repro: comment `cmt_b6204_orphan` on `pg_b6204_orphan` with `blockId: blk_b6204_NONEXISTENT` (not in store).
+- Observed: chip is disabled, text "↑ on block (missing)", line-through, title "The referenced block no longer exists".
+- Status: works as designed — symmetric mirror of B-6104 fix. Truly missing blocks remain greyed out.
+
+### B-6205 — Cmd+K "C O M M" token splitter matches every page (P2, open)
+- Repro: Cmd+K with query "C O M M" (spaces between letters).
+- Observed: 10+ rows of unrelated pages ("Getting Started", "Meeting notes", "Project brief", "Welcome", etc.). Query "COMM" with no spaces correctly narrows to 3 pages containing "comm".
+- Cause: palette likely splits on whitespace then AND-matches tokens. Single-char tokens "C","O","M","M" match nearly every title.
+- Expected: ignore tokens shorter than 2 chars, or require a minimum token length. Better still, use a fuzzy substring match on the joined query.
+
+### B-6206 — Move-to-teamspace breadcrumb persists across reload (passes)
+- Repro: moved `pg_b6202_blockhost` from Private → Engineering, reloaded.
+- Observed: `breadcrumb-teamspace-ts_mp2pz5zwvod19q0j` chip "⚙️ Engineering" appears after refresh, old chip gone, `pages.teamspaceId === ts_mp2pz5zwvod19q0j` in store. B-5903/6109 holds across reload.
+- Status: works as designed.
+
+### B-6207 — Public page does NOT render trashed sub-page link as a link (P3, open)
+- Repro: public parent `pg_b6205_pub` (`publishSlug: pub-trashed-sub-b6205`) with a `sub-page` block pointing to trashed sub `pg_b6205_sub_trashed`.
+- Observed: sub-page renders as plain text "🗑️ Trashed Sub B-6205 (unpublished)" — NO `<a>` element, NO body inlined. Behavior is correct (no body), but the spec asked "just the link". The non-trashed equivalent ALSO renders without an `<a>` — link to a sub-page on a public page never becomes a real link.
+- Expected: published sub-pages get an `<a>` to their public slug; trashed/unpublished sub-pages get the plain-text label currently shown. Today public-page sub-page blocks are always non-interactive labels.
+
+### B-6208 — View duplicate emits "(Copy)" with no incremental suffix (P2, open)
+- Repro: db `db_mp2qmu4d1va6knov`, opened view-menu for view "All" (`view_mp2qmu4djdr3pyti`), clicked `view-duplicate-...` three times.
+- Observed: views list now contains three identically named "All (Copy)" entries. Suffix derives from the SOURCE name + " (Copy)" — never from the previous duplicate. Users cannot distinguish duplicates in the tab strip.
+- Expected: increment to "All (Copy) 2", "All (Copy) 3" — or fall back to "Copy of All", "Copy of All 2", etc. Match the page-duplicate behavior (which already increments).
+
+### B-6209 — AI Cmd+J shortcut while focused in textarea (passes)
+- Repro: focused `comment-input` textarea, dispatched Cmd+J on it.
+- Observed: AI panel opens (`ai-input` appears) even though focus is in a textarea. Global shortcut handler correctly fires before the editable element swallows the event.
+- Status: works as designed.
+
+### B-6210 — Trash route shows empty state after permanent-delete of last item (passes)
+- Repro: reduced trash to 1 item `pg_b6207_last_trash`, navigated to `/app/trash`, clicked `delete-forever-pg_b6207_last_trash`.
+- Observed: `trash-empty` testid appears, main reads "Trash\nTrash is empty." No stale row remains.
+- Status: works as designed.
+
+### B-6211 — DnD uses browser-default ghost (no custom drag preview) (P3, open)
+- Repro: dispatched dragstart on `sidebar-page-pg_b5800_P` with a wrapped DataTransfer.
+- Observed: no `setDragImage` invoked anywhere in src; browser-default ghost (full-fidelity element snapshot at OS opacity) used. Search confirms no `setDragImage` in worktrees.
+- Expected: this is acceptable but the default ghost can look heavy for deeply-indented sidebar nodes. Notion uses a slim "pill" preview. Marking as P3 nit since DnD itself works.

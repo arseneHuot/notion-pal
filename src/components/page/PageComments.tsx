@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useStore, addComment, resolveComment, deleteComment, updateComment, setUI } from "@/lib/store";
 import { useAuth } from "@/hooks/use-auth";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { X, Send, Check, MessageSquare, Pencil } from "lucide-react";
 import type { Comment } from "@/lib/types";
 
@@ -219,6 +220,58 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
   );
 }
 
+function BlockAnchorChip({ commentId, blockId, blockMissing }: { commentId: string; blockId: string; blockMissing: boolean }) {
+  // The Comment's block might live on a different page than the page the
+  // comment is rendered against (B-6201). Walk up from the block via parentId
+  // until we hit a block whose parentId IS a page id — that's the owning
+  // page. We navigate to it, then set the hash so PageView's existing
+  // hashchange listener does the scroll + ring-highlight.
+  const blocks = useStore((s) => s.blocks);
+  const pages = useStore((s) => s.pages);
+  const navigate = useNavigate();
+  const params = useParams({ strict: false }) as { pageId?: string };
+  const ownerPageId = useMemo(() => {
+    if (!blockId) return null;
+    let cur: { id: string; parentId?: string | null } | undefined = blocks[blockId];
+    const seen = new Set<string>();
+    while (cur && cur.parentId && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      if (pages[cur.parentId]) return cur.parentId; // parent is a page
+      cur = blocks[cur.parentId]; // parent is another block — keep walking
+    }
+    return null;
+  }, [blockId, blocks, pages]);
+  return (
+    <button
+      onClick={() => {
+        if (blockMissing || !blockId) return;
+        if (ownerPageId && ownerPageId !== params.pageId) {
+          // Cross-page jump: navigate first, hash sets the highlight.
+          navigate({ to: "/app/p/$pageId", params: { pageId: ownerPageId }, hash: `block-${blockId}` });
+        } else {
+          window.location.hash = `block-${blockId}`;
+        }
+      }}
+      disabled={blockMissing}
+      className={`mb-1 text-[10px] uppercase tracking-wider flex items-center gap-1 ${
+        blockMissing
+          ? "text-muted-foreground cursor-not-allowed line-through"
+          : "text-blue-600 hover:underline"
+      }`}
+      data-testid={`comment-block-anchor-${commentId}`}
+      title={
+        blockMissing
+          ? "The referenced block no longer exists"
+          : ownerPageId && ownerPageId !== params.pageId
+            ? `Jump to block on ${pages[ownerPageId]?.title || "another page"}`
+            : `Jump to block ${blockId}`
+      }
+    >
+      ↑ on block{blockMissing ? " (missing)" : ownerPageId && ownerPageId !== params.pageId ? " ↗" : ""}
+    </button>
+  );
+}
+
 function CommentEditor({ initial, onSave, onCancel, commentId }: { initial: string; onSave: (next: string) => void; onCancel: () => void; commentId: string }) {
   // Defensive: malformed imports can persist `Comment.content` as
   // undefined / null. Coalesce so .trim() never throws (B-5710 / I-5701).
@@ -285,22 +338,7 @@ function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<type
         </span>
       </div>
       {blockId && (
-        <button
-          onClick={() => {
-            if (blockMissing) return;
-            window.location.hash = `block-${blockId}`;
-          }}
-          disabled={blockMissing}
-          className={`mb-1 text-[10px] uppercase tracking-wider flex items-center gap-1 ${
-            blockMissing
-              ? "text-muted-foreground cursor-not-allowed line-through"
-              : "text-blue-600 hover:underline"
-          }`}
-          data-testid={`comment-block-anchor-${comment.id}`}
-          title={blockMissing ? "The referenced block no longer exists" : `Jump to block ${blockId}`}
-        >
-          ↑ on block{blockMissing ? " (missing)" : ""}
-        </button>
+        <BlockAnchorChip commentId={comment.id} blockId={blockId} blockMissing={blockMissing} />
       )}
       <div className="text-sm whitespace-pre-wrap">{comment.content}</div>
     </div>

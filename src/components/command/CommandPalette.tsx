@@ -95,8 +95,23 @@ export function CommandPalette() {
     const q = query.toLowerCase().trim();
     // Word-order-insensitive matching (B-4204). Split the query into tokens
     // and require all tokens to appear (in any order) in the haystack.
-    const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
-    const allMatch = (hay: string) => tokens.every((t) => hay.includes(t));
+    // Drop single-character tokens to avoid "C O M M" exploding to dozens
+    // of unrelated pages (B-6205 / I-6201) — except when the WHOLE query
+    // is a single char, in which case fall back to substring match on the
+    // original query.
+    const rawTokens = q ? q.split(/\s+/).filter(Boolean) : [];
+    const tokens = rawTokens.length > 1
+      ? rawTokens.filter((t) => t.length >= 2)
+      : rawTokens;
+    // If the user typed >1 single-char tokens, `tokens` collapses to []
+    // and an `every()` against empty would match ALL pages. Treat that
+    // case as a no-op query (no matches) so e.g. "C O M M" returns 0
+    // instead of every page (B-6205).
+    const noiseQuery = q.length > 0 && tokens.length === 0;
+    const allMatch = (hay: string) => {
+      if (noiseQuery) return false;
+      return tokens.every((t) => hay.includes(t));
+    };
 
     const matchingPages = Object.values(pages)
       .filter((p) => !p.isInTrash)

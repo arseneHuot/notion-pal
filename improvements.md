@@ -1939,3 +1939,21 @@ Priority: high / medium / low.
 
 ### I-6107 — Map view: surface a "no location property" empty state with CTA to add one (P2, open)
 - See B-6102. Today's placeholder is plain text. Improve to: detect the database has no geo / lat-lng property; show a CTA "Add a Location property to display rows on the map." Provides a clear next step instead of "coming soon — geo properties not yet implemented".
+
+### I-6200 — Cross-page comment anchor: navigate to block's parent page (P2, open)
+- See B-6201. PageComments click-handler for the block-anchor chip currently does `setHash('#block-' + bid)` on the current location. When the referenced block lives on a different page, that hash is meaningless on the current page. Resolve `useStore.getState().blocks[bid].parentId`, then `navigate('/app/p/' + parentId + '#block-' + bid)`. Combined with the B-6104 store-existence gate, this closes the cross-page comments loop end-to-end.
+
+### I-6201 — AI textarea Enter should respect busy state (P2, open)
+- See B-6203. AIChat's textarea onKeyDown only checks `e.key==='Enter' && !e.shiftKey` and calls `send()`. Add `if (isBusy) { e.preventDefault(); return; }` (same predicate used to disable `ai-send`). Also consider a visible "Waiting…" placeholder while busy so users know why their Enter is no-op.
+
+### I-6202 — Cmd+K: ignore single-char tokens when AND-matching (P2, open)
+- See B-6205. The palette currently splits the query on whitespace and AND-matches each token against title+block content. Single-letter tokens are wildly non-discriminative ("C O M M" → every page that contains C, O, M, M anywhere). Either (a) filter tokens shorter than 2 chars before AND-matching, or (b) treat the raw query as a fuzzy substring with `query.replace(/\s+/g,'').toLowerCase()` as a fallback when there are <2 multi-char tokens.
+
+### I-6203 — Public page should render published sub-page block as `<a>` to its public slug (P3, open)
+- See B-6207. Today public renderer treats sub-page blocks as static labels regardless of whether the sub-page is published. For sub-pages with `isPublished && publishSlug`, emit a real `<a href="/p/<slug>">`. For trashed/unpublished sub-pages, keep the plain "(unpublished)" label.
+
+### I-6204 — View duplicate: increment "(Copy 2)", "(Copy 3)" suffix (P2, open)
+- See B-6208. duplicateView() likely does `name + " (Copy)"`. Replace with a uniqueness helper that scans the db's `views[].name`, finds existing `<base> (Copy)`, `<base> (Copy 2)` etc., and picks the next free integer. Match the page-title duplicate behavior to keep UX consistent.
+
+### I-6205 — Custom drag preview for sidebar / block DnD (P3, open)
+- See B-6211. App relies on the browser default drag image. Use `dataTransfer.setDragImage(clonedNode, x, y)` to render a slim "pill" with just the icon+title, similar to Notion. Significantly reduces visual clutter when dragging deeply-indented sidebar pages.

@@ -317,6 +317,7 @@ export function AIChat() {
         className="p-3 border-t border-border"
         onSubmit={(e) => {
           e.preventDefault();
+          if (busy) return; // Don't queue submissions while a reply streams (B-6203).
           send();
         }}
       >
@@ -329,6 +330,7 @@ export function AIChat() {
               // convention). The form's onSubmit handles validation.
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
+                if (busy) return; // ignore while busy (B-6203)
                 send();
               }
             }}

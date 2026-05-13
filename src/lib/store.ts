@@ -1615,8 +1615,18 @@ export function duplicateView(databaseId: string, viewId: string): string | null
   if (!src) return null;
   const newId = uid("v");
   // Deep-clone via JSON so nested arrays/objects (filters, sorts, options)
-  // are independent. The View union is JSON-safe.
-  const cloned: View = { ...JSON.parse(JSON.stringify(src)), id: newId, name: `${src.name} (Copy)` };
+  // are independent. The View union is JSON-safe. Disambiguate the name
+  // against existing siblings so three duplications produce "All (Copy)",
+  // "All (Copy 2)", "All (Copy 3)" instead of three identical tabs
+  // (B-6208 / I-6205).
+  const baseName = `${src.name} (Copy)`;
+  const existingNames = new Set(db.views.map((v) => v.name));
+  let candidate = baseName;
+  let n = 2;
+  while (existingNames.has(candidate)) {
+    candidate = `${src.name} (Copy ${n++})`;
+  }
+  const cloned: View = { ...JSON.parse(JSON.stringify(src)), id: newId, name: candidate };
   setState((s) => {
     const cur = s.databases[databaseId];
     if (!cur) return s;
