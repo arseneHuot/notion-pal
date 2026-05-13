@@ -724,16 +724,19 @@ export function restorePageCascade(id: string) {
     const page = s.pages[id];
     if (!page) return s;
     const idsToRestore = new Set<string>([id]);
-    // Walk UPWARDS first: if the page's ancestor chain is also trashed,
-    // include those ancestors so the restored page actually becomes
-    // reachable in the sidebar (B-7403). Without this the UI's
-    // "Restore" promise was a no-op for any child whose parent was
-    // still in the trash.
+    // Walk UPWARDS through the entire ancestor chain: include EVERY
+    // trashed ancestor in the restore set, even if non-trashed pages
+    // sit between them (B-7403 / B-7604). Stopping at the first
+    // non-trashed ancestor missed the case where grandparent is in
+    // trash but parent is not — the visible child stays unreachable
+    // because the trashed grandparent still hides the branch above.
     let cur: typeof page | undefined = page;
+    const seen = new Set<string>([id]);
     while (cur && cur.parentId) {
       const parent = s.pages[cur.parentId];
-      if (!parent || !parent.isInTrash) break;
-      idsToRestore.add(parent.id);
+      if (!parent || seen.has(parent.id)) break;
+      seen.add(parent.id);
+      if (parent.isInTrash) idsToRestore.add(parent.id);
       cur = parent;
     }
     // Then walk DOWNWARDS to include every trashed descendant (legacy

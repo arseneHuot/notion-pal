@@ -6700,3 +6700,37 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7503 — TableView ignored view.propertyOrder — fixed (commit d30c388)
 - Fix: TableView walks `view.propertyOrder` first (dropping dangling IDs), then appends any remaining `db.properties`. `reorderDatabaseProperties` rewrites every view's propertyOrder to match. Closes the dead-field gap. Verified live: synthetic propertyOrder `[c,b,dangling,a,title]` renders as `[c,b,a,title]`.
+
+
+## 2026-05-13 — B-7600 verification + edge-case sweep
+
+### B-7503 (re-verified) — TableView honors view.propertyOrder + drops dangling — fixed — P3
+- Repro: injected `db_b7600_porder` with view.propertyOrder `[prop_c, prop_b, prop_DANGLE, prop_a, prop_title]`. `/app/db/db_b7600_porder` rendered headers as `[C, B, A, Title]` exactly. Dangling ID silently dropped, no console error, no crash.
+- Second view with `[title, a, b, c]` and third with `[b, a, title, c]` each rendered in their own order — switching tabs via `db-view-view_b7600_two` / `three` swapped headers correctly. propertyOrder is now a first-class, per-view directive (TableView.tsx:28). Closes B-7503.
+
+### B-7600 (verification) — Header drag-reorder syncs propertyOrder across ALL views — fixed — P3
+- Repro: on `db_b7600_porder` (3 table views), simulated dragstart on "C" → drop on "B" header in view 3. Result: `db.properties = [title, a, c, b]`; ALL three views' `propertyOrder = [title, a, c, b]`. Confirms `reorderDatabaseProperties` rewrites every view's propertyOrder (store.ts:1416-1421). Multi-view sync is solid.
+
+### B-7601 — Sub-page export emits `<!-- paragraph -->` for any block whose type isn't in the switch — P3 — open
+- Repro: injected `pg_b7600_subexp_parent` (a `sub-page` block pointing to `pg_b7600_subexp_child` with a `paragraph` block). Dispatched `export-page-markdown` with `noDownload:true`. Output: `## 🧒 Child Page\n\n<!-- paragraph -->`.
+- Root cause: `blockToMarkdown` (src/lib/export-markdown.ts:64) has no `case "paragraph"` (or similar legacy/imported types) — falls through to the default `<!-- ${type} -->` placeholder. App's main editor uses `"text"`, so this only bites imported/legacy/AI-generated data. No crash, but exported content is mangled.
+- Severity P3: rare for self-authored pages; high blast radius for an "Import then Export" round-trip where outside tools emit `paragraph`/`p` blocks.
+- Fix sketch: alias `paragraph` → render same as `text`, or pre-normalise block types in `normalizeState` to the canonical schema.
+
+### B-7602 — Cmd+K palette: pasted multi-line query collapses with no separator → no results, no hint — P3 — open
+- Repro: opened command palette (Cmd+K), set input value to `"Welcome\nGetting Started\nA"` (e.g. via paste of multi-line text). Native `<input>` collapses newlines, producing `"WelcomeGetting StartedA"`. Result: `⌘K No results`, no toast, no guidance to split queries.
+- Severity P3: a real user pasting from a list (chat, doc, etc.) sees zero results and can't tell why — the failure mode is invisible. The "search" runs once on the concatenation, which only matches if it accidentally appears as a substring.
+- Fix sketch: pre-process input by splitting on `\n`, take only the first line, or use the longest term as the canonical query. Optionally show a hint "Showing results for: <first-line>" when the raw value contained a newline.
+
+### B-7603 — Public form date input accepts year > 9999 (e.g. `99999-01-01`) — P3 — open
+- Repro: `/form/db_b7600_form/view_b7600_form`, set the `date` input to `99999-01-01` via JS-set value (paste-equivalent). Browser flags `validity.valid === true`, the form submits, and the row persists with `prop_d: "99999-01-01"` in storage.
+- A 5-digit year breaks downstream date parsing (`new Date("99999-01-01")` returns `Invalid Date` in some locales / month-grid renders). Form has zero client-side guardrails for date range.
+- Severity P3: only reachable when a user actively types/pastes a 5-digit year. Standard date pickers won't do this.
+- Fix sketch: in `PublicFormField` date branch, regex-validate the value to `/^\d{4}-\d{2}-\d{2}$/` on change; set `min="0001-01-01"` / `max="9999-12-31"` on the input. Also normalise on submit so out-of-range values are rejected with `setError("Invalid date.")`.
+
+### B-7604 — Trashed grandparent + non-trashed parent = child shows "in Trash" banner that does nothing — P2 — open
+- Repro: `pg_b7600_gp` trashed, `pg_b7600_p` parent of gp NOT trashed, `pg_b7600_c` child of p (already restored). Navigate to `/app/p/pg_b7600_c`. PageView shows the yellow "This page is in Trash" banner with Restore + Delete permanently buttons because `ancestorInTrash` walks up and finds gp.
+- Click `banner-restore`: nothing happens. Child is already `isInTrash:false`, so `restorePageCascade` descendant-walk is a no-op; ancestor-walk stops at parent (parent is not trashed). Grandparent stays trashed. Banner sticks indefinitely.
+- Severity P2: blocks the user from using their own page. Either the banner shouldn't show (P is reachable, page is fine), or Restore should walk past non-trashed ancestors to flip trashed ones.
+- Fix sketch: `restorePageCascade` should walk the FULL ancestor chain unconditionally (not stop at first non-trashed), flipping any `isInTrash:true` along the way. Alternative: copy update — "An ancestor of this page is in Trash. [Restore ancestor]".
+

@@ -2238,3 +2238,28 @@ Priority: high / medium / low.
 ### I-7505 — DB route render time grows ~1.5 s at 1000 rows (no virtualization) — open — P2
 - After perf injection, `/app/db/db_v7507_perf` took ~1505 ms from `pushState` to first render with all 1000 `row-row_v7507_*` testids present. No crash, but the DOM has 1000 row nodes — every cell mount, scroll handler, and resize observer scales linearly.
 - Suggestion: introduce row virtualization (react-window / tanstack-virtual) in TableView so initial render is ~constant. Defer until product hits real >1k row decks, but the cliff is in place.
+
+
+## 2026-05-13 — I-7600 verification + edge-case sweep
+
+### I-7600 — `propertyOrder` first-class, dangling-tolerant — verified done — P3
+- Multi-view (3 table views) drag-reorder of "C onto B" rewrote `db.properties` AND every view's `propertyOrder` consistently to `[title,a,c,b]`. Empty propertyOrder falls through to `db.properties` (verified on `db_b7600_empty`). Adding a new property appends to every view's propertyOrder (`prop_mp46jqllryky` ended at the tail in all 3 views). Deleting a property scrubs it from propertyOrder (and from `hiddenProperties` already by prior commit). Confirms commit d30c388 + store.ts:1411-1421 are airtight.
+
+### I-7601 — AI panel empty-state copy is informative + actionable — verified — P3
+- Open the AI panel with no thread: shows "Ask anything about your workspace. I can search pages, summarise content, draft text, and more." + a quiet "Models: GPT-5.2 · Claude Opus 4.7 · Gemini 3 · Auto (demo)" line + credit count. `ai-msg-0` correctly doesn't exist; no console warnings. Good empty state — no broken layout, no spurious `ai-msg-*` shells.
+
+### I-7602 — Hidden property within propertyOrder respects both — verified — P3
+- Injected `db_b7600_hidden` view with `hiddenProperties:['prop_beta']` and `propertyOrder:['prop_gamma','prop_beta','prop_alpha','prop_title']`. Headers rendered `[Gamma, Alpha, Title]` — Beta hidden, Gamma and Alpha in propertyOrder positions. The two filters compose correctly: propertyOrder for ordering, hiddenProperties for visibility.
+
+### I-7603 — Public form date should validate range + format client-side — open — P2
+- Companion to B-7603. Date inputs should reject 5-digit years and clearly out-of-range values BEFORE writing to storage. Add a property-level `validation` config to View.form for min/max date, required flag, regex for text, length cap. Avoids passing junk into the host DB which renders dates with `Date.toLocaleDateString` and silently fails on `Invalid Date`.
+- Bonus: surface a "required" UI marker (red asterisk) consistent with title's already-implicit-required behaviour.
+
+### I-7604 — `blockToMarkdown` should alias common foreign block types — open — P3
+- Companion to B-7601. `paragraph`, `p`, `body`, `richtext` are common in imports from outside tools. Currently they fall through to `<!-- ${type} -->`. Add an alias map at the top of `blockToMarkdown` (or normalise in `normalizeState`) so exports survive a round-trip from Markdown / Notion API imports / AI-generated tree.
+- Even better: route unknown block types through `htmlToInlineMarkdown(content)` when the block has a `content` field, instead of dropping the text entirely.
+
+### I-7605 — Restore banner copy + behaviour for "ancestor-in-trash" case — open — P2
+- Companion to B-7604. When the current page is `isInTrash:false` but an ancestor is trashed, the existing banner copy "This page is in Trash" is wrong. Replace with: "A parent page is in Trash. [Restore parent] [Open parent]" — actionable, explicit. Wire Restore to flip the trashed ancestor (cascading further up if needed) and re-evaluate.
+- Avoid showing the Delete-permanently button in this case — the current page itself isn't trashed and shouldn't be perma-deletable from here.
+
