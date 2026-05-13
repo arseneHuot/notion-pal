@@ -6273,3 +6273,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Expected: same as any other no-match query — render `cmd-empty` "No results" row. Cause is probably that `q.length>0` is true but the singleton token `""` isn't a `noiseQuery` (its length === 2 ≥ 2), so it enters AND-match, finds nothing, and the empty state hook is keyed on `noiseQuery` rather than "0 matching pages AND 0 default actions".
 - Severity: P3 — cosmetic, but a query that returns zero results should always say "No results."
 
+
+### B-6500 — deleteComment leaks grand-replies — fixed (commit 6e5555b)
+- Fix: BFS over parentId tree removes every descendant in the closure. Verified: deleting root of a 4-level chain removes all 4 from store.
+
+### B-6507 — Cmd+K query with quote chars — fixed (commit 6e5555b)
+- Fix: tokenizer strips `'`, `"`, and backticks from each token. `"OKRs"` now matches the OKRs page.
