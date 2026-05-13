@@ -3940,3 +3940,15 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Repro: focus an editable block, attach MutationObserver to document.body (subtree+childList+attributes+characterData), call `document.execCommand('insertText', false, 'q')`, sleep 220ms.
 - Observed: 50 mutations recorded. Total elapsed 236ms (mostly setTimeout overhead).
 - Expected: indicates React re-renders cascading through siblings on every keystroke. Not jank but worth investigating memo placement on sibling Block components (probably a `useStore` selector that returns a new object each time).
+
+### B-3107 — Formula property `formula.formula` alias + empty-expression UX — fixed (commit e9ff7b0) — closes I-3101
+- Fix: `FormulaCell` in PropertyEditor.tsx now reads `property.expression ?? property.formula ?? ""` and short-circuits with an em-dash placeholder when the expression is empty/whitespace. Old "#ERR: Unexpected end" replaced by a friendlier `—` with a tooltip "Set an expression for this formula property".
+
+### B-3109 — Slash menu filter doesn't match category/description — fixed (commit e9ff7b0) — closes I-3106
+- Fix: `filterSlash` in slash-commands.ts now also matches against `cmd.category` and `cmd.description`. Verified: typing "database" surfaces all 8 db-* variants (slash-db-table, slash-db-board, slash-db-calendar, slash-db-list, slash-db-gallery, slash-db-timeline, slash-db-chart, slash-db-form). Plural keywords ("databases") also surface their entries through the description match.
+
+### B-3111 — `ib-color-default` unwrap inside a colored span — fixed (commit e9ff7b0) — closes I-3103
+- Fix: the unwrap path now walks up from `range.commonAncestorContainer` (plus startContainer + endContainer) instead of `sel.anchorNode.parentElement`. `selectNodeContents(span)` makes `sel.anchorNode === span` itself, so the old `.parentElement` walk skipped the colored ancestor entirely. Verified: a `<span data-color="1" style="color: rgb(220, 38, 38);">color</span>ful text` block becomes plain `colorful text` after selecting the span and clicking ib-color-default.
+
+### B-3118 — `row-open-*` no-op in table view — false negative (info)
+- Verified: clicking `[data-testid="row-open-r_dt1"]` DOES open the drawer with `data-testid="row-detail-drawer"`. The tester checked for `[data-testid="row-detail"]` (without the `-drawer` suffix), which doesn't exist. Drawer renders with role-equivalent semantics and a close button at `row-detail-close`. No code change needed.
