@@ -6651,3 +6651,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Severity P3: rare (only hits events whose existing time falls inside the missing DST hour). No crash. Calendar still renders correctly post-move.
 - Fix sketch: detect the gap by comparing `next.getHours() !== prevHours` and either snap back (subtract one hour) or surface a toast: "Event moved across DST — time shifted to 03:30".
 
+
+### B-7403 — Restore on child of trashed parent was no-op — fixed (commit b517dbf) — P2
+- Fix: `restorePageCascade` walks ancestor chain via parentId first, adding any trashed ancestors to the restore set, then walks descendants as before. Verified live: parent + child both trashed → click restore-<child> → both end up isInTrash:false.
+
+### B-7400 — Cross-tab rehydrate didn't re-persist normalize result — fixed (commit b517dbf) — P3
+- Fix: storage event listener AND BroadcastChannel rehydrate handler both call `persist(_state)` after `normalizeState(next)`. Cleanup of dangling row IDs / missing arrays is now durable across reloads.
