@@ -21,11 +21,16 @@ export function InlineToolbar() {
       // Only show inside contenteditable inside a block
       const node = sel.anchorNode;
       const el = node?.nodeType === Node.ELEMENT_NODE ? (node as Element) : node?.parentElement ?? null;
-      const editor = el?.closest("[contenteditable]");
+      const editor = el?.closest("[contenteditable]") as HTMLElement | null;
       if (!editor) {
         setOpen(false);
         return;
       }
+      // Detect heading-like blocks where the browser's execCommand("bold")
+      // inverts to "normal" weight (B-2812). The toolbar's bold button
+      // becomes a no-op in that context.
+      const blockType = editor.closest("[data-block-type]")?.getAttribute("data-block-type") ?? "";
+      const insideHeading = blockType.startsWith("heading-") || blockType.startsWith("toggle-heading-") || editor.tagName === "H1" || editor.tagName === "H2" || editor.tagName === "H3";
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       if (rect.width === 0 && rect.height === 0) {
@@ -38,6 +43,7 @@ export function InlineToolbar() {
         italic: document.queryCommandState("italic"),
         strike: document.queryCommandState("strikeThrough"),
         underline: document.queryCommandState("underline"),
+        insideHeading,
       });
       setOpen(true);
     }
@@ -100,9 +106,10 @@ export function InlineToolbar() {
       data-testid="inline-toolbar"
     >
       <button
-        onMouseDown={(e) => { e.preventDefault(); exec("bold"); }}
-        className={`p-1.5 rounded hover:bg-accent ${active.bold ? "bg-accent" : ""}`}
-        title="Bold (Cmd+B)"
+        onMouseDown={(e) => { e.preventDefault(); if (!active.insideHeading) exec("bold"); }}
+        disabled={!!active.insideHeading}
+        className={`p-1.5 rounded hover:bg-accent ${active.bold ? "bg-accent" : ""} disabled:opacity-40 disabled:cursor-not-allowed`}
+        title={active.insideHeading ? "Already bold (heading)" : "Bold (Cmd+B)"}
         aria-label="Bold"
         data-testid="ib-bold"
       >

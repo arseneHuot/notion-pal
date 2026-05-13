@@ -3252,7 +3252,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: select 5 chars, fire `mousedown` on `[data-testid="ib-link"]`.
 - Observed: no link-input popover appears. Block HTML unchanged ("click here"). No `link-popover` or `ib-link-input` testid in DOM. Feature wired up visually but no handler / popover.
 
-### B-2608 — Inline-toolbar `ib-ai` does nothing (P3, open)
+### B-2608 — Inline-toolbar `ib-ai` does nothing (P3, fixed)
 - Steps: select text, mousedown on `[data-testid="ib-ai"]`.
 - Observed: no popover, no inline-AI panel, no Improve/Translate/Summarize menu. Button is decorative.
 
@@ -3415,4 +3415,95 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-2716 — Synthetic `paste` ClipboardEvent doesn't reach React onPaste (P3, info — E2E gap)
 - Steps: dispatch `new ClipboardEvent('paste', {clipboardData: dt, bubbles: true})` on a `[contenteditable="true"]` block.
 - Observed: handler does not fire; need to invoke `target[__reactPropsKey].onPaste({…})` directly with a synthetic event object. Only relevant to E2E automation — real Cmd+V paste in the user's browser triggers the React path correctly.
+
+
+## 2026-05-13 13:00 — Test agent batch 29
+
+### B-2800 — Title `<h1>` paste-XSS now blocked: `<img onerror>` in `text/html` paste neutered (P0, fixed — closes B-2702) — verified
+- Steps: focus `[data-testid="page-title"]`, invoke React `onPaste` prop with a synthetic event whose `clipboardData` carries `text/html: <img src=x onerror=window.__TITLE_XSS=1>`.
+- Observed: handler calls `preventDefault()` (returns `prevented:true`), title `innerHTML` unchanged (`Getting Started EDITED-LIVE`), `window.__TITLE_XSS` remains `undefined`. Source confirmed (`src/components/page/PageView.tsx:184-192`): the new `onPaste` forces a plain-text path — reads `text/plain` (or strips tags from `text/html` if plain absent) and inserts via `execCommand("insertText",…)`. No HTML is ever passed to the DOM.
+
+### B-2801 — Title plain-text paste still inserts (P3, fixed — closes B-2701 for the title) — verified
+- Steps: focus `[data-testid="page-title"]`, place caret at start, invoke React `onPaste` with `clipboardData.text/plain = "INJECTED PLAIN TEXT "`.
+- Observed: handler `preventDefault()`s but immediately calls `execCommand("insertText", …)`, so the title `innerHTML` becomes `"INJECTED PLAIN TEXT Getting Started EDITED-LIVE"`. Plain-text paste works AND XSS is blocked.
+
+### B-2802 — Block-content paste sanitizer still holds — no regression (P1, fixed) — verified
+- Steps: invoke React `onPaste` prop on `[data-testid="block-content-blk_mp39bwborucqkom3"]` with `clipboardData.text/html = "<img src=x onerror=window.__PASTE_XSS=1>"`.
+- Observed: `prevented:true`, block HTML unchanged (`"/"`), `window.__PASTE_XSS` remains `undefined`. The earlier B-2700 fix at the block layer is still in place alongside the new title fix.
+
+### B-2803 — Title `execCommand('insertHTML', …)` payload STILL executes — paste fix doesn't cover this vector (P0, open — partial fix of B-2702) — SECURITY
+- Steps: focus `[data-testid="page-title"]`, `selectNodeContents` + `execCommand('insertHTML', false, '<img src=x onerror="window.__TITLE_INSERT_XSS=1">')`.
+- Observed: `execCommand` returns `true`, `__TITLE_INSERT_XSS === 1`. The new `onPaste` handler is the ONLY guard. Any code path that ends up calling `execCommand("insertHTML", …)` (e.g. a malicious browser extension, a future feature, an attacker who triggers `insertHTML` via a custom event) re-opens the same XSS. Real fix needs an `onInput`-side sanitizer that walks the title's child nodes after every mutation and strips non-text descendants (mirroring the model where titles are always text-only).
+
+### B-2804 — Sidebar pages STILL not draggable (P2, open — extends B-2612, B-2712)
+- Steps: home page, `document.querySelectorAll('aside [draggable="true"]').length` → 0. All `page-menu-*`, `expand-*`, `ts-*` buttons in the sidebar have `draggable === null`.
+- Observed: sidebar pages, top-level sections (Private / Engineering / Shared / Favorites) and team-section dividers cannot be reordered or moved between sections.
+
+### B-2805 — Table rows STILL not draggable (P2, open — extends B-2613, B-2712)
+- Steps: focus inline DB on `pg_mp33cd7d01u4huok`, query `[data-testid^="row-"]` and parent `<tr>`s.
+- Observed: 0 draggable rows; `row-open-r_dt1` and `row-delete-r_dt1` are leaf buttons only. Notion-equivalent row reorder via drag is missing.
+
+### B-2806 — Gallery cards STILL not draggable (P2, open — extends B-2614, B-2712)
+- Steps: switch to `db-view-v_dates_gallery`.
+- Observed: 8 `gallery-card-*` cards, all `draggable === null`. Card-to-section reorder is unavailable.
+
+### B-2807 — Calendar week chips STILL no testid / no draggable / no onClick (P2, open — extends B-2709)
+- Steps: `/app/calendar`, select `week` in view dropdown, inspect `week-day-*` children.
+- Observed: 7 week-day cells contain 5 visible chips (text "Test event B21", "Wed event", "Untitled", "Untitled", "Test Cal Event Batch 15"). None has `data-testid`, none has `draggable`, no React props on the chip nodes. Users still can't drag-reschedule or click-to-edit events.
+
+### B-2808 — Timeline bars (`tl-bar-*`) have onClick but click is a no-op + not draggable (P2, open — new)
+- Steps: switch to `db-view-v_dates_tl`, find `tl-bar-r_dt1`, click it.
+- Observed: bar React props show `onClick` registered (so the bar is wired up) but clicking does nothing — no row drawer, no popover, URL unchanged. Also `draggable === null`, so users cannot drag the bar to reschedule. Timeline visually rendered but read-only.
+
+### B-2809 — List view rows (`list-row-*`) not draggable (P2, open — new)
+- Steps: switch to `db-view-v_dates_list`.
+- Observed: 8 `list-row-*` items, all `draggable === null`. Reorder via drag missing on List view.
+
+### B-2810 — `ib-link` still inert (P2, open — extends B-2607, B-2715) — verified via mousedown+click
+- Steps: select 5 chars in a block, dispatch `selectionchange` + `mouseup`, then `mousedown` and `.click()` together on `[data-testid="ib-link"]`. As an alternative, invoked React's `onMouseDown` prop directly with `preventDefault` mocked.
+- Observed: source confirmed (`InlineToolbar.tsx:154`): `onMouseDown` calls `applyLink()` which sets `linkOpen` true → a `[data-testid="ib-link-popover"]` SHOULD render. In practice the popover never appears in automated tests because the toolbar component itself unmounts on the next selection-change tick (e.g. when the mousedown is processed, focus shifts and the selection collapses, triggering `setOpen(false)` in the toolbar's check). Real-mouse users would see this too if they release outside the toolbar. Mousedown + click on the same tick does not produce a stable popover.
+
+### B-2811 — `ib-ai` likewise inert under synthetic dispatch (P2, open — extends B-2608)
+- Steps: same setup as B-2810, click `[data-testid="ib-ai"]`.
+- Observed: source dispatches `window.dispatchEvent(new CustomEvent("open-ai-chat-with", { detail: { selected: txt } }))`. No listener was registered on `window` for that event in the live page (probed via `window.eventListeners` — `'open-ai-chat-with'` has 0 listeners). So even when the mousedown fires, the AI side-panel does not open.
+
+### B-2812 — `ib-bold` on H1 selection still emits `font-weight: normal` span (P2, open — extends B-2606, B-2714) — verified
+- Steps: select 4 chars inside `[data-testid="page-title"]` (an H1 with `font-weight: 700` from `font-bold`), fire `selectionchange` + `mouseup`. (Toolbar appears under real mouse-driven selection; synthetic dispatch could not stabilize it for direct click — verified via source.)
+- Observed: `InlineToolbar.tsx:103` calls `exec("bold")` → `execCommand("bold")`. Chrome's bold toggle reads inherited `font-weight: bold` from the H1 styling and inserts `<span style="font-weight: normal;">` instead of `<b>` because it interprets the existing weight as "already bold". No special-case in the toolbar to invert bold cleanly on heading blocks. Fix needs a custom bold implementation that wraps with `<b>` / `<strong>` regardless of inherited styling.
+
+### B-2813 — Cross-tab sync STILL absent — no BroadcastChannel / storage-event listeners (P2, open — extends B-2615) — verified
+- Steps: `grep -rn "BroadcastChannel\|onstorage\|addEventListener.*storage" src/` returns 0 hits.
+- Observed: the app never listens to `storage` events nor uses `BroadcastChannel`. Two open tabs of the same workspace remain isolated. State changes in tab A do not propagate to tab B without a manual reload.
+
+### B-2814 — Settings page testids unchanged: still only signout / darkmode / export (P3, info — extends B-2624, B-2711)
+- Steps: `/app/settings`, list all `[data-testid^="settings-"]`.
+- Observed: 3 testids: `settings-signout`, `settings-darkmode`, `settings-export`. Workspace, Profile, Billing, Language, Connections, Notifications sub-sections still missing from the route.
+
+### B-2815 — 25 / 181 buttons on `/app/p/<id>` still lack accessible name (P3, info — extends B-2629)
+- Steps: post-hydration on `pg_mp33cd7d01u4huok`, filter `<button>`s with no text, no `aria-label`, no `title`, no `aria-labelledby`.
+- Observed: 25 unlabeled (same as last batch); all are sidebar `expand-pg_*` chevron icon buttons holding only an inline `<svg>`. The other icon buttons (`page-menu-*`, `page-new-*`, `close-sidebar`, …) have labels. Add `aria-label="Expand"` / `"Collapse"` to the chevrons.
+
+### B-2816 — Cmd+K palette wrapper still lacks `role="dialog"` / `aria-modal` (P3, info — extends B-2520, B-2713)
+- Steps: dispatch Cmd+K, walk up from `[data-testid="cmd-new-page"]` to BODY.
+- Observed: every ancestor up to BODY has `role===null`, `aria-modal===null`, `data-testid===null`. Palette opens (24 cmd-* items including new `cmd-page-*` and `cmd-db-*` entries) but is announced as a plain `<div>` group by screen readers.
+
+### B-2817 — Timeline bar `tl-bar-*` is the FIRST DB view-item with an `onClick`, but the handler is a no-op (P2, open — new)
+- Steps: click `[data-testid="tl-bar-r_dt1"]`.
+- Observed: React props expose `onClick`, but firing it does not navigate, open a drawer, or open a popover. URL unchanged, no `[role=dialog]` appears. Compare with `gallery-card-*` / `list-row-*` which have no onClick at all — timeline at least wired it up, but the action is missing.
+
+### B-2818 — Empty page title now shows `Untitled` placeholder (P3, fixed — closes part of placeholder UX) — verified
+- Steps: navigate to `/app` → click sidebar "📄Untitled" page → inspect `[data-testid="page-title"]::before` pseudo.
+- Observed: `getComputedStyle(title, '::before').content === '"Untitled"'` when `innerText` is empty. The CSS-pseudo placeholder fix (af7eeae) is live and visible.
+
+### B-2819 — `row-open-<id>` button still no-op (P2, open — extends B-2708)
+- Steps: click `[data-testid="row-open-r_dt1"]` on the inline DB.
+- Observed: still does nothing — no drawer, no nav, no popover. Same status as last batch.
+
+### B-2820 — Synthetic React-`onMouseDown` direct invocation on `ib-link` opens linkPopover state but the toolbar unmounts before the popover renders (P3, info — E2E gap)
+- Steps: select 5 chars, hook the inline toolbar's `useState`, call `[data-testid="ib-link"]` `__reactProps.onMouseDown({preventDefault: ()=>{}, …})`.
+- Observed: `applyLink()` fires (sets internal `linkOpen=true`), but the next React render sees an empty selection (the synthetic mousedown event doesn't keep selection alive in the React lifecycle), so the parent `InlineToolbar` returns `null` and unmounts. The popover never reaches the DOM. Real mouse-driven flow would keep selection — purely an E2E observation.
+
+### B-2821 — `open-ai-chat-with` window event has 0 listeners (P2, open — root cause for B-2811)
+- Steps: probe `window`'s registered listeners for `open-ai-chat-with` after page load.
+- Observed: 0 listeners. The AI chat panel never subscribes to the event that `ib-ai` dispatches. Fix: add a listener in the AI chat / global app shell that opens the panel with the selected text prefilled.
 

@@ -143,8 +143,20 @@ export function AIChat() {
     function show() {
       setOpen(true);
     }
+    function showWith(e: Event) {
+      const detail = (e as CustomEvent<{ selected: string }>).detail;
+      setOpen(true);
+      if (detail?.selected) {
+        const quoted = `Ask AI about: "${detail.selected.slice(0, 200)}"`;
+        setInput(quoted);
+      }
+    }
     window.addEventListener("open-ai-chat", show);
-    return () => window.removeEventListener("open-ai-chat", show);
+    window.addEventListener("open-ai-chat-with", showWith);
+    return () => {
+      window.removeEventListener("open-ai-chat", show);
+      window.removeEventListener("open-ai-chat-with", showWith);
+    };
   }, []);
 
   // Persist messages across reloads (B-1722 / B-1618), per-user (B-1802).

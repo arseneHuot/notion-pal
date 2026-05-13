@@ -180,7 +180,17 @@ function PageHeader({ page }: { page: ReturnType<typeof useStore<NonNullable<Ret
         contentEditable
         suppressContentEditableWarning
         className="text-4xl font-bold outline-none w-full"
-        onInput={(e) => setTitle(e.currentTarget.innerText)}
+        onInput={(e) => {
+          // Title is text-only. If any element nodes leaked in (via
+          // execCommand insertHTML, drag-drop, etc.) flatten them right
+          // away so a hostile `<img onerror>` can't survive (B-2803).
+          const target = e.currentTarget;
+          const text = target.innerText;
+          if (target.children.length > 0) {
+            target.textContent = text;
+          }
+          setTitle(text);
+        }}
         onPaste={(e) => {
           // Force a plain-text paste — the title never needs rich HTML and
           // we MUST NOT let `<img onerror>` payloads run (B-2702).

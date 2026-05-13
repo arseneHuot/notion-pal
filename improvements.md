@@ -1220,3 +1220,33 @@ Priority: high / medium / low.
 ### I-2707 — Cmd+K palette: add `role="dialog"` + `aria-modal="true"` + focus-trap (low, open — extends I-2520)
 - See B-2713. Palette currently renders as a plain `<div>` with no dialog semantics. Add `role="dialog"`, `aria-modal="true"`, `aria-label="Command palette"`, and trap focus inside while open.
 
+
+## 2026-05-13 13:00 — Test agent batch 29
+
+### I-2800 — Title `onInput`-side sanitizer to close `execCommand('insertHTML',…)` XSS (critical, open) — security
+- See B-2803. The new `onPaste` covers paste-via-clipboard, but ANY caller that mutates the title via `execCommand("insertHTML", …)` or direct `innerHTML =` still executes embedded handlers (e.g. `<img onerror>`). Fix: on `onInput`, walk `titleRef.current.childNodes`, replace each non-text child with `document.createTextNode(child.textContent ?? "")`, then set `setTitle(titleRef.current.innerText)`. Titles are always plain text in the data model, so flattening is safe.
+
+### I-2801 — Shared paste-helper hook for all contenteditables (high, open — replaces I-2700)
+- See B-2800/B-2802. Title and block-content now both have manual `onPaste` handlers, but each is hand-rolled. Extract a `useSafePaste()` hook that returns an `onPaste` callback; bind it on title, callout, list-item, code-block, table-cell-title, synced-block source. Future contenteditable additions can't forget to wire sanitization.
+
+### I-2802 — `open-ai-chat-with` listener missing — wire `ib-ai` to the AI panel (high, open)
+- See B-2811 / B-2821. Inline toolbar dispatches a `CustomEvent("open-ai-chat-with", {detail: {selected: …}})` on `window`, but nothing subscribes. Either the AI chat panel must register a `useEffect(() => { window.addEventListener("open-ai-chat-with", …) })`, OR the inline toolbar should call a Zustand setter directly (e.g. `useAiStore.getState().openWithSelection(txt)`). Without one of these, the AI button is dead.
+
+### I-2803 — `ib-bold` custom toggle on H1 (medium, open — extends B-2606/B-2714/B-2812)
+- See B-2812. `document.execCommand("bold")` inverts because the H1 inherits `font-weight: bold` from `font-bold` Tailwind utility — Chrome thinks the selection is "already bold" and emits a normal-weight wrapper. Detect heading ancestors in `exec("bold")` and instead manually wrap the range in `<strong>` / unwrap if already wrapped, bypassing `execCommand`. Same logic applies if a user adds `font-bold` to any other block.
+
+### I-2804 — DnD plumbing across sidebar / table-rows / gallery-cards / list-rows / calendar-chips / timeline-bars (medium, open — consolidates I-2604, I-2612–I-2614, I-2706)
+- See B-2804–B-2809. None of the secondary surfaces have `draggable={true}` + `onDragStart`/`onDragOver`/`onDrop` listeners. A single `useReorder({items, onMove})` hook attached to each list/grid would unblock all of them. Order: sidebar pages (most-requested) → table rows → gallery cards → list rows → calendar chips → timeline bars.
+
+### I-2805 — Timeline bar onClick must open row-detail (medium, open — extends I-2705)
+- See B-2808/B-2817. The handler is wired but no-op; route it to the same row-drawer that `row-open-<id>` will eventually open. Bonus: drag horizontally to reschedule (re-uses the DnD hook from I-2804).
+
+### I-2806 — Cross-tab sync via `storage` event + zustand persist subscribe (medium, open — extends I-2615)
+- See B-2813. Zustand persist already writes per-user keys to `localStorage`. Add `window.addEventListener("storage", e => { if (e.key?.startsWith("notion-clone:")) zustand.persist.rehydrate(); })` to propagate edits across tabs. Optional: `BroadcastChannel("notion-clone")` for lower-latency updates without round-tripping through localStorage.
+
+### I-2807 — Sidebar chevron icon buttons need `aria-label` (low, open — extends B-2629/B-2815)
+- See B-2815. All 25 unlabeled buttons are `[data-testid^="expand-pg_"]` chevrons. Add `aria-label={expanded ? "Collapse page" : "Expand page"}` (or `{page.title}` interpolation for richer SR output).
+
+### I-2808 — Settings page sub-sections (workspace/profile/billing/language/notifications/connections) (medium, open — extends I-2624)
+- See B-2814. Three testids in three batches — settings has been frozen. Even an empty stub of `[data-testid="settings-workspace"]` / `[data-testid="settings-profile"]` / `[data-testid="settings-billing"]` / `[data-testid="settings-language"]` would unblock E2E and signal future direction.
+
