@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty, getState as getStoreState } from "@/lib/store";
+import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty, updateView, getState as getStoreState } from "@/lib/store";
 
 function databasesNow() {
   return Object.values(getStoreState().databases);
@@ -33,7 +33,7 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
         <thead>
           <tr className="bg-muted/40">
             {visibleProps.map((p, idx) => (
-              <PropertyHeader key={p.id} property={p} databaseId={databaseId} sticky={idx === 0 && p.type === "title"} />
+              <PropertyHeader key={p.id} property={p} databaseId={databaseId} viewId={viewId} sticky={idx === 0 && p.type === "title"} />
             ))}
             <th className="w-8"></th>
             <th className="w-8 border-b border-border">
@@ -91,10 +91,33 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
   );
 }
 
-function PropertyHeader({ property, databaseId, sticky }: { property: Property; databaseId: string; sticky?: boolean }) {
+function PropertyHeader({ property, databaseId, viewId, sticky }: { property: Property; databaseId: string; viewId: string; sticky?: boolean }) {
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [name, setName] = useState(property.name);
+  const db = useStore((s) => s.databases[databaseId]);
+  const view = db?.views.find((v) => v.id === viewId);
+  const currentSort = view?.sorts?.find((s) => s.propertyId === property.id);
+  const isHidden = (view?.hiddenProperties ?? []).includes(property.id);
+
+  function applySort(direction: "asc" | "desc") {
+    if (!view) return;
+    const existing = (view.sorts ?? []).filter((s) => s.propertyId !== property.id);
+    updateView(databaseId, viewId, { sorts: [...existing, { propertyId: property.id, direction }] });
+    setOpen(false);
+  }
+  function clearSort() {
+    if (!view) return;
+    updateView(databaseId, viewId, { sorts: (view.sorts ?? []).filter((s) => s.propertyId !== property.id) });
+    setOpen(false);
+  }
+  function toggleHide() {
+    if (!view) return;
+    const hidden = view.hiddenProperties ?? [];
+    const next = isHidden ? hidden.filter((id) => id !== property.id) : [...hidden, property.id];
+    updateView(databaseId, viewId, { hiddenProperties: next });
+    setOpen(false);
+  }
 
   return (
     <th className={`border border-border px-2 py-1 text-left font-medium text-xs text-muted-foreground relative ${sticky ? "sticky left-0 bg-muted/60 z-[2]" : ""}`}>
@@ -135,6 +158,39 @@ function PropertyHeader({ property, databaseId, sticky }: { property: Property; 
           >
             Rename
           </button>
+          <button
+            onClick={() => applySort("asc")}
+            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-accent ${currentSort?.direction === "asc" ? "font-medium bg-accent/50" : ""}`}
+            data-testid={`prop-sort-asc-${property.id}`}
+          >
+            ↑ Sort ascending
+          </button>
+          <button
+            onClick={() => applySort("desc")}
+            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-accent ${currentSort?.direction === "desc" ? "font-medium bg-accent/50" : ""}`}
+            data-testid={`prop-sort-desc-${property.id}`}
+          >
+            ↓ Sort descending
+          </button>
+          {currentSort && (
+            <button
+              onClick={clearSort}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent text-muted-foreground"
+              data-testid={`prop-sort-clear-${property.id}`}
+            >
+              ✕ Clear sort
+            </button>
+          )}
+          {property.type !== "title" && (
+            <button
+              onClick={toggleHide}
+              className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent"
+              data-testid={`prop-hide-${property.id}`}
+            >
+              {isHidden ? "Show column" : "Hide column"}
+            </button>
+          )}
+          <div className="border-t border-border my-1" />
           <div className="px-3 py-1 text-[10px] uppercase text-muted-foreground">Type</div>
           {PROPERTY_TYPES.map((t) => (
             <button

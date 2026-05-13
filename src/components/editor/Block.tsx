@@ -27,6 +27,13 @@ interface Props {
 }
 
 export function BlockComponent({ block, pageId }: Props) {
+  // Backwards-compat shim: older seeds or hand-constructed blocks may use the
+  // bare `database` type before the inline/linked split (B-3606). Treat that
+  // as `database-inline` so the renderer doesn't fall through to "Unsupported".
+  const rawType: string = (block as { type: string }).type;
+  if (rawType === "database") {
+    return <DatabaseBlockEl block={{ ...(block as object), type: "database-inline" } as Block & { type: "database-inline" }} pageId={pageId} />;
+  }
   switch (block.type) {
     case "text":
     case "heading-1":

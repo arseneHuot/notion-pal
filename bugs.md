@@ -4389,3 +4389,111 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
   * If the title field is visible, it must be filled (otherwise "<Title name> is required.").
   * If every visible field is empty/whitespace/empty-array, submission is blocked with "Please fill in at least one field before submitting.".
   Errors render under the submit button via the existing `error` state.
+
+### B-3600 — Re-verify B-3519 rapid trash-restore (acceptance, fixed)
+- Repro: injected 3 trashed pages with valid teamspaceId (Private). Navigated /app/trash, all 3 `restore-<id>` buttons appeared. Clicked them 250 ms apart.
+- Observed: all 3 pages flipped `isInTrash:false`; URL stayed on /app/trash; sidebar afterwards exposed `expand-<pgId>` + `page-menu-<pgId>` for all 3. No silent drops.
+- Conclusion: fix in commit 1d3bc2d holds. Closes B-3519.
+
+### B-3601 — Re-verify B-3214 public-form empty submit (acceptance, fixed)
+- Repro: seeded a `db_form_*` with view `vw_form_*` (title + select + number). Opened `/form/<dbId>/<viewId>`. Clicked Submit with everything empty. Then filled only the select.
+- Observed: both attempts blocked. "Title is required." renders under the submit button. No row inserted in `rows` map. Filling title + number creates a row. Closes B-3214.
+
+### B-3602 — Re-verify B-3516 cross-tab StorageEvent rehydrate (acceptance, fixed)
+- Repro: on /app, injected a new page with valid teamspaceId; manually dispatched a synthetic `StorageEvent` with old/new JSON.
+- Observed: within 800 ms the sidebar exposed `expand-pg_crosstab_*` (page rendered under Private teamspace). Closes B-3516.
+
+### B-3603 — Public form: select value not persisted on submit (P2, open)
+- Repro: on `/form/<dbId>/<viewId>` filled title + number + selected an option in the select (Category=Bug). Submitted.
+- Observed: row created with `values: { prop_title:..., prop_num: 42 }` — the select prop was DROPPED from the saved row even though the option was clearly visible/highlighted in the UI.
+- Severity: P2 — silent data loss for select fields submitted via the public form. Likely the form's `setValues` handler doesn't fire on `<select>` change, or the submit only reads inputs (not selects).
+
+### B-3604 — Markdown export drops bookmark blocks (P2, open)
+- Repro: created a page with 19 blocks of varied types (`text`, `heading-1/2/3`, `bullet-list`, `numbered-list`, `todo`, `quote`, `callout`, `code`, `divider`, `toggle`, `image`, `video`, `file`, `equation`, `bookmark`). Exported via `page-opt-export-md`.
+- Observed: the bookmark block (`https://example.com`) is silently OMITTED from the output. The 18 other block types appear; only `bookmark` is dropped. Empty media still leaks `<!-- (empty image block) -->` etc. (B-3512 still open).
+- Severity: P2 — silent data loss on export. Notion-style markdown convention would emit a bare URL or `[url](url)`.
+
+### B-3605 — Markdown export: empty equation renders as broken `$$\n\n$$` (P3, open)
+- Same export above: an equation block with empty `content` produces `$$\n\n$$` — valid Markdown but renders as an empty display-math block, useless. Also slightly fragile: many renderers reject empty `$$` blocks.
+- Suggested: skip the block entirely (matches I-3509 for other empty media types).
+
+### B-3606 — `database` block "Unsupported block: database" in page render (P1, open)
+- Repro: injected an inline-database block (type:'database', content:dbId) into a page. The page now displays "Unsupported block: database" where the table/board should be.
+- Observed: the renderer has no handler for this type. (Existing seed pages get tables via a different code path — perhaps a special render based on db schema in `databases` map, not via a block.) Either: (a) block type isn't actually supported (so why is it persisted?) or (b) the renderer dispatch is missing this case.
+- Severity: P1 — inline DB pages can't be hand-constructed; existing pages keep working but the feature is fragile.
+
+### B-3607 — Cmd+K with single-letter query: 53 ms paint, no errors (acceptance)
+- Repro: closed/reopened palette, then typed "a" into `command-input`. Measured: paint ~53 ms; with 9 page items + 7 actions; no JS errors; no flicker.
+- Conclusion: no regression. Closes the iteration-12 sub-task.
+
+### B-3608 — Color tool over bold preserves bold (acceptance, B-3504 still holds)
+- Repro: paragraph "Plain paragraph" → select-all → ib-bold → confirmed `<b>...</b>`. Re-select → ib-color → ib-color-red → confirmed `<span style="color:..."><b>...</b></span>`. Re-select → ib-color → ib-color-default → confirmed `<b>Plain paragraph</b>` (color span removed, bold preserved).
+- Conclusion: B-3504 fix holds. Default-color removes the color wrapper without touching nested formatting.
+
+### B-3609 — Block-handle menu: Delete + Duplicate now present (acceptance, B-3403 partial)
+- Repro: clicked `handle-<blockId>` on a paragraph block; menu shows Delete (testid `menu-delete-<bid>`, hotkey "Del") and Duplicate (hotkey "⌘D"). 
+- Still missing: Turn-into, Copy-link, Color/Background, Move-to. The original B-3403 ask was Duplicate/Turn-into/Copy-link — Duplicate is in, Turn-into & Copy-link still missing.
+- Severity: keeping B-3403 open, downgrading to P3 since the most-common option (Duplicate) landed.
+
+### B-3610 — Comment edit/delete still missing (B-3404 still open)
+- Repro: opened comments panel, posted "Hello world from QA". The rendered comment exposes `resolve-<cmtId>` and `reply-<cmtId>` testids — no `edit-<cmtId>` or `delete-<cmtId>`.
+- Severity: P2 — comment moderation impossible; if a user types a typo they cannot fix or delete it. B-3404 still open.
+
+### B-3611 — Inline AI (ib-ai) still routes to side AI panel, not inline modal (B-3210 still open)
+- Repro: select text, click `ib-ai` in inline toolbar → the right-side AI panel opens with the existing `ai-input` single-line `<input>`.
+- No separate inline AI prompt input exists. Same single-line input as before. Closes B-3210 sub-task with same status: still open, P3.
+
+### B-3612 — Markdown export: bookmark URL rendered as nothing OR partial (P2, dup of B-3604)
+- Same investigation as B-3604: bookmark dropped entirely. Logging again because the iteration task list calls out export coverage specifically.
+
+### B-3613 — Calendar event chip: still NO testid + NOT draggable (B-3513/B-3514 still open)
+- Repro: /app/calendar, clicked `day-add-2026-05-13`, created "QA Drag Event". Inspected the day cell. Chip is `<div class="text-xs ..." style="background:#3b82f6">QA Drag Event</div>` — no `data-testid`, no `draggable="true"`, no `onDragStart`.
+- Severity: P2. Same as I-3506 / I-3508 — drag UX broken, automation cannot target the chip. Re-confirms B-3513 and B-3514 are still open.
+
+### B-3614 — Dark-mode toggle 5x rapid: no flicker, deterministic alternation (acceptance)
+- Repro: /app/settings, clicked `dark-btn` 5x with 60 ms between clicks. Observed: `html.classList` flipped on/off cleanly each click (off→on→off→on→off). No double-toggles, no missed toggles, no race-condition flicker.
+- Conclusion: dark-mode toggle stable. Closes the iteration-14 sub-task.
+
+### B-3615 — Trash empty state: "Trash is empty." with period (acceptance)
+- Repro: /app/trash with zero trashed pages → main area shows "Trash is empty." (literal text with trailing period). Matches the spec.
+
+### B-3616 — Sidebar page rows: no drag-and-drop (P2, open — new)
+- Repro: inspected every `expand-pg_*` row and its row wrapper. None have `draggable="true"`, none expose `onDragStart` / `onDragOver` / `onDrop` listeners. The wrapper `<div class="group flex ...">` is plain.
+- Severity: P2 — reordering and re-parenting pages via the sidebar is a Notion baseline. Currently the only way to move a page is `page-options → Move to`. No drag UX exists yet.
+
+### B-3617 — Typing perf: H1 0.175 ms/char vs paragraph 0.248 ms/char (acceptance)
+- Repro: typed 100 chars into an H1 block then 100 chars into a paragraph block via `document.execCommand('insertText', false, 'a')`. Final block lengths 108 / 115 (incl. seed text).
+- Conclusion: heading-1 is slightly FASTER than paragraph (~30 %). Both well under 1 ms/char. No re-render regression detected.
+
+### B-3618 — ib-underline + Cmd+U both work (acceptance, I-3408 fixed)
+- Repro: selected text in a paragraph → clicked `ib-underline`. HTML becomes `<u>...</u>`. Re-selected and pressed Cmd+U via synthetic keydown → underline toggled off.
+- Conclusion: both UI button AND keyboard shortcut wired. Closes I-3408.
+
+### B-3619 — Public form refresh re-allows submission, values cleared (acceptance)
+- Repro: filled title+number on `/form/<dbId>/<viewId>`, submitted → "Thanks for submitting!". `location.reload()`. After reload: inputs show empty values. Filled title again with "SecondRow" → second row created (rows map size 1 → 2).
+- Conclusion: refresh resets the form to a clean state and a new submission persists. Closes the iteration-15 sub-task.
+
+### B-3620 — Mobile responsive: emulated 375px width still doesn't trigger drawer (B-3521/B-3522 still open)
+- Repro: monkey-patched `window.innerWidth/innerHeight` to 375×667 and fired `resize` from /app. `matchMedia('(max-width:767px)').matches === false` (the iframe's true width is unchanged). Sidebar remains visible with `close-sidebar` button. No `mobile-menu` / `sidebar-backdrop` / `drawer` testids appear.
+- Severity: P2/P3 — confirms B-3521 + B-3522. Tied to I-3208. Real-device QA still pending.
+
+### B-3621 — Synced source/ref bidirectional sync works (acceptance)
+- Repro: created a synced-block (source) via `slash-synced`. Added inner text "Synced source body". Created a synced-block-ref via `slash-synced-ref` and pasted the source id into `synced-source-input-<id>` + clicked Link.
+- Tested both directions: editing the source block's inner contenteditable propagates to the ref's rendered text (and vice versa — editing the ref's inner contenteditable updates the source's block.content in the store).
+- Conclusion: bidirectional sync intact. Closes the iteration-10 sub-task.
+
+### B-3622 — Synced reference markdown export now resolves (acceptance, B-3511 fixed)
+- Repro: with the source containing "EDITED at REF", exported the page → both the source AND the ref render the same body text in markdown (the ref no longer prints `<!-- synced reference: no source -->`).
+- Conclusion: B-3511 (and I-3510) is fixed for refs that have a valid sourceId on the same page.
+
+### B-3623 — Bookmark export still missing on synced-export run (P2, dup of B-3604)
+- During the synced-export verification above, also re-confirmed: the bookmark block at index 18 (`https://example.com`) is STILL absent from the export. Re-confirms B-3604 / I-3600.
+
+### B-3624 — Inline DB prop-header click only shows Rename, no Sort (B-3507 still open)
+- Repro: created an inline DB via `slash-db-table`. Clicked `prop-header-<propId>` on the title column. The popover that opens contains ONLY a "Rename" action (testid `prop-rename-<propId>`). No Asc / Desc / Clear sort actions, no sort applied to the view.
+- Notion baseline: a single click sorts ascending, double click descending, third clears. Sort is reachable today only via `db-actions-<dbId> → add-sort-<viewId>`.
+- Severity: P2. Closes the iteration-5 sub-task; B-3507 + I-3501 still open.
+
+### B-3625 — DB filter operators: "is" / "is-empty" / "is-not-empty" available; no "equals" string (acceptance/info)
+- Repro: opened `filter-row-0` for a new inline DB. Operator dropdown lists: contains, does-not-contain, is, is-not, is-empty, is-not-empty, greater-than, less-than, greater-than-equal, less-than-equal, checked, unchecked (12 total).
+- Notion uses "equals" for number columns; current build uses "is" for all types. Functionally equivalent — flagging only as a copy/spec consistency note. NB: no "starts-with"/"ends-with" string ops.

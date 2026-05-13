@@ -1419,3 +1419,27 @@ Priority: high / medium / low.
 
 ### I-3510 — Synced-block reference markdown export should resolve source on same page (low, open)
 - See B-3511. The synced reference renders correctly at runtime (B-3409) but the markdown exporter prints `<!-- synced reference: no source -->`. Match the runtime resolution.
+
+### I-3600 — Markdown exporter must emit bookmark blocks (medium, open)
+- See B-3604. Bookmark block (`type: 'bookmark', content: 'https://...'`) is currently silently DROPPED from the markdown export, while every other block type renders something (even if just a comment placeholder). Emit at minimum `[<title or url>](<url>)` or a bare URL on its own line. The exporter has cases for 17 of 18 types — bookmark looks like an oversight.
+
+### I-3601 — Markdown exporter: skip empty equation blocks (or emit a hint comment) (low, open)
+- See B-3605. Today an equation block with empty expression renders `$$\n\n$$`, which most markdown renderers treat as an empty display-math block and warn. Either skip entirely (matches I-3509 idea) OR emit `<!-- (empty equation block) -->` for parity.
+
+### I-3602 — Standalone `database` block: implement renderer (high, open)
+- See B-3606. The block type `database` ("Unsupported block: database" today) needs a renderer. Either (a) decide it's not a supported standalone block and reject the type in slash menu / DnD, or (b) implement an inline-DB renderer that takes `content` as a `dbId` and renders the database's first non-form view.
+
+### I-3603 — Public form: select / multi-select field value should persist on submit (high, open)
+- See B-3603. Select prop chosen on the public form is currently DROPPED from the saved row (only title + number persisted). The form needs a real onChange wiring for `<select>` (and other non-input controls) into the form's value state.
+
+### I-3604 — Comment edit + delete UI (medium, open)
+- See B-3610. Each rendered comment has `resolve-<cmtId>` + `reply-<cmtId>` but no `edit-<cmtId>` / `delete-<cmtId>`. Add an overflow menu on hover with at least Edit (re-open the textarea pre-filled) and Delete (remove the comment, prompt-free with toast undo).
+
+### I-3605 — Sidebar drag-to-reorder + drag-to-reparent (medium, open)
+- See B-3616. Sidebar page rows have no `draggable` / drag handlers. Notion's core UX includes dragging pages to reorder siblings and to nest under another page. Today the only path is `page-options → Move to teamspace`. Add HTML5 `draggable=true` + onDragStart/onDragOver/onDrop on each row.
+
+### I-3606 — Inline-DB view also needs a sort-on-header click (high, open — depends on I-3501)
+- See I-3501 / B-3507. Coupled with B-3606 fix: once standalone DB renders, ensure header click sorts (single-click asc, double desc, triple clear) and the rename menu moves behind a `…` overflow.
+
+### I-3607 — DB filter operator labels: rename "is" to "equals" for number/date columns (low, open)
+- See B-3625. The user-facing label "is" is fine for select/title but for number/date columns Notion convention is "equals". Switch the label based on column type to reduce user surprise. Also consider adding "starts with" / "ends with" for text/title columns to round out the parity gap.

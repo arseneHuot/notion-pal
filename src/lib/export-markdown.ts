@@ -111,10 +111,20 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
     case "bookmark":
     case "embed": {
       const e = b as Extract<Block, { type: "embed" | "bookmark" }>;
-      return e.url ? `[${e.url}](${e.url})` : "";
+      if (!e.url) return `<!-- (empty ${b.type} block) -->`;
+      // Emit a labeled link so a "bookmark" / "embed" round-trip is
+      // recognizable in the exported markdown (B-3604 / I-3600).
+      const label = e.caption?.trim() || (b.type === "bookmark" ? `🔖 ${e.url}` : `↗ ${e.url}`);
+      return `[${label}](${e.url})`;
     }
-    case "equation":
-      return `$$\n${(b as { content?: string }).content ?? ""}\n$$`;
+    case "equation": {
+      const content = ((b as { content?: string }).content ?? "").trim();
+      // Skip empty equation blocks — `$$\n\n$$` is technically valid LaTeX
+      // but renders as a useless empty math block and some Markdown engines
+      // reject it (B-3605 / I-3601).
+      if (!content) return `<!-- (empty equation block) -->`;
+      return `$$\n${content}\n$$`;
+    }
     case "table": {
       const t = b as Extract<Block, { type: "table" }>;
       if (!Array.isArray(t.rows) || t.rows.length === 0) return "";
