@@ -24,15 +24,28 @@ export function GalleryView({ databaseId, viewId }: { databaseId: string; viewId
 
   return (
     <div className="flex flex-wrap gap-3">
-      {sorted.map((r) => (
+      {sorted.map((r) => {
+        // B-8400 — the cover used to render `titleProp.name[0]` (always
+        // "N" when the title column was "Name") for every row. Derive
+        // an actual per-row cover: prefer the row's image cover if set,
+        // then its icon, then the first char of the title VALUE (not
+        // the title column NAME), then a generic 📄.
+        const cover = typeof r.cover === "string" ? r.cover : null;
+        const titleVal = titleProp ? String(r.values?.[titleProp.id] ?? "").trim() : "";
+        const initial = titleVal ? Array.from(titleVal)[0] : null;
+        return (
         <div
           key={r.id}
           onClick={() => window.dispatchEvent(new CustomEvent("open-row-detail", { detail: { rowId: r.id } }))}
           className={`bg-card border border-border rounded-md shadow-sm overflow-hidden cursor-pointer hover:ring-1 hover:ring-border ${sizeClass}`}
           data-testid={`gallery-card-${r.id}`}
         >
-          <div className="aspect-square bg-muted flex items-center justify-center text-4xl">
-            {(r.icon as string) ?? titleProp?.name?.[0] ?? "📄"}
+          <div className="aspect-square bg-muted flex items-center justify-center text-4xl overflow-hidden">
+            {cover && /^(https?:|data:image)/i.test(cover) ? (
+              <img src={cover} className="size-full object-cover" alt="" />
+            ) : (
+              <span>{(r.icon as string) || initial || "📄"}</span>
+            )}
           </div>
           <div className="p-2">
             {titleProp && (
@@ -47,7 +60,8 @@ export function GalleryView({ databaseId, viewId }: { databaseId: string; viewId
             ))}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

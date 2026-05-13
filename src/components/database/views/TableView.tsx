@@ -338,15 +338,34 @@ function PropertyHeader({ property, databaseId, viewId, sticky }: { property: Pr
 
 function FormulaEditor({ databaseId, property, close }: { databaseId: string; property: Property; close: () => void }) {
   const [v, setV] = useState((property as { expression?: string }).expression ?? "");
+  // B-8403 — onBlur-only commit was unreliable: typing + paste + popover
+  // close before the textarea ever lost focus stored nothing. Persist on
+  // every keystroke (cheap, cells re-evaluate from the same `expression`
+  // field) AND keep onBlur as belt-and-suspenders for paste flows.
+  function persist(next: string) {
+    setV(next);
+    updateDatabaseProperty(databaseId, property.id, { expression: next } as Partial<Property>);
+  }
   return (
     <div className="border-t border-border px-3 py-2">
       <label className="text-[10px] uppercase text-muted-foreground">Formula</label>
       <textarea
         value={v}
-        onChange={(e) => setV(e.target.value)}
+        onChange={(e) => persist(e.target.value)}
         onBlur={() => updateDatabaseProperty(databaseId, property.id, { expression: v } as Partial<Property>)}
+        onKeyDown={(e) => {
+          // Cmd/Ctrl+Enter explicitly commits + closes; mirrors the
+          // comment compose pattern and gives keyboard users a clear
+          // "I'm done editing" gesture.
+          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            updateDatabaseProperty(databaseId, property.id, { expression: v } as Partial<Property>);
+            close();
+          }
+        }}
         className="w-full bg-background border border-input rounded text-xs font-mono p-1 mt-1 min-h-[60px]"
         placeholder='prop("Name") + " ✓"'
+        data-testid={`formula-editor-${property.id}`}
       />
     </div>
   );

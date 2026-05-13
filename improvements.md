@@ -2512,3 +2512,36 @@ Priority: high / medium / low.
 - Observed: the history modal text reads "No history yet. Save a snapshot to begin." The Editor never auto-snapshots in the background (only manual via the modal's button), so a user who never opens the history dialog has zero history, ever.
 - Suggestion: add a background timer that snapshots a page after 60s of edits or every N writes (whatever the auto-snapshot job that already exists is — B-8000 referenced "auto-snapshot restore", so the snapshot job exists; just confirm it's running for everyone and surface "Last auto-saved 2m ago" near the history button).
 
+## 2026-05-13 — Iteration 8400 (sidebar, inbox, AI panel, formula UX)
+
+### I-8400 — Sidebar pages have no multi-select for bulk move/delete — P2 — open
+- Verified live: clicking `[data-testid="sidebar-page-pg_v8000_history_test"]` with `shiftKey: true` then another sibling does NOT establish a multi-select state. No `aria-selected` or `data-selected` attribute on any sidebar page item before or after the click, and the only visual marker is the per-item hover style (`hover:bg-sidebar-accent`).
+- Cmd/Ctrl+click follows the same path (no selection persistence).
+- Implication: bulk operations from the focus list ("Bulk move pages between teamspaces") are not possible from the sidebar today. Users must open one page at a time, click "Move to…" individually.
+- Suggestion: track `selectedPageIds: Set<string>` in the sidebar component (or a tiny `useSidebarSelection` hook). Shift+click extends selection from the last anchor to the clicked item (in render order); Cmd/Ctrl+click toggles individual items. When `selectedPageIds.size > 1`, swap the right-click context menu to a bulk variant ("Move N pages to…", "Delete N pages"). Visual cue: highlight all selected rows with `bg-sidebar-accent`; show a tiny "(N selected)" chip at the top of the section.
+
+### I-8401 — Inbox has no unread badge, no "mark all read", no filter — P2 — open
+- Verified live: `[data-testid="sidebar-inbox"]` button renders only an icon + "Inbox" label, no badge span / counter for unread comments-on-my-pages. The route `/app/inbox` lists ~13 `inbox-resolve-*` items but offers no bulk "Mark all read" / "Resolve all" button, and no filter strip (e.g. "Unread / Resolved / Mentions").
+- Notion's inbox shows an unread count badge in the sidebar that decays as items are read, plus tabs for "Inbox / Mentions / Following".
+- Suggestion: derive `unreadCount = comments.filter(c => !c.resolved && c.mentions.includes(currentUserId)).length` (or similar). Render a tiny `<span data-testid="inbox-badge">N</span>` next to the sidebar icon when > 0. On the inbox route, add a header row with `inbox-mark-all-read`, `inbox-filter-{unread|resolved|mentions}` segmented control.
+
+### I-8402 — AI assistant replies have no copy-to-clipboard button — P2 — open
+- File: `src/components/ai/AskAIPanel.tsx` (or equivalent — the AI panel renders messages as `[data-testid="ai-msg-{i}"]`).
+- Verified live: an assistant message DOM has no copy affordance:
+  ```
+  <div data-testid="ai-msg-3" data-role="assistant">
+    <div class="rounded-lg px-3 py-2 …">… HTML answer … <div class="mt-2 text-xs">Sources: …</div></div>
+  </div>
+  ```
+- Users have to triple-click to select the formatted reply (which includes "Sources:" lines they probably don't want to copy). No way to copy just the assistant's body text.
+- Suggestion: render a small overflow toolbar on each assistant message: a `<button data-testid="ai-msg-copy-{i}">Copy</button>` that calls `navigator.clipboard.writeText(plainText)` where `plainText` strips the trailing "Sources" footer. Show a transient "Copied" tooltip via `aria-live="polite"`.
+
+### I-8403 — Formula editor has no Save button, no syntax-highlight, no autocomplete — P3 — open
+- Companion to B-8403. The formula textarea is a plain `<textarea class="font-mono">` with placeholder `prop("Name") + " ✓"`. No persistent toolbar, no Save / Apply, no autocomplete for `prop(`, no list of available functions in the popover.
+- Notion's formula editor is famously rich: function list, type-aware autocomplete, a "result preview" cell that shows what the formula evaluates to for the currently focused row.
+- Suggestion: minimally, add a `<button data-testid="formula-save-{propId}">Save</button>` next to the textarea (and bind to `Cmd+Enter`). For autocomplete, even a flat list of function names (`add, subtract, multiply, divide, concat, length, upper, lower, if, prop, now, today, dateAdd, dateBetween …`) shown below the textarea would help. Wire `prop("` to a list of property names already on the database.
+
+### I-8404 — Board / gallery card "Empty" date cells are noisy native widgets — P3 — open
+- Companion to B-8401. Even after the fix to hide the `jj/mm/aaaa` placeholder, the card layout still ends up with one row per property regardless of whether the value is set; cards with 5 mostly-empty properties just show "Empty" 5 times.
+- Suggestion: add a per-view setting "Hide properties that are empty" (default on for board/gallery, off for table). Skip rendering a property line when the value is `null`/`""`/`[]`. Show a small `+ N hidden empty` affordance at the bottom of each card; clicking expands and lets the user pick which to fill.
+

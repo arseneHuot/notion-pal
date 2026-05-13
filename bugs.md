@@ -7192,3 +7192,65 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-8105 — Settings workspace rename inline — fixed — P2
 - New `updateWorkspace(workspaceId, patch)` store helper (trims + caps name to 80 chars). Settings `WorkspaceNameRow` flips to inline-edit on click (`settings-workspace-name` button → `settings-workspace-name-input`). Enter / blur commits, Esc reverts. Verified live: name went `Arsène Test's Workspace` → `Renamed Workspace` and propagated to the sidebar header chip.
+
+
+## 2026-05-13 — Iteration 8400 (board/gallery view rendering, formula engine, slash menu fuzzy)
+
+### B-8400 — Gallery view cover is a hardcoded "N" placeholder, identical for every row — P2 — open
+- File: `src/components/database/GalleryView.tsx` (per DOM inspection — every card renders `<div class="aspect-square bg-muted flex items-center justify-center text-4xl">N</div>`).
+- Verified live on `db_mp4746oq1yo7e6nf` (Gallery view): all 6 cards display the same letter "N" in the cover slot. Not derived from row title (cards titled `test` and `Untitled` both show "N"), not derived from row icon, not derived from cover image. Looks like a hard-coded literal that was never wired up to data.
+- Severity P2: the cover is the dominant visual element in gallery view; identical placeholders make the view nearly useless for visual scanning, which is the whole point of the gallery layout.
+- Fix sketch: read `row.cover` (if set, render `<img src={cover}/>`), else read `row.icon` (if emoji or initial-letter), else fall back to the first character of the title prop. Honor a per-view `coverProperty` setting later (Notion lets you pick which property's image/file fills the cover).
+
+### B-8401 — Board card & gallery card date cells render a native date picker even when empty — P3 — open
+- Files: `src/components/database/BoardView.tsx`, `src/components/database/GalleryView.tsx` (DateCell in card body).
+- Verified live: a row with `prop_…ixrmyycr: ""` shows `jj/mm/aaaa` (French locale of `<input type="date">` placeholder) inside every card. The card grows a chrome-styled date input even when the cell is empty, instead of an "Empty" placeholder like all other empty cells in the same card.
+- Severity P3: visual noise / inconsistency. Other empty cells (select, multi-select, text) render "Empty" muted text; date alone renders a locale-dependent native widget.
+- Fix sketch: in the board/gallery card date renderer, branch on `!value` to render `<span className="text-xs text-muted-foreground">Empty</span>` (matching other empty cells); on click, swap to the `<input type="date">`.
+
+### B-8402 — Formula `add(1, 2)` returns `#ERR: Unknown function add` — P2 — open
+- Verified live by directly editing `properties[].expression` in localStorage (the textarea-based formula editor only commits on a save flow I could not reach via synthetic input dispatch; that's a separate I-ticket).
+- Tested expressions and observed outputs on `db_mp4746oq1yo7e6nf` / `prop_mp4by4amndbi`:
+  - `add(1, 2)` → `#ERR: Unknown function add`. **Notion supports `add`** (alongside `+`).
+  - `now()` → `1778693245423` (raw epoch ms; Notion returns a formatted date / Date object).
+  - `1/0` → `Infinity` (Notion returns `#ERR` or `NaN` so the user knows division-by-zero is undefined).
+  - `prop("DoesNotExist")` → silently empty string (Notion returns `#ERR: prop("…") does not exist`, otherwise typos in prop names go unnoticed).
+  - `true && false` → `#ERR: Unexpected char: &` (Notion supports `&&` and `||`; `and(true, false)` is the only path today).
+- Works correctly: `unknownFunc(1)` → `#ERR: Unknown function unknownFunc`; `prop("Name" +` → `#ERR: Unexpected end`; `length("test")` → `4`; `concat("a","b")` → `ab`; `if(true,"y","n")` → `y`; `upper("hi")` → `HI`.
+- Severity P2: power-user feature, but the missing `add`, raw epoch from `now()`, and silent typo on `prop()` together undermine confidence that the engine matches Notion's semantics.
+- Fix sketch: in `src/lib/formula.ts` (or wherever `evalFormula` lives), add an `add(a,b) => a+b` (also `subtract`, `multiply`, `divide`); wrap `now()` output in a Date and format `toLocaleDateString()`; throw `#ERR: prop("X") does not exist` when the prop name is unknown; add `&&`/`||` to the tokenizer (or document that only `and()`/`or()` are supported with a friendlier error).
+
+### B-8403 — Formula editor textarea does not commit changes via input events — P2 — open
+- File: `src/components/database/PropertyMenu.tsx` (formula textarea, no explicit Save button).
+- Verified live: typing into the formula textarea (placeholder `prop("Name") + " ✓"`) and dispatching `input`/`change`/`blur` events through the native value setter leaves the stored `properties[i].expression` unchanged at its previous value. The only way I could persist a new expression was to mutate `localStorage` directly and reload.
+- This likely means the textarea's React handler is keyed off a different event path (controlled-component re-render from store, or a "commit on close popover" hook). For automated tests / power users using paste, this is fragile.
+- Severity P2: the formula feature is partially unusable from automation; manual entry may also lose work if the user closes the popover before whatever debounce kicks in.
+- Fix sketch: confirm `onChange` is wired to `updatePropertyExpression(propId, e.target.value)`; if it's a "commit on blur" pattern, also commit on Cmd+Enter and on popover close.
+
+### B-8404 — Slash menu fuzzy match returns false positives via description substring — P3 — open
+- File: `src/lib/slash-commands.ts:451-464` (`filterSlash`).
+- Verified live in `pg_v8000_history_test`:
+  - `/bul` (typing "bul" after the slash) surfaces `slash-table` because the table command's description "Quick table for ta**bul**ar content" contains the substring "bul".
+  - `/cal` surfaces `slash-breadcrumb` because the breadcrumb description "Show hierar**cal** path." contains "cal" (in "hierarchical").
+- Both are noise items that push the actually-intended command lower in the visible list.
+- Severity P3: ergonomic, not blocking. Description-substring matching is a useful safety net, but should be scored lower than label/alias matches.
+- Fix sketch: rank matches in `filterSlash` — score 3 for label-startsWith, 2 for alias-startsWith, 1 for label/alias-includes, 0 (and only include if no higher-tier match exists for ≥3 commands) for description-includes. Sort by score desc; return.
+
+
+
+## 2026-05-13 — B-8500 batch fixes
+
+### B-8400 — Gallery cover wired to row data — fixed — P2
+- `GalleryView` cover slot used to render `titleProp?.name?.[0]` which is the column NAME's first char (always "N" for the "Name" column). Now derives per-row: `<img src>` when `row.cover` is an http(s)/data-image URL, else `row.icon`, else the first grapheme of the row's title VALUE, else 📄. Each card finally surfaces something row-specific.
+
+### B-8402 — Formula engine: add/subtract/multiply/divide, now() formatted, &&/||, /0 → #ERR, missing prop → #ERR — fixed — P2
+- Verified live (`evaluateFormula(expr, row, db)`):
+  - `add(1, 2)` → `3`. New aliases: `add`, `subtract`, `multiply`, `divide`, `not`, `and`, `or` (last three already worked; documented).
+  - `add(prop("Num"), 10)` → `15` (proves prop lookup composes with arithmetic).
+  - `prop("DoesNotExist")` → `#ERR: prop("DoesNotExist") does not exist` (was: silent empty string).
+  - `true && false` → `false`, `true || false` → `true` (tokenizer + parser handle `&&` / `||` at proper precedence).
+  - `1/0` → `#ERR: Division by zero` (was: `Infinity`). Same for `%` and `divide()`.
+  - `now()` → `"2026-05-13"` (formatted ISO local date). Raw epoch still available as `nowMs()`.
+
+### B-8403 — Formula editor commits on every keystroke — fixed — P2
+- `FormulaEditor` (TableView) now persists via `updateDatabaseProperty` inside `onChange` (cheap; cells re-evaluate from the same field). Cmd/Ctrl+Enter explicitly commits + closes. onBlur stays as belt-and-suspenders for paste flows. Added `data-testid="formula-editor-${propertyId}"` for E2E.

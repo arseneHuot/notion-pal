@@ -79,6 +79,15 @@ class Parser {
       }
       if ("+-*/%".includes(c)) { tokens.push({ kind: "op", value: c, pos: i }); i++; continue; }
       if ("(),".includes(c)) { tokens.push({ kind: "punct", value: c, pos: i }); i++; continue; }
+      // B-8402 — accept `&&` / `||` as logical operators so users don't
+      // have to remember the `and(...)` / `or(...)` call forms. Single
+      // `&` / `|` keep their old behaviour (unexpected-char error).
+      if (c === "&") {
+        if (src[i + 1] === "&") { tokens.push({ kind: "op", value: "&&", pos: i }); i += 2; continue; }
+      }
+      if (c === "|") {
+        if (src[i + 1] === "|") { tokens.push({ kind: "op", value: "||", pos: i }); i += 2; continue; }
+      }
       if (c === "=") {
         if (src[i + 1] === "=") { tokens.push({ kind: "op", value: "==", pos: i }); i += 2; continue; }
       }
@@ -103,7 +112,30 @@ class Parser {
   atEnd() { return this.pos >= this.tokens.length; }
 
   parseExpression(): AstNode {
-    return this.parseEquality();
+    // B-8402 — logical OR (||) is the loosest binding, then AND (&&),
+    // then equality / comparison / arithmetic as before. Mirrors how
+    // most calc-engines handle `a == b && c == d || e == f`.
+    return this.parseLogicalOr();
+  }
+
+  parseLogicalOr(): AstNode {
+    let left = this.parseLogicalAnd();
+    while (!this.atEnd() && this.peek().value === "||") {
+      this.consume();
+      const right = this.parseLogicalAnd();
+      left = { kind: "bin", op: "||", left, right };
+    }
+    return left;
+  }
+
+  parseLogicalAnd(): AstNode {
+    let left = this.parseEquality();
+    while (!this.atEnd() && this.peek().value === "&&") {
+      this.consume();
+      const right = this.parseEquality();
+      left = { kind: "bin", op: "&&", left, right };
+    }
+    return left;
   }
 
   parseEquality(): AstNode {
@@ -211,14 +243,31 @@ function evaluate(node: AstNode, ctx: Context): FormulaValue {
       }
       if (node.op === "-") return Number(l ?? 0) - Number(r ?? 0);
       if (node.op === "*") return Number(l ?? 0) * Number(r ?? 0);
-      if (node.op === "/") return Number(l ?? 0) / Number(r ?? 0);
-      if (node.op === "%") return Number(l ?? 0) % Number(r ?? 0);
+      if (node.op === "/") {
+        // B-8402 — division-by-zero used to silently emit Infinity,
+        // which downstream cells render as the string "Infinity".
+        // Match Notion's posture: throw so the cell shows #ERR.
+        const rn = Number(r ?? 0);
+        if (rn === 0) throw new FormulaError("Division by zero");
+        return Number(l ?? 0) / rn;
+      }
+      if (node.op === "%") {
+        const rn = Number(r ?? 0);
+        if (rn === 0) throw new FormulaError("Modulo by zero");
+        return Number(l ?? 0) % rn;
+      }
       if (node.op === "==") return l === r;
       if (node.op === "!=") return l !== r;
       if (node.op === ">") return Number(l) > Number(r);
       if (node.op === "<") return Number(l) < Number(r);
       if (node.op === ">=") return Number(l) >= Number(r);
       if (node.op === "<=") return Number(l) <= Number(r);
+      // B-8402 — logical operators short-circuit semantics: `false && x`
+      // returns `false` without evaluating `x`. Since we already evaluated
+      // both sides above, JS coercion suffices; the result preserves the
+      // last truthy/falsy value to match Notion/JS conventions.
+      if (node.op === "&&") return l && r;
+      if (node.op === "||") return l || r;
       throw new FormulaError(`Unknown op ${node.op}`);
     }
     case "call": {
@@ -227,7 +276,9 @@ function evaluate(node: AstNode, ctx: Context): FormulaValue {
         case "prop": {
           const name = args[0];
           const prop = ctx.database.properties.find((p) => p.name === name);
-          if (!prop) return null;
+          // B-8402 — surface unknown prop names as a hard error so typos
+          // get caught instead of silently producing empty strings.
+          if (!prop) throw new FormulaError(`prop(${JSON.stringify(name)}) does not exist`);
           const v = ctx.row.values?.[prop.id];
           return (v as FormulaValue) ?? null;
         }
@@ -241,7 +292,30 @@ function evaluate(node: AstNode, ctx: Context): FormulaValue {
           const v = args[0];
           return v == null ? 0 : String(v).length;
         }
-        case "now": return Date.now();
+        // B-8402 — arithmetic aliases matching Notion (`add(a,b)` etc.).
+        // Previously only the `+ - * /` operators worked.
+        case "add": return args.reduce((a, b) => Number(a ?? 0) + Number(b ?? 0), 0);
+        case "subtract": return Number(args[0] ?? 0) - Number(args[1] ?? 0);
+        case "multiply": return args.reduce((a, b) => Number(a ?? 1) * Number(b ?? 1), 1);
+        case "divide": {
+          const rn = Number(args[1] ?? 0);
+          if (rn === 0) throw new FormulaError("Division by zero");
+          return Number(args[0] ?? 0) / rn;
+        }
+        case "not": return !args[0];
+        case "and": return args.every((a) => !!a);
+        case "or": return args.some((a) => !!a);
+        // B-8402 — `now()` returns a formatted local ISO date string so
+        // the cell renders something human-readable (e.g. "2026-05-13")
+        // instead of a raw epoch number. Use `nowMs()` for the timestamp.
+        case "now": {
+          const d = new Date();
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, "0");
+          const day = String(d.getDate()).padStart(2, "0");
+          return `${y}-${m}-${day}`;
+        }
+        case "nowMs": return Date.now();
         case "dateBetween": {
           const a = args[0] ? Date.parse(String(args[0])) : NaN;
           const b = args[1] ? Date.parse(String(args[1])) : NaN;
