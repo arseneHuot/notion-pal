@@ -4805,3 +4805,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4005 — Public form Enter-to-submit (acceptance)
 - Filled title field via React props.onChange (simulating real keystroke), called `form.requestSubmit()` on the wrapping form element. Row count went from 1 → 2, page transitioned to "Thanks for submitting!". `form.requestSubmit()` is exactly what the browser fires when Enter is pressed in a single-line input inside a `<form>` with a single submit button, so Enter-to-submit is operational. Note: synthetic `KeyboardEvent('Enter')` does NOT trigger submission in Chromium — that's expected browser behavior, not a bug.
+
+### B-3210 / B-3806 / B-3911 — AI input single-line — fixed (commit 41057a4)
+- Fix: AIChat replaced `<input type="text">` with a `<textarea>`. Enter still submits the form (form's onSubmit); Shift+Enter inserts a newline (Notion/Slack convention). Auto-grows up to ~6 lines via a ref callback (`min-h-[32px] max-h-40 overflow-y-auto`). Placeholder updated to "Ask anything... (Shift+Enter for newline)".
+- Verified live: setting value to "Line 1\nLine 2\nLine 3" preserves all three newlines in the textarea.
