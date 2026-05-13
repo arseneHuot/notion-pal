@@ -5447,3 +5447,41 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5103 / I-5101 — Page history discoverability — fixed (commit 4e322d1)
 - Fix: page-options menu now has `page-opt-history` entry. Clicking it dispatches an `open-page-history` window event which TopBar listens for and uses to set `historyOpen = true`, opening the existing PageHistoryDialog.
+
+## 2026-05-13 — B-5200 series
+
+### B-5200 — B-5101 cascade verify (acceptance, fixed)
+- Seeded `pg_b5200_parent` + child `pg_b5200_child` + grandchild `pg_b5200_grand` all in Engineering (tsA). Navigated to parent, clicked `page-opt-move-ts_mp2s8a5x6ku00yjn` (Test Teamspace / tsB). Post-state: all three pages have `teamspaceId === ts_mp2s8a5x6ku00yjn`; child.parentId still `pg_b5200_parent`, grand.parentId still `pg_b5200_child`; parent.parentId === null. movePageToTeamspace BFS confirmed to hit every descendant without disturbing tree shape.
+
+### B-5201 — Move-to-teamspace on a child page promotes it to root + descendants follow (acceptance, ok)
+- Seeded chain `pg_b5201_root → mid → leaf` all in tsA. Navigated to `mid` (the child), clicked `page-opt-move-<tsB>`. Post-state: mid.parentId === null (promoted to root), mid.teamspaceId === tsB; leaf.parentId still `pg_b5201_mid`, leaf.teamspaceId === tsB. root unchanged (parentId null, ts still tsA). The promote-to-root + cascade combo behaves correctly for non-root sources too.
+
+### B-5202 — Trash + restore-page cascade preserves the entire sub-tree (acceptance, ok)
+- Seeded `pg_b5202_root → a → b` in tsA. Page-options → page-opt-trash on root: all 3 pages `isInTrash:true`, parentId chain preserved. Navigated `/app/trash`, clicked `restore-pg_b5202_root`: all 3 pages `isInTrash:false`, root.parentId null, a.parentId === root, b.parentId === a. Verified with a 4-level chain in B-5207 below too.
+
+### B-5203 — Cmd+K palette tolerates regex metacharacters (acceptance, ok)
+- Opened palette, set input to "a.b", then "[c]", then "((", then "^*$" in sequence. Zero console errors thrown, palette stays mounted throughout. CommandPalette uses `.toLowerCase().includes(...)` against pre-split tokens (no `new RegExp(...)`), so the chars are treated literally. No DoS surface here.
+
+### B-5204 — Public form renders + persists 14 submittable property types (acceptance, ok / partial)
+- Built `db_b5204_allprops` with title, text, number, select, multi-select, status, date, person, files, checkbox, url, email, phone, relation. Form view at `/form/db_b5204_allprops/view_b5204_form` rendered all 14 `public-form-field-*` testids and a single new row persisted with every value present. However person/files/relation fall through to plain text inputs (no member picker / file upload / row picker) — see I-5200.
+
+### B-5205 — Sidebar "Other" section surfaces injected orphan, drops it once teamspaceId set (acceptance, ok)
+- Wrote `pg_b5205_orphan` with `teamspaceId:null` + `parentId:null` directly to LS + posted rehydrate. `[data-testid="sidebar-other-section"]` now contains `sidebar-page-pg_b5205_orphan` (visible label "👻 B5205 Orphan"). Then patched `teamspaceId = ts_mp2pz5zwvod19q0j` and rehydrated: the page leaves "Other" and surfaces under Engineering. OrphanSection.tsx filter `(!p.teamspaceId && !p.parentId && !p.isInTrash)` is correct on both sides.
+
+### B-5206 — DB row drag with active filter reorders the underlying rows array (acceptance, ok)
+- Created `db_b5206_filter_drag` with 5 rows (A/B/C/D/E, alternating active/archived) and a `state is active` filter. Visible: [A, C, E]. Synthetic drag from `row-r_b5206_c` to `row-r_b5206_a`. Post-state: `db.rows === [c, a, b, d, e]` — c inserted before a in the underlying array, and the hidden archived rows b, d remain at their original neighboring positions. The view filter was re-applied after the drop, so visible became [C, A, E]. Confirms reorderDatabaseRows operates on `db.rows` (not the filtered slice), which is the correct semantic.
+
+### B-5207 — Trash + restore handles 4-level deep hierarchy (acceptance, ok)
+- Seeded `pg_b5207_root → l1 → l2 → l3` in tsA. Trashed root via page-opt-trash. All 4 `isInTrash:true`. Restored via `restore-pg_b5207_root` in /app/trash. All 4 `isInTrash:false`; parentId chain intact (root null, l1→root, l2→l1, l3→l2). restorePageCascade BFS holds for deep trees.
+
+### B-5208 — Cmd+K and Cmd+P (and Ctrl+P) all open the same command palette (acceptance, ok)
+- File: src/components/command/CommandPalette.tsx:19 `if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "p"))`. Verified each shortcut individually: cmdK=true, cmdP=true, ctrlP=true. The Cmd+P standard "browser print" is preventDefault'd by the palette open, but since we stub `window.print` in the QA session and the palette handler intercepts before browser default, no print dialog ever surfaces. Parity intact.
+
+### B-5209 — AI textarea ingests a 10KB block in under 10ms without freezing (acceptance, ok)
+- Opened AI panel via `ai-btn`. Native value setter on `[data-testid="ai-input"]` (TEXTAREA) with `'X'.repeat(10240)`, dispatched `input` event. Total set + dispatch: 9.9ms. Textarea reads back length 10240, panel still mounted, no UI stutter. No virtual list / debounce needed at this size — paste flow scales fine for typical prompts.
+
+### B-5210 — Public form falls back to plain text input for person, files, relation (P2, open)
+- File: src/routes/form.$dbId.$viewId.tsx:244-333. The PublicFormField switch handles title, text, number, date, checkbox, select/status, multi-select, url/email/phone — anything else (person, files, relation) hits the trailing generic `<input value=... />`. Result: form respondents type a raw string like "agent14" or "row_xyz" or "http://x.com/file.pdf" and the data lands verbatim in `row.values[propId]`. No file upload, no member picker, no row chooser. Visually identical to text inputs so users have no signal. P2 — the form submits, the data persists, but the UX is broken for those three types.
+
+### B-5211 — Page submit handler invoked correctly via Enter key on form (acceptance, ok)
+- During B-5204 verification, the `<form>` element handles `onSubmit={e => { e.preventDefault(); submit(); }}`. Pressing Enter inside any field correctly fires submit. No accidental anchor click / page-reload behavior.

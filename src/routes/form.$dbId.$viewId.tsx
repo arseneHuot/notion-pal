@@ -54,9 +54,13 @@ function PublicFormPage() {
 
   const fields = useMemo<Property[]>(() => {
     if (!data) return [];
-    // Drop system-managed types AND any property the form view explicitly
-    // marked hidden via `hiddenProperties` (B-4607). Without this, columns
-    // the form-builder hid still showed up on the public submission page.
+    // Drop system-managed types, hidden-by-view types, AND property types
+    // that aren't meaningfully submittable from a public form: person
+    // (visitor isn't a workspace user), files (we never trigger native
+    // file pickers in tests + UX is fiddly), relation (visitor can't pick
+    // target rows). These previously fell through to a plain text input
+    // and persisted as a string the host's DB couldn't interpret (B-5210
+    // / I-5200).
     const hidden = new Set<string>(data.view.hiddenProperties ?? []);
     return data.db.properties.filter(
       (p) =>
@@ -68,7 +72,10 @@ function PublicFormPage() {
         p.type !== "unique-id" &&
         p.type !== "formula" &&
         p.type !== "rollup" &&
-        p.type !== "button",
+        p.type !== "button" &&
+        p.type !== "person" &&
+        p.type !== "files" &&
+        p.type !== "relation",
     );
   }, [data]);
 

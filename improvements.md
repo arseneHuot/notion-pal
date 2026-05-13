@@ -1737,3 +1737,18 @@ Priority: high / medium / low.
 
 ### I-5104 — Cmd+K palette should highlight the matched token in block excerpts (low, open)
 - See B-5107. The block-match label is currently "B5100ALPHA foo bar B5100BETA · Welcome" — the matched tokens are not visually emphasized. Wrap each token match in a `<mark>` (or apply a CSS class) inside `blockMatches.push(...).label`. Standard search-result polish; low effort.
+
+### I-5200 — Public form needs typed widgets for person / files / relation (medium, open)
+- See B-5210. PublicFormField currently degrades to plain text input for `person`, `files`, `relation`. Person should expose a dropdown of workspace members (the form runs without auth so respondents can't actually select themselves — surface a name/email pair input that the host can resolve on receipt). Files should accept drag-drop or URL list. Relation should at minimum render a dropdown of related-DB row labels. Without these, the form silently accepts garbage that the host's downstream renderers can't parse.
+
+### I-5201 — Add `data-testid` on public-form-thanks include the dbId/viewId for parameterized assertions (low, open)
+- The thanks state uses a single `public-form-thanks` testid. For multi-form pages or test suites that submit multiple forms in sequence, scoping with `public-form-thanks-<viewId>` would make assertions targeted. Trivial polish; helps QA.
+
+### I-5202 — Sidebar Other section title could indicate why pages are there (low, open)
+- "Other" is correct but inscrutable. A tooltip on the section header ("Pages without a teamspace · Move them to organize") would help users who stumble on orphaned pages. The OrphanSection comment in code already explains the rationale; surfacing it to users is a small lift.
+
+### I-5203 — Cmd+P shortcut should call `e.preventDefault()` explicitly to suppress browser print dialog (low, open)
+- CommandPalette.tsx:19-23 toggles `setOpen` but doesn't call `e.preventDefault()`. In production browsers Cmd+P would still open the print dialog alongside the palette. Verified the palette opens correctly in our QA env only because `window.print` is stubbed. Add `e.preventDefault()` so the shortcut is safe for real users.
+
+### I-5204 — Public form should mark person/files/relation fields with placeholder hints (low, open)
+- Even before I-5200 lands, a `placeholder="@username or email"` on person, `placeholder="https://… or paste link"` on files, and `placeholder="Row title or id"` on relation would give respondents a hint that this is a text-mode fallback. Zero-cost UX win.
