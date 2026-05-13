@@ -23,13 +23,24 @@ export function TopBar() {
     return () => window.removeEventListener("open-page-history", onOpen);
   }, []);
 
-  // Breadcrumb path
-  const breadcrumbs: { id: string; title: string; icon: string | null }[] = [];
+  // Breadcrumb path: page → ... → root ancestor → teamspace name (B-5601 /
+  // B-5705). The teamspace anchor lives in `state.teamspaces[teamspaceId]`
+  // and is rendered as a non-clickable leading chip so users always see
+  // which teamspace the current page belongs to. Without this, moving a
+  // page across teamspaces left the breadcrumb pointing at the old chain
+  // (which still walks parentId only).
+  const teamspaces = useStore((s) => s.teamspaces);
+  const breadcrumbs: { id: string; title: string; icon: string | null; kind?: "teamspace" }[] = [];
   if (page) {
     let p: typeof page | null = page;
     while (p) {
       breadcrumbs.unshift({ id: p.id, title: p.title || "Untitled", icon: p.icon });
       p = p.parentId ? pages[p.parentId] : null;
+    }
+    const rootTeamspaceId = breadcrumbs[0] && pages[breadcrumbs[0].id]?.teamspaceId;
+    const ts = rootTeamspaceId ? teamspaces[rootTeamspaceId] : null;
+    if (ts) {
+      breadcrumbs.unshift({ id: ts.id, title: ts.name, icon: ts.icon, kind: "teamspace" });
     }
   }
 
@@ -50,8 +61,16 @@ export function TopBar() {
         {breadcrumbs.map((b, i) => (
           <span key={b.id} className="flex items-center gap-1 min-w-0">
             {i > 0 && <ChevronRight className="size-3" />}
-            {/* The last crumb is the current page — render as plain text. */}
-            {i === breadcrumbs.length - 1 ? (
+            {/* Teamspace chip: non-clickable identity marker. */}
+            {b.kind === "teamspace" ? (
+              <span
+                className="truncate text-xs text-muted-foreground"
+                data-testid={`breadcrumb-teamspace-${b.id}`}
+                title={`Teamspace: ${b.title}`}
+              >
+                {b.icon ?? "🗂"} {b.title}
+              </span>
+            ) : i === breadcrumbs.length - 1 ? (
               <span className="truncate text-foreground" data-testid={`breadcrumb-${b.id}`}>
                 {b.icon ?? "📄"} {b.title}
               </span>

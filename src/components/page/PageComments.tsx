@@ -18,9 +18,12 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
   // Track which comment (top-level OR reply) is being edited.
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  // Top-level page comments + their nested replies.
+  // Top-level page comments + their nested replies. Includes block-scoped
+  // comments (Comment.blockId != null) so they're not stuck in the store
+  // with no UI surface (B-5010 / B-5102 / B-5304). The block context is
+  // rendered as a small chip on each block-scoped comment row.
   const pageComments = useMemo(
-    () => Object.values(comments).filter((c) => c.pageId === pageId && !c.blockId && !c.parentId && (showResolved || !c.resolved)),
+    () => Object.values(comments).filter((c) => c.pageId === pageId && !c.parentId && (showResolved || !c.resolved)),
     [comments, pageId, showResolved],
   );
   const repliesByParent = useMemo(() => {
@@ -254,6 +257,10 @@ function CommentEditor({ initial, onSave, onCancel, commentId }: { initial: stri
 }
 
 function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<typeof useAuth>["user"] }) {
+  // Show a small "on block" chip for block-scoped comments so users
+  // understand the context (B-5010 / B-5304). Clicking it scrolls the
+  // target block into view via the existing #block-<id> hash mechanism.
+  const blockId = (comment as { blockId?: string | null }).blockId;
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">
@@ -270,6 +277,16 @@ function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<type
           )}
         </span>
       </div>
+      {blockId && (
+        <button
+          onClick={() => { window.location.hash = `block-${blockId}`; }}
+          className="mb-1 text-[10px] uppercase tracking-wider text-blue-600 hover:underline flex items-center gap-1"
+          data-testid={`comment-block-anchor-${comment.id}`}
+          title={`Jump to block ${blockId}`}
+        >
+          ↑ on block
+        </button>
+      )}
       <div className="text-sm whitespace-pre-wrap">{comment.content}</div>
     </div>
   );

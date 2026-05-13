@@ -5755,3 +5755,53 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5710 — CommentEditor crashes on undefined content — fixed (commit 906e0e9)
 - Fix: `initial` prop coalesced with `?? ""` at both call sites AND inside CommentEditor's useState initializer.
+
+## 2026-05-13 — Iteration B-5800 (cycle regression + UX coverage)
+
+### B-5800 — B-5704 cycle protection — re-verified (acceptance, fixed)
+- Steps: planted cycle A↔B (`pg_b5701_A`↔`pg_b5701_B`, sub-page A→B, sub-page B→A), bodies "Cycle body A"/"Cycle body B". Cleared `__lastExportedMarkdown`, dispatched `export-page-markdown` with `{noDownload:true}` on A.
+- Observed: `# Cycle A\n\nCycle body A\n\n## 🔃 Cycle B\n\nCycle body B\n🔁 [Cycle A](/app/p/pg_b5701_A)\n`. Each body string appears exactly once (regex count A=1, B=1). The cycle terminates at the link emission for A — visited set guard is solid.
+
+### B-5801 — B-5710 CommentEditor null guard — re-verified (acceptance, fixed)
+- Steps: seeded `cmt_b5710_null_*` on `pg_b5701_A` first with `content:null`, then with the `content` field deleted entirely (worst case after a schema diff). For each case clicked `comment-edit-<id>` and then the `comment-edit-input-<id>` textarea.
+- Observed: textarea rendered with `value === ""`, zero entries in `window.__errors`. No "value.trim is not a function" or "Cannot read properties of undefined (reading 'trim')" crash. The defensive coalescing in `CommentEditor`'s useState initializer survives both `null` and missing-field cases.
+
+### B-5802 — Three independent sub-pages all inline correctly (acceptance, ok)
+- Steps: planted parent `pg_b5800_P` with intro `text` block and three sub-page blocks pointing to `pg_b5800_S1/S2/S3`, each child carrying a unique body. Exported parent with `{noDownload:true}`.
+- Observed: `# Parent5800\n\nParent body intro\n\n## 📄 Sibling 1\n\nBody of sibling 1\n\n## 📄 Sibling 2\n\nBody of sibling 2\n\n## 📄 Sibling 3\n\nBody of sibling 3\n`. All three siblings rendered as H2 sections in source order. The visited-set guard for cycles doesn't accidentally swallow independent siblings — confirms the fix is scoped only to true cycles.
+
+### B-5803 — A→B→C→A three-link cycle handled with single inline per page (acceptance, ok)
+- Steps: planted `pg_b5801_A/B/C` with bodies "Body of TriA/B/C". Sub-page chain A→B→C→A. Exported A.
+- Observed: `# TriA\n\nBody of TriA\n\n## 📄 TriB\n\nBody of TriB\n### 📄 TriC\n\nBody of TriC\n📄 [TriA](/app/p/pg_b5801_A)\n`. Regex counts: TriA=1, TriB=1, TriC=1. The longer 3-page cycle terminates correctly — visited-set logic isn't tied to immediate parent only, it tracks the full traversal.
+
+### B-5804 — Calendar drag-reschedule preserves event color (acceptance, ok)
+- Steps: planted `evt_b5802_color_*` with `color:#ef4444` for today 10:00. On `/app/calendar`, fired `dragstart` on `cal-event-<id>` with the event id in DataTransfer, then `dragover`+`drop` on `day-2026-05-15`.
+- Observed: store reflects `start: 2026-05-15T08:00:00.000Z` (rescheduled by +2 days) with `color:'#ef4444'` intact. CalendarView preserves all non-temporal fields during reschedule — color, title, description, source, location, allDay all survive the drop handler.
+
+### B-5805 — Page menu submenu actions (favorite / duplicate / trash) work (acceptance, ok)
+- Steps: clicked `page-menu-pg_b5800_P` → `pmenu-favorite-pg_b5800_P` (toggle), reopened → `pmenu-duplicate-pg_b5800_P` (creates new page), then targeted the duplicate via `page-menu-<dup-id>` → `pmenu-trash-<dup-id>`.
+- Observed: favorite flipped `isFavorite:false → true`; duplicate created `Parent5800 (Copy)` with fresh id; trash flipped `isInTrash:false → true` with `trashedAt` timestamp set. All three sidebar submenu pathways are wired correctly. No DOM duplicates of `pmenu-*` testids appeared during the operation.
+
+### B-5806 — AI "New thread" clears `notion-clone:ai-chat:<uid>` (acceptance, ok)
+- Steps: opened AI sidebar with 14 prior messages (`notion-clone:ai-chat:<uid>` = 1658 bytes). Clicked `ai-new-thread`.
+- Observed: key persists with value `"[]"` (2 bytes), all `ai-msg-*` nodes removed (count → 0). The fresh-thread reset writes an empty array rather than deleting the key — keeps the per-user namespace stable for subsequent sessions. No leftover stale messages.
+
+### B-5807 — Command palette search is case-insensitive for page titles (acceptance, ok)
+- Steps: opened command palette (`sidebar-search`), typed `okrs` (lower), captured result list, then replaced with `OKRs` (mixed).
+- Observed: both queries return the same two pages, in identical order: `🎯OKRs` and `📄team okrs notes`. Filter normalizes both sides to lowercase. `OKRs` title and `team okrs notes` title both match in either casing — no orthography surprises.
+
+### B-5808 — Trash > restore preserves nested block.parentId chain (acceptance, ok)
+- Steps: planted `pg_b5803_restore` with a toggle block `blk_b5803_root` (parentId=page) and a nested `blk_b5803_child` (parentId=root). Trashed via `page-options` → `page-opt-trash`. Restored from `sidebar-trash` via `restore-pg_b5803_restore`.
+- Observed: pre-trash, post-trash, and post-restore all show the same block.parentId chain: root→page, child→root. Page returns to `isInTrash:false, parentId:null`. Block hierarchy survives full trash/restore round-trip — no flattening, no orphaning.
+
+### B-5809 — Move-to-teamspace followed by move-to-trash work in sequence (acceptance, ok)
+- Steps: on restored `pg_b5803_restore` (teamspaceId=Private), clicked `page-opt-move-ts_mp2pz5zwvod19q0j` (Engineering). Reopened menu, clicked `page-opt-trash`.
+- Observed: after move, `teamspaceId:'ts_mp2pz5zwvod19q0j'`, `isInTrash:false`. After trash, `isInTrash:true`, `teamspaceId` unchanged (Engineering retained as "origin teamspace" for restore). Block parents preserved across both operations. No race between the two store mutations.
+
+### B-5810 — Comment delete cascades to replies (acceptance, ok / B-4900-class regression)
+- Steps: seeded parent `cmt_b5804_p` with two replies `cmt_b5804_r1`, `cmt_b5804_r2` (parentId chain). Clicked `comment-delete-cmt_b5804_p`.
+- Observed: post-delete, all three comment records are gone from `data.comments`. Cascade walks the `parentId` graph and removes children when their parent is deleted — works for a 2-deep tree (parent + N replies). No orphaned replies left dangling.
+
+### B-5811 — Sidebar `sidebar-fav-<id>` testid uniqueness holds (acceptance, ok / B-4810 regression check)
+- Steps: with two favorited root pages (`pg_mp2pz5zwikifg7r3`, `pg_b5800_P`), enumerated `[data-testid^="sidebar-fav-"]` and `[data-testid^="sidebar-page-"]`. Computed duplicate counts.
+- Observed: each favorited page renders exactly one `sidebar-fav-<id>` and one matching `sidebar-page-<id>` element. No duplicates, no overlap between the two namespaces. The favorites strip and the main page tree stay separately addressable — B-4810 hardening intact.
