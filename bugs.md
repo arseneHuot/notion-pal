@@ -4497,3 +4497,15 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-3625 — DB filter operators: "is" / "is-empty" / "is-not-empty" available; no "equals" string (acceptance/info)
 - Repro: opened `filter-row-0` for a new inline DB. Operator dropdown lists: contains, does-not-contain, is, is-not, is-empty, is-not-empty, greater-than, less-than, greater-than-equal, less-than-equal, checked, unchecked (12 total).
 - Notion uses "equals" for number columns; current build uses "is" for all types. Functionally equivalent — flagging only as a copy/spec consistency note. NB: no "starts-with"/"ends-with" string ops.
+
+### B-3606 — Unsupported `database` block — fixed (commit b2ce55c) — P1
+- Fix: Block.tsx now treats a bare `database` block type as `database-inline` via a backwards-compat shim at the top of the renderer switch. Older seeds and hand-constructed blocks from before the inline/linked split no longer render "Unsupported block: database".
+
+### B-3604 — Bookmark blocks dropped from markdown export — fixed (commit b2ce55c) — closes I-3600
+- Fix: export-markdown.ts now emits `[🔖 <url>](<url>)` for bookmarks (or `[caption](<url>)` if a caption is set) and `[↗ <url>](<url>)` for embeds. Empty bookmark/embed/equation blocks emit `<!-- (empty <type> block) -->` rather than being silently dropped (closes B-3604 + B-3605 + B-3512).
+
+### B-3605 — Empty equation emitted `$$\n\n$$` — fixed (commit b2ce55c) — closes I-3601
+- Fix: equation export now skips empty blocks with `<!-- (empty equation block) -->` instead of the broken `$$\n\n$$`.
+
+### B-3624 / B-3507 — Prop-header dropdown lacks Sort / Hide — fixed (commit b2ce55c) — closes I-3603
+- Fix: TableView's PropertyHeader now renders Sort ascending / descending / Clear sort buttons (`prop-sort-asc-<id>`, `prop-sort-desc-<id>`, `prop-sort-clear-<id>`) and a Hide/Show column button (`prop-hide-<id>`). All wired through `updateView` on the view's `sorts` and `hiddenProperties` fields. The Type switcher and Delete option remain below a divider.
