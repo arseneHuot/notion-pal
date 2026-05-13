@@ -3812,3 +3812,18 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Repro: open ib-link popover, set input value via native setter, dispatch input event, then click `[data-testid="ib-link-apply"]`.
 - Observed: nothing happens. Apply handler is `onMouseDown` only (no `onClick`). `dispatchEvent(MouseEvent('mousedown'))` works, as does Enter on the input.
 - Expected: either accept `click` OR add a hint. Real users who click do trigger mousedown so the issue is test-only — keep priority low. Drop B-3010 in favor of B-3026.
+
+### B-3022 — Trash route crash on malformed DB — fixed (commit 005ce79)
+- Fix: `app.trash.tsx` reads `d.rows?.length ?? 0` instead of `d.rows.length`. Verified: injecting a synthetic trashed DB without a `rows` array no longer throws; the row renders with "0 rows".
+
+### B-3023 — Calendar `day-add-*` buttons unlabeled — fixed (commit 005ce79) — closes I-3000
+- Fix: each Plus button now has `aria-label="Add event on <Month Day>"` (localized via `toLocaleDateString`) and `title="Add event"`. Verified 35/35 day-add buttons labeled on /app/calendar.
+
+### B-3009 — `ib-color` missing aria-label — fixed (commit 005ce79) — closes I-3003
+- Fix: explicit `aria-label="Text color"` added next to the existing `title`. Screen readers will now announce the "A" button correctly.
+
+### B-3026 — `ib-link-apply` only responded to onMouseDown — fixed (commit 005ce79) — closes I-3004
+- Fix: Apply button now has both onMouseDown and onClick handlers wired to `commitLink`. Automated `.click()` and synthetic dispatch both work; mouse-driven users keep the selection-preserving mousedown path.
+
+### B-3011 — Cmd+K palette: surface block snippets — fixed (commit 005ce79) — closes I-3005
+- Fix: queries ≥ 2 chars now produce a "Block matches" group with up to 5 snippets formatted as `"…<excerpt>…  ·  <page>"`. Clicking the result navigates to the parent page and scrolls + briefly ring-highlights the matched block via its `data-block-id` attribute. Verified: searching "OKR" returns two entries from the OKRs / OKRs (Copy) pages plus the regular Pages group.
