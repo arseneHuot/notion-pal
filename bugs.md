@@ -6691,3 +6691,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Severity P3: real users see no immediate breakage, but column ordering is silently non-functional. Users dragging columns assume changes persist; in fact reordering only works because Inline rewrites `properties[]` (mirrored), not via the documented `propertyOrder`.
 - Fix sketch: in TableView, order `visibleProps` by `view.propertyOrder.filter(id => propsById[id])` first, then append properties not in propertyOrder. (Belt-and-suspenders for dangling IDs.)
 
+
+### B-7501 — Dangling-parentId page invisible — fixed (commit 2e32202)
+- Fix: Sidebar's TeamspaceSection rootPages filter + OrphanSection both include pages whose `parentId` is missing or trashed. They now surface as roots of their teamspace (or under Other when teamspaceless).
+
+### B-7502 — Dangling-parentId comment invisible — fixed (commit 2e32202)
+- Fix: PageComments treats a comment whose `parentId` points at a non-existent comment as top-level. Previously fell through both filters and silently vanished.
