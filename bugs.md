@@ -5401,3 +5401,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5014 — Sidebar Trash testid `sidebar-trash` navigates to /app/trash (acceptance, ok)
 - Clicked `[data-testid="sidebar-trash"]` from /app. URL now `/app/trash`, `<main>` shows "Trash · Trash is empty." Confirms the sidebar footer Trash icon is wired correctly. (Older runs hit B-219-style no-op buttons; this one is solid.)
+
+### B-5012 / B-5013 — deleteDatabase crash on legacy views — fixed (commit bd0d3fa) — P1
+- Fix: `deleteDatabase`'s per-other-DB cleanup now coalesces `db.properties`, `db.views`, and per-view `propertyOrder` / `hiddenProperties` with `?? []`. Legacy / imported DBs whose views were persisted before those fields were required no longer trip a swallowed TypeError. Verified live: deleting a trashed DB whose view lacks both fields succeeds end-to-end (DB removed from state, no ErrorBoundary).
