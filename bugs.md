@@ -6613,3 +6613,41 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7101 — Dangling row IDs in db.rows — fixed (commit 4dac1be)
 - Fix: `normalizeState` filters `db.rows` to only IDs that exist in `state.rows`. Hard-deletes, migrations, or imports that leave dangling IDs no longer throw off counts or trip ungaurded read sites. Verified: DB with [real, dangling, dangling] → 1 row rendered.
+
+
+## 2026-05-13 — B-7400 verification + exploration sweep
+
+### B-7101 (re-verified) — Dangling row IDs pruned on cross-tab rehydrate — fixed — P2
+- Repro: injected `db_b7101_verify` via direct localStorage write with `rows: [realId, 'dangling_1', 'dangling_2']`. Fired `StorageEvent` on `notion-clone:user:<uid>`, navigated to `/app/db/db_b7101_verify`.
+- Result: exactly 1 row rendered (`row-r_b7101_real`), `db-view-count-view_b7101` reads "1", no ErrorBoundary. Storage was rewritten with `rows: ['r_b7101_real']` only. Confirms `normalizeState` (store.ts:114) prunes dangling IDs on the rehydrate path.
+
+### B-7400 — Cross-tab dangling rows live-normalised in memory but NOT re-persisted — P3 — open
+- Repro: while on `/app/db/<id>`, another tab writes the same key with `rows: [real, dangling1, dangling2, dangling3]` and fires StorageEvent. In-memory state and rendered count correctly show 1 row.
+- However the raw localStorage still contains the 4-element array until the next *local* setState. If the user navigates away or closes before any local write, the dangling IDs persist on disk indefinitely — they're a passive corruption seed.
+- Severity P3: never crashes (cross-tab listener normalises every read), but the persisted file silently disagrees with the rendered state. A subsequent `db.rows.length` read in an exported / shared snapshot would over-report row count.
+- Fix sketch: after `normalizeState(next)` in the cross-tab listener (store.ts:208), if any field was patched, call `persist(_state)` so disk and memory agree.
+
+### B-7401 — Page with dangling `parentId` becomes invisible in sidebar but reachable by URL — P3 — open
+- Repro: injected `pg_dangle_parent` with `parentId: 'pg_DOES_NOT_EXIST_xxx'`. Navigated to `/app/p/pg_dangle_parent`. Page renders OK, breadcrumb gracefully shows only the leaf (no chain), but the sidebar tree never lists it (sidebar text does NOT contain "Dangling parent test").
+- Severity P3: not a crash, but the page is orphaned from discovery. Cascade trash/restore won't catch it either — neither the dangling parent nor any sibling carries it.
+- Fix sketch: in the sidebar's tree builder, surface pages whose `parentId` resolves to nothing (or `isInTrash`) under a synthesised "Orphaned" group — or rebind their `parentId` to `null` during `normalizeState`.
+
+### B-7402 — Reply comment with dangling `parentId` silently disappears (no crash, no surfacing) — P3 — open
+- Repro: injected two comments on `pg_dangle_parent`: `c_top_1` (top-level) and `c_dangle_1` with `parentId: 'c_DELETED_PARENT_xxx'`. Opened the comments panel.
+- Result: only `c_top_1` rendered. `c_dangle_1` was filtered out by PageComments.tsx:27 (which requires `!c.parentId` for top-level) and never reached by the `repliesByParent[parentId]` lookup either. Recursive renderer doesn't crash — the orphan reply is simply invisible.
+- Severity P3: user loses comment content with no UI cue. Especially nasty for "comment then delete parent" race during real-time sync.
+- Fix sketch: in PageComments.tsx, treat a comment as top-level if `parentId` is absent OR the parent comment is missing/resolved. Alternatively prune dangling `parentId` in `normalizeState` for comments.
+
+### B-7403 — Restore button on a child page whose parent is in trash is a NO-OP — P2 — open
+- Repro: injected `pg_cascade_parent` with `isInTrash:true` and `pg_cascade_child` with `parentId:'pg_cascade_parent'`, `isInTrash:false`. Navigated to `/app/p/pg_cascade_child`.
+- PageView shows the "This page is in Trash" banner because `ancestorInTrash` walks up and finds the trashed parent. Clicked `banner-restore`. After click: child stays `isInTrash:false`, parent stays `isInTrash:true`, banner is still shown. The page is effectively unreachable / unrestorable from its own URL.
+- `restorePageCascade(page.id)` walks DESCENDANTS of the current page, not ancestors — so it does nothing when the trashed ancestor is the problem.
+- Severity P2: real user can land on this via a stale bookmark to a child whose parent got trashed. UI promises Restore works, but it doesn't.
+- Fix sketch: when `ancestorInTrash && !page.isInTrash`, banner-restore should also cascade-restore the trashed ancestor chain (or at least surface a different message: "This page's parent is in Trash — restore Parent first" with a button that navigates to the parent).
+
+### B-7404 — Calendar drag onto a spring-forward day shifts wall-clock hour by 1 — P3 — open
+- Repro: `moveCalendarEvent` (store.ts:1900) builds `new Date(y, m-1, d, prevHours, prevMinutes)`. For an event with `start` at 02:30 (Europe/Paris) dropped onto the spring-forward Sunday (2027-03-28), JS Date returns 03:30 because 02:30 doesn't exist that day.
+- Result: the user's chip jumps to a later time without warning. Fall-back direction is fine (wall-clock preserved).
+- Severity P3: rare (only hits events whose existing time falls inside the missing DST hour). No crash. Calendar still renders correctly post-move.
+- Fix sketch: detect the gap by comparing `next.getHours() !== prevHours` and either snap back (subtract one hour) or surface a toast: "Event moved across DST — time shifted to 03:30".
+

@@ -206,6 +206,9 @@ function attachCrossTabSync() {
         return;
       }
       _state = normalizeState(next);
+      // Re-persist the normalized snapshot so dangling row IDs / missing
+      // arrays don't survive on disk until the next local write (B-7400).
+      persist(_state);
       for (const l of listeners) l();
     } catch {
       // ignore parse errors
@@ -227,6 +230,7 @@ function attachCrossTabSync() {
           const incomingTs = (next as unknown as { _lastWriteAt?: number })._lastWriteAt ?? 0;
           if (incomingTs > 0 && localTs > 0 && incomingTs < localTs) return;
           _state = normalizeState(next);
+          persist(_state); // re-persist the normalized snapshot (B-7400)
           for (const l of listeners) l();
         } catch {
           // ignore
@@ -720,7 +724,21 @@ export function restorePageCascade(id: string) {
     const page = s.pages[id];
     if (!page) return s;
     const idsToRestore = new Set<string>([id]);
-    let queue = [id];
+    // Walk UPWARDS first: if the page's ancestor chain is also trashed,
+    // include those ancestors so the restored page actually becomes
+    // reachable in the sidebar (B-7403). Without this the UI's
+    // "Restore" promise was a no-op for any child whose parent was
+    // still in the trash.
+    let cur: typeof page | undefined = page;
+    while (cur && cur.parentId) {
+      const parent = s.pages[cur.parentId];
+      if (!parent || !parent.isInTrash) break;
+      idsToRestore.add(parent.id);
+      cur = parent;
+    }
+    // Then walk DOWNWARDS to include every trashed descendant (legacy
+    // behaviour).
+    let queue: string[] = Array.from(idsToRestore);
     while (queue.length > 0) {
       const next: string[] = [];
       for (const pid of queue) {

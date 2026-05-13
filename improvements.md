@@ -2184,3 +2184,26 @@ Priority: high / medium / low.
 ### I-7307 — Empty trash → `trash-empty` testid (verified)
 - Navigated to `/app/trash`. 2 trashed items remained (`pg_trash_a`, `db_trash_c`). Clicked `delete-forever-pg_trash_a` then `delete-forever-db-db_trash_c`.
 - After both clicks the page rendered the `data-testid="trash-empty"` element with text "Trash is empty.". 0 restore/delete-forever buttons remained. Confirms the empty-state branch in `src/routes/app.trash.tsx:28` activates correctly when all items are purged.
+
+
+## 2026-05-13 — I-7400 exploration sweep
+
+### I-7400 — Re-persist normalized state after cross-tab `storage` rehydrate — open — P3
+- Today `normalizeState` runs every read (load + cross-tab + BroadcastChannel) and corrects bad/missing fields in memory only. The on-disk snapshot keeps the corruption until the next local write touches setState.
+- A drive-by user who only views (no edits) and switches tabs leaves dangling IDs on disk indefinitely — a future export, debug-dump or third-tab read still sees the bad data.
+- Suggestion: after `normalizeState(next)` in the storage listener (store.ts:208) compute a quick `!== next` shallow check, and if any field was rewritten, call `persist(_state)`. Same in the BroadcastChannel branch (store.ts:229).
+
+### I-7401 — Surface orphaned pages (dangling `parentId`) in sidebar — open — P3
+- Pages whose `parentId` points at a non-existent OR trashed page are filtered out of the sidebar tree everywhere except direct URL access. They become "ghost" pages.
+- Suggestion: in `normalizeState`, when `page.parentId && !pages[page.parentId]`, rebind `parentId = null` so the page falls back to the workspace top level. Same treatment for blocks whose parent block / page got purged.
+
+### I-7402 — Treat comments with dangling `parentId` as top-level — open — P3
+- PageComments.tsx:27 currently drops orphaned replies entirely. They should re-surface as standalone comments rather than vanishing.
+- Suggestion: change top-level filter to `!c.parentId || !comments[c.parentId]`. Cheap, keeps user content visible.
+
+### I-7403 — Restore-banner UX for trashed-ancestor pages — open — P2
+- When `ancestorInTrash && !page.isInTrash`, the "Restore" button is misleading. Either:
+  (a) make it cascade-restore the ancestor chain too, or
+  (b) replace the banner with: "Parent ‹X› is in Trash — Restore Parent" + a deep link to the parent.
+- Option (b) is safer because it preserves the user's intent (they may not want the whole sub-tree back).
+
