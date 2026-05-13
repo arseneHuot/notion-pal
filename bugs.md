@@ -6573,3 +6573,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Severity P2: latent — masks legitimate row counts (`db.rows.length` is wrong by 1), and any new code path that doesn't guard `rowsMap[r]` (e.g., a future export-to-CSV) will trip on it.
 - Fix sketch: on restore-DB (and trash-DB), prune `db.rows` to entries that exist in `state.rows`. Same belt-and-suspenders as `loadFromStorage`'s normalization step for `row.values`.
 
+
+### B-7100 / I-7101 — Centralized state normalization — fixed (commit 57a4279) — P1
+- Fix: extracted `normalizeState(parsed)` shared by `loadFromStorage` and the cross-tab listeners. Coalesces row.values, db.rows/properties/views, page.blocks to safe defaults. Closes B-7100 + provides the single-source-of-truth fix requested by I-7101. Verified live: DB without `rows` renders without ErrorBoundary.
