@@ -5094,3 +5094,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4316 — Cmd+P preventDefault'd so browser print stays disabled (acceptance)
 - Dispatched `KeyboardEvent('keydown',{key:'p',metaKey:true,cancelable:true})` at document → `ev.defaultPrevented=true`. Browser print dialog therefore suppressed and palette opens. Matches Cmd+K behaviour. Closes the regression risk noted in I-4303.
+
+### Tracker — three UX polish items (commit 6484519)
+- I-4302: `cmd-empty` testid on Cmd+K palette empty state + `trash-empty` testid on /app/trash empty state.
+- I-4304: ib-ai now embeds the page title in the AI prompt → `On page "<title>", help me with: "<selection>"`.
