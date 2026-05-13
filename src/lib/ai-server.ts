@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 
 /**
  * Server-side function that calls Gemini Flash with the user's prompt + a
@@ -57,7 +57,7 @@ export const askAI = createServerFn({ method: "POST" })
       const response = await ai.models.generateContentStream({
         model: "gemini-flash-latest",
         config: {
-          thinkingConfig: { thinkingLevel: "HIGH" as never },
+          thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
         },
         contents: [
           {
