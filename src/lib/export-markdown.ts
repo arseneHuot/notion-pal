@@ -166,19 +166,39 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
     }
     case "columns": {
       const c = b as Extract<Block, { type: "columns" }>;
-      const colIds = c.columnIds ?? [];
+      const colIds = c.columnIds ?? Object.values(blocks)
+        .filter((cb) => cb.parentId === b.id && cb.type === "column")
+        .sort((a, c) => a.order - c.order)
+        .map((cb) => cb.id);
       const out: string[] = ["<!-- multi-column layout: -->"];
+      let emittedSomething = false;
       for (const colId of colIds) {
         const col = blocks[colId];
         if (!col || col.type !== "column") continue;
-        const blockIds = (col as Extract<Block, { type: "column" }>).blockIds ?? [];
+        // Prefer the column's explicit blockIds; fall back to a parentId
+        // scan (B-4207) so a column that lost its blockIds field still
+        // exports its children instead of an empty `<!-- column -->`.
+        let blockIds = (col as Extract<Block, { type: "column" }>).blockIds ?? [];
+        if (blockIds.length === 0) {
+          blockIds = Object.values(blocks)
+            .filter((cb) => cb.parentId === col.id)
+            .sort((a, c) => a.order - c.order)
+            .map((cb) => cb.id);
+        }
+        if (blockIds.length === 0) continue; // skip truly-empty columns
         out.push(`<!-- column -->`);
         for (const cid of blockIds) {
           const cb = blocks[cid];
-          if (cb) out.push(blockToMarkdown(cb, blocks, depth, pages));
+          if (cb) {
+            const md = blockToMarkdown(cb, blocks, depth, pages);
+            if (md.trim()) {
+              out.push(md);
+              emittedSomething = true;
+            }
+          }
         }
       }
-      return out.join("\n");
+      return emittedSomething ? out.join("\n") : "<!-- (empty multi-column layout) -->";
     }
     case "synced-block": {
       const children = Object.values(blocks)
