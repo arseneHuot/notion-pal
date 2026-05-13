@@ -5548,3 +5548,52 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5305 — Calendar non-cal-drop silently refused — fixed (commit c8f791b)
 - Fix: /app/calendar's day-cell drop handler now dispatches a "Reschedule database rows from the DB calendar view" toast when a `row-*` event id is dropped, instead of silently no-op'ing.
+
+## 2026-05-13 — Test agent batch (B-5400 re-verify + new coverage)
+
+### B-5400 — B-5303 DB property drag-reorder fix re-verified (acceptance, ok)
+- Steps: at /app/db/db_mp3lhvrxwl40mnbf (QA Form DB) DOM shows non-title `th[data-property-id]` headers with `draggable=true` (title `prop_mp3lhvrx9qtr7nk5` is `draggable=false`). Synthesized dragstart on Status, dragover+drop on Tags via `DataTransfer` payload `application/x-property-id`.
+- Observed: `state.databases[db_mp3lhvrxwl40mnbf].properties` ids rearranged from [Name, Status, Tags, Date, Score, TestNote] → [Name, Tags, Status, Date, Score, TestNote]. DOM ths re-rendered in matching order. No console errors.
+- The fix in TableView.tsx:159-181 + `reorderDatabaseProperties` works end-to-end. Closes I-5301/I-5300.
+
+### B-5401 — B-5305 calendar toast re-verified (acceptance, ok)
+- Steps: at /app/calendar (May 2026) dragged `cal-event-row-row_mp3nmhann55g` (DB row, date 2026-05-13) onto `day-2026-05-20`. Listened for `window` "toast" event.
+- Observed: toast event fired with `detail === "Reschedule database rows from the DB calendar view"`. Row's date value (`prop_mp3lhvrx8mfpeiij`) stayed at "2026-05-13" — beforeDate==afterDate, unchanged. moveCalendarEvent never executed.
+- The early-return-with-toast branch at app.calendar.tsx:184-187 fires correctly.
+
+### B-5402 — Title column drop-refusal works (acceptance, ok)
+- Steps: title `th[data-property-id="prop_mp3lhvrx9qtr7nk5"]` reports `draggable === false`, so dragstart on title yields no `application/x-property-id` payload. Synthesized a drop on the Status header anyway.
+- Observed: `properties` array unchanged before/after. Confirms TableView.tsx:162 `draggable={property.type !== "title"}` and the `if (property.type === "title") return;` guard in `onDragStart` both fire, leaving the title pinned in the sticky-left slot.
+
+### B-5403 — AI panel via `ib-ai` event + send round-trip works (acceptance, ok)
+- Steps: dispatched `open-ai-chat-with` with `{selected:"integration testing notes", pageTitle:"QA Page"}`. Panel opened (`ai-input` rendered). Pre-filled value was `On page "QA Page", help me with: "integration testing notes"`. Typed "Tell me about meeting notes", clicked `ai-send`.
+- Observed: `ai-msg-0` is user with the typed text; `ai-msg-1` is assistant starting with `Based on your workspace, here's what I found about "Tell me about meeting notes"`. pseudoAnswer search ran and the reply rendered through MarkdownText. Credits decremented (consumeAICredits(5)).
+
+### B-5404 — AI multi-line markdown renders bold/italic/list (acceptance, ok)
+- Steps: seeded `notion-clone:ai-chat:<uid>` with `[{role:"assistant",content:"**bold**\n*ital*\n- item"}]`, reloaded, then opened the AI panel.
+- Observed: `ai-msg-0` HTML contains `<strong>bold</strong>`, `<em>ital</em>`, `<ul class="list-disc"><li>item</li></ul>`. Newlines split into separate `<div>`s within the `whitespace-pre-wrap space-y-1` wrapper. InlineMarks + InlineText (AIChat.tsx:14-74) parse line-by-line correctly.
+
+### B-5405 — Cmd+K query "the" returns lowercase-title/body matches (acceptance, ok)
+- Steps: `open-command-palette` event, typed "the" into `command-input`.
+- Observed: 4 page results — Getting Started, Roadmap Q3, Project brief, "plan the next quarter". Matches come from both title (lowercase substring per `allMatch`) and body block contents (stripHtml lowercase). Word-token loop in CommandPalette.tsx:42-63 honors the case-insensitive contract.
+
+### B-5406 — Move-to-teamspace from "Other" section works (acceptance, ok)
+- Steps: navigated to `/app/p/pg_b4600_orphan` (a root, teamspaceId=null page from the "Other" bucket). Opened `page-options`, clicked `page-opt-move-ts_mp2s8a5x6ku00yjn` (Test Teamspace).
+- Observed: `state.pages.pg_b4600_orphan.teamspaceId` updated from `null` → `ts_mp2s8a5x6ku00yjn`. Cascade fn `movePageToTeamspace` triggered. After cleanup the page was reset back to null.
+
+### B-5407 — AI chat clears via `ai-new-thread` (acceptance, ok)
+- Steps: opened AI panel with stored thread (single assistant msg). Clicked `[data-testid="ai-new-thread"]`.
+- Observed: `ai-msg-*` count goes from 1 → 0 immediately; the persist effect (AIChat.tsx:177-184) writes the empty array to `notion-clone:ai-chat:<uid>` on the next render. The "New" button label is exposed only at 10px uppercase — tiny but discoverable.
+
+### B-5408 — delete-forever-page leaves orphan comments behind (P3, open)
+- Steps: created `pg_b5400_orphancmt_test` in trash with a comment `cmt_b5400_orphan` referencing its `pageId`. Visited /app/trash, clicked `delete-forever-pg_b5400_orphancmt_test`.
+- Observed: page record gone; comment record still in `state.comments` with `pageId: "pg_b5400_orphancmt_test"` pointing at the now-missing page. `permanentlyDeletePage` (store.ts:690-776) cascades blocks + dangling page-links but never touches comments.
+- Expected: delete (or at least flag) comments whose `pageId` is in the cascade set during permanent delete; otherwise these leak indefinitely and `Object.values(comments)` keeps growing.
+
+### B-5409 — DB date `is-empty` filter hides date-bearing rows correctly (acceptance, ok)
+- Steps: injected `{operator:"is-empty",propertyId:"prop_mp3lhvrx8mfpeiij"}` into view_mp3lhvrxts5dk1bx filters via state + StorageEvent. QA Form DB has 7 rows total (2 with date 2026-05-13, 5 empty).
+- Observed: tbody renders 6 trs — 5 matching rows + 1 add-row stub. Date-bearing rows `row_mp3nmhann55g` and `row_mp3oubgd3xy6` are correctly hidden. Filter logic in filter.ts:55-58 honors the date-prop empty contract.
+
+### B-5410 — Cmd+/ opens slash menu inside a callout's contenteditable (acceptance, ok)
+- Steps: on `/app/p/pg_mp2r871w150jzjkn` (Project brief), focused the contenteditable inside callout `blk_mp2r871xz978yenr`. Dispatched a `keydown` for `/` with `metaKey:true`.
+- Observed: `[data-testid="slash-menu"]` mounts. The slash menu is wired at the contenteditable level so callout children get the same affordance as ordinary paragraph blocks. Cmd+/ chord (in addition to plain `/`) works because the handler doesn't gate on absence of modifiers.

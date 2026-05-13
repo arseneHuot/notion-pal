@@ -771,7 +771,17 @@ export function permanentlyDeletePage(id: string) {
       }
     }
 
-    return { ...s, pages: newPages, blocks: newBlocks };
+    // Cascade-drop any comment that pointed at a deleted page or block
+    // (B-5408). Without this, `state.comments` retained orphans whose
+    // `pageId` referenced a missing page.
+    const newComments: typeof s.comments = {};
+    for (const [cid, c] of Object.entries(s.comments)) {
+      if (pagesToDelete.has(c.pageId)) continue;
+      if (c.blockId && !newBlocks[c.blockId]) continue;
+      newComments[cid] = c;
+    }
+
+    return { ...s, pages: newPages, blocks: newBlocks, comments: newComments };
   });
 }
 

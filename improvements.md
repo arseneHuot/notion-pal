@@ -1776,3 +1776,27 @@ Priority: high / medium / low.
 ### I-5306 — Cmd+K results should show breadcrumb on deeply-nested sub-pages (low, open)
 - Per B-5309 the palette already finds level-4 children correctly. Today the item shows only the page title. Adding a "Engineering › L1 › L2 › L3 ›" prefix (or a small `data-testid="cmd-breadcrumb-<id>"` line under the title) would disambiguate sub-pages that share a title with another page's child.
 
+## 2026-05-13 — Test agent batch (I-5400 series)
+
+### I-5400 — Permanent-delete should cascade comments (medium, open)
+- See B-5408. `permanentlyDeletePage` (store.ts:690-776) cleans pages, blocks, and dangling page-links but ignores `state.comments`. Long-running workspaces accumulate orphan comments whose `pageId` no longer resolves; the comments inspector at any future point will surface "Comment on missing page" entries.
+- Fix: at the end of `permanentlyDeletePage`, iterate `state.comments` and drop entries with `pageId` in `pagesToDelete`. Mirror the same cleanup for `blockId` when the block has been cascaded out (already in the per-page block sweep).
+
+### I-5401 — Date column "is-empty" filter could show a visual hint above the table (low, open)
+- The filter works (B-5409) but when the empty-filter hides every date-bearing row, users get no in-table indication of why rows disappeared. A small "Filtered: 5 rows match (Date is empty)" stripe above the table — similar to Notion's filter chip count — would make the affordance discoverable.
+
+### I-5402 — AI panel `ai-input` should retain pre-filled context after `ai-new-thread` (low, open)
+- After B-5407 clears the thread, the pre-fill triggered by `open-ai-chat-with` is also wiped. If a user clicks "New" by accident, the parent-page context is lost. Suggest holding the last `{selected,pageTitle}` payload in a small ref so we can re-populate the input on the next message.
+
+### I-5403 — Cmd+/ inside a callout could surface callout-specific commands first (low, open)
+- B-5410 confirms the slash menu opens. Today it offers the full block-type list including "callout" itself (which would nest a callout-in-callout, a confusing UX). When the focused contenteditable lives inside a callout, demote or hide "callout" / "columns" from the top of the menu and surface emoji-change / convert-to-text instead.
+
+### I-5404 — Title `<th>` should expose a clear "not draggable" affordance (low, open)
+- Per B-5402 the title column refuses drags silently. The cursor over the title header is still `cursor-default`, indistinguishable from "draggable but you missed". Add `cursor-not-allowed` on the title `<th>` (or just `cursor-text`) so the affordance signals "this column is pinned".
+
+### I-5405 — Move-to-teamspace menu should group teamspaces by current location (low, open)
+- B-5406 shows the move works for orphan ("Other") pages, but the menu lists every teamspace alphabetically including the one the page already lives in (when applicable). Mark the current teamspace with a small "current" badge and grey out / remove its menu item so users don't accidentally re-apply the same value (which is a no-op but feels like a misclick).
+
+### I-5406 — AI markdown renderer should support ordered/unordered list nesting (low, open)
+- B-5404 confirms top-level `- item` works. Trying multi-level indent (e.g. `- a\n  - b`) currently flattens to a single-level list — the bullet regex matches both but the second never becomes a child `<li>`. Implementing depth via leading-space count would close the gap with most chat-assistant renderers.
+
