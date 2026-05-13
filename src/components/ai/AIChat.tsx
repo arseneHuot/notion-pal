@@ -151,11 +151,20 @@ export function AIChat() {
         setInput(quoted);
       }
     }
+    function onKey(e: KeyboardEvent) {
+      // Cmd/Ctrl+J toggles the AI panel (Notion-style shortcut, B-4119).
+      if ((e.metaKey || e.ctrlKey) && (e.key === "j" || e.key === "J")) {
+        e.preventDefault();
+        setOpen((v) => !v);
+      }
+    }
     window.addEventListener("open-ai-chat", show);
     window.addEventListener("open-ai-chat-with", showWith);
+    window.addEventListener("keydown", onKey);
     return () => {
       window.removeEventListener("open-ai-chat", show);
       window.removeEventListener("open-ai-chat-with", showWith);
+      window.removeEventListener("keydown", onKey);
     };
   }, []);
 

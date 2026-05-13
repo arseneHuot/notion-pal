@@ -203,7 +203,7 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
   return (
     <div>
       <div
-        className={`group flex items-center pr-1 rounded text-sm ${active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent"}`}
+        className={`group flex items-center pr-1 rounded text-sm cursor-grab active:cursor-grabbing ${active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent"}`}
         style={{ paddingLeft: depth * 12 + 6 }}
         draggable
         data-page-id={page.id}
