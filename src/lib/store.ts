@@ -1462,7 +1462,10 @@ export function resolveComment(id: string) {
   setState((s) => {
     const c = s.comments[id];
     if (!c) return s;
-    return { ...s, comments: { ...s.comments, [id]: { ...c, resolved: true, updatedAt: Date.now() } } };
+    // Toggle so users can un-resolve a previously-resolved comment from the
+    // same button (B-3906). The Comments pane reflects the new state via the
+    // "Resolve" / "Resolved" button label.
+    return { ...s, comments: { ...s.comments, [id]: { ...c, resolved: !c.resolved, updatedAt: Date.now() } } };
   });
 }
 

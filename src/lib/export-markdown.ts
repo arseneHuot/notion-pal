@@ -81,7 +81,7 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const children = Object.values(blocks)
         .filter((cb) => cb.parentId === b.id)
         .sort((a, c) => a.order - c.order);
-      const childMd = children.map((c) => blockToMarkdown(c, blocks, depth + 1)).join("\n");
+      const childMd = children.map((c) => blockToMarkdown(c, blocks, depth + 1, pages)).join("\n");
       return `<details>\n<summary>${head}</summary>\n\n${childMd}\n</details>`;
     }
     case "callout": {
@@ -110,12 +110,20 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
     }
     case "bookmark":
     case "embed": {
-      const e = b as Extract<Block, { type: "embed" | "bookmark" }>;
+      const e = b as Extract<Block, { type: "embed" | "bookmark" }> & {
+        bookmarkTitle?: string;
+        bookmarkDescription?: string;
+      };
       if (!e.url) return `<!-- (empty ${b.type} block) -->`;
-      // Emit a labeled link so a "bookmark" / "embed" round-trip is
-      // recognizable in the exported markdown (B-3604 / I-3600).
-      const label = e.caption?.trim() || (b.type === "bookmark" ? `🔖 ${e.url}` : `↗ ${e.url}`);
-      return `[${label}](${e.url})`;
+      // Prefer richer metadata when present (Notion-style bookmark cards
+      // carry title + description). Fall back to caption, then a tagged URL.
+      const title = e.bookmarkTitle?.trim() || e.caption?.trim();
+      const label = title || (b.type === "bookmark" ? `🔖 ${e.url}` : `↗ ${e.url}`);
+      const linkLine = `[${label}](${e.url})`;
+      if (e.bookmarkDescription?.trim()) {
+        return `${linkLine}\n> ${e.bookmarkDescription.trim().replace(/\n/g, "\n> ")}`;
+      }
+      return linkLine;
     }
     case "equation": {
       const content = ((b as { content?: string }).content ?? "").trim();
@@ -167,7 +175,7 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
         out.push(`<!-- column -->`);
         for (const cid of blockIds) {
           const cb = blocks[cid];
-          if (cb) out.push(blockToMarkdown(cb, blocks, depth));
+          if (cb) out.push(blockToMarkdown(cb, blocks, depth, pages));
         }
       }
       return out.join("\n");
@@ -176,7 +184,7 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const children = Object.values(blocks)
         .filter((cb) => cb.parentId === b.id)
         .sort((a, c) => a.order - c.order);
-      return children.map((c) => blockToMarkdown(c, blocks, depth)).join("\n");
+      return children.map((c) => blockToMarkdown(c, blocks, depth, pages)).join("\n");
     }
     case "synced-block-ref": {
       const ref = b as Extract<Block, { type: "synced-block-ref" }>;
@@ -185,7 +193,7 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const children = Object.values(blocks)
         .filter((cb) => cb.parentId === source.id)
         .sort((a, c) => a.order - c.order);
-      return children.map((c) => blockToMarkdown(c, blocks, depth)).join("\n");
+      return children.map((c) => blockToMarkdown(c, blocks, depth, pages)).join("\n");
     }
     case "button": {
       const bb = b as Extract<Block, { type: "button" }>;

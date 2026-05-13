@@ -1478,3 +1478,22 @@ Priority: high / medium / low.
 ### I-3804 — `prop-sort-clear-<id>` only renders for sorted prop (low, doc)
 - See B-3820. Document that the testid is conditional in the prop-header menu. Automation should `click prop-header-<id>` first, then check whether `prop-sort-clear-<id>` exists before asserting it can be clicked.
 
+## 2026-05-13 — QA agent iteration I-3900
+
+### I-3900 — Public form: required-field label needs visual indicator (low, open)
+- See B-3903. When a property has `required: true`, the rendered `<label>` text is just "Name" (no `*` or "Required" hint). Users only learn the field is required after a failed submit. Add a trailing red `*` or muted "(required)" suffix when `prop.required` is true.
+
+### I-3901 — Public form: tab through inputs lacks accessible labels (low, open)
+- Inputs have no `name` attribute, no `id`, no `aria-labelledby`. The label/input association is purely visual (DOM order). Screen readers will read fields as "blank" with no field name. Wrap inputs inside `<label>` or pair `<label htmlFor>` + `<input id>` + name to fix.
+
+### I-3902 — Markdown export: bookmark should use bookmarkTitle / description (medium, open)
+- See B-3914. Today the exporter emits `[🔖 <url>](<url>)`. Even though the data model carries `bookmarkTitle` and `bookmarkDescription`, neither appears in output. Suggested format:
+  - If title: `[**<title>**](<url>) — <description>` (or just `[<title>](<url>)`)
+  - Else fall back to URL.
+
+### I-3903 — Markdown export: subpage should at least emit a heading + link (medium, open)
+- See B-3915. Currently `<!-- subpage -->` is a placeholder. Surface the child's title and a relative link (`### [Child page 3914](child-page-3914.md)`), and consider an "Include subpages" toggle that recursively inlines child blocks.
+
+### I-3904 — Comments: when resolved, the resolve button needs to flip to "Re-open" and actually unresolve (medium, open — dup of I-204 but with a concrete bug behind it)
+- See B-3906. The fix is twofold: (1) read `resolved` and render the alternate label/icon when true; (2) the click handler must call the unresolve mutation (toggle, not set). Right now the click on a resolved comment is a no-op.
+

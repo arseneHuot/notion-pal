@@ -4706,3 +4706,73 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3803 — Show-resolved toggle missing testid — fixed (commit 51aba2c)
 - Fix: the existing "Show resolved" checkbox in PageComments now has `data-testid="show-resolved-toggle"`. E2E can flip it to reach resolved comments for editing.
+
+## 2026-05-13 — QA agent iteration B-3900
+
+### B-3900 — B-3815 verified fixed (P0, fixed — acceptance)
+- Navigated `/form/db_mp2qmu4d1va6knov/view_mp2ry265swv12c04`. Typed `QA-3900-<ts>` into the first INPUT (no `type` attribute, label "Name"). Clicked `public-form-submit`.
+- Result: `[data-testid="public-form-thanks"]` appeared, `databases[dbId].rows` went 5 → 6, the new row's `values["prop_mp2qmu4d010rz75j"]` matched the typed text exactly.
+- `createdBy: "public-form"` on the new row — correct.
+
+### B-3901 — B-3817 verified fixed (P1, fixed — acceptance)
+- `document.querySelector('[data-testid="public-form-submit"]').closest('form')` returns the FORM element with `data-testid="public-form"`. The submit button is `type="submit"` and lives inside the form. `form.requestSubmit()` triggers a row insert + Thanks panel (confirming Enter-in-title would submit too).
+- Caveat: dispatching a synthetic KeyboardEvent("keydown", "Enter") on the title input does NOT trigger submit — that's a JSDOM/browser-spec behavior (synthetic key events don't fire native form submission). In a real browser, pressing Enter in a single-line input submits because the form is native. The fix is correct.
+
+### B-3902 — B-3803 verified fixed (P2, fixed — acceptance)
+- `[data-testid="show-resolved-toggle"]` exists in PageComments. (See iteration B-39xx below for behavior validation.)
+
+### B-3903 — Public form required-field validation works (P2 → fixed, new acceptance)
+- Marked title prop `required: true` directly in localStorage and reloaded. Submitted empty: `"Name is required."` appears in the form, row count did not increment, `public-form-thanks` did not appear.
+- Gap: the label "Name" has no asterisk/visual "required" indicator. See I-3900 below.
+
+### B-3904 — Public form select-field value persists on submit (P3 → fixed, I-3603 closes)
+- Set Status `<select>` to opt_mp2qmu4durv3zurg ("In progress") + typed a title + `form.requestSubmit()`. New row stored `values["prop_mp2qmu4drjrtqmer"] === "opt_mp2qmu4durv3zurg"`. Confirms I-3603 fixed (select persistence works for status-typed fields).
+
+### B-3905 — Comment delete cascades to replies (P3, fixed — acceptance)
+- Posted parent + 2 replies on `pg_mp2pz5zw6oflgc0j`. Verified all 3 in `data.comments` with `parentId` chain.
+- Clicked `[data-testid="comment-delete-cmt_mp3kt7d4njalusi6"]` (parent). After delete: 0 of the 3 remained in `data.comments`.
+- Cascade works. (Stub passes the original delete-cascade contract.)
+
+### B-3906 — Resolved comments: edit works, but resolve button is one-way (P2, open — re-confirms I-204/B-3813)
+- Posted `Resolve me B-3906`, clicked `resolve-<id>`. Comment vanishes from default pane. Toggled `show-resolved-toggle` ON → row reappears with class `opacity-50`. Clicked `comment-edit-<id>` → `comment-edit-input-<id>` textarea appears with original content. Saved new content → `data.comments[id].content` updated AND `resolved` stayed true.
+- BUG: With resolved=true, the `resolve-<id>` button text reads "Resolved" but clicking it DOES NOT toggle resolved back to false (clicked twice; both times `resolved: true` persisted). No way to un-resolve a resolved comment short of deleting it. Aligns with I-204 ("Resolved" reads as status, not action) — but worse: action is dead. Recommend: when resolved, render the button as "Re-open" or "Unresolve" and actually toggle the field.
+- Severity P2 because the workaround is delete+re-post.
+
+### B-3907 — Calendar event chips STILL not draggable (P2, open — B-2907/B-3513/B-3514 still open)
+- Repro: `/app/calendar`, 2 events found in `data.calendarEvents` rendered into `day-2026-05-13`. Each chip is a `<div>` (not draggable element), has no `data-testid`, `el.draggable === false`. No `cal-event-<id>` testid. Drag-reschedule remains unimplemented.
+
+### B-3908 — Cmd+K open/close 5 rapid cycles (acceptance, fixed)
+- `/app/calendar` with 101 pages + 141 blocks in workspace. 5 keydown(meta+k) + Escape cycles, each ~52ms (51.1, 52.5, 52.5, 52.7, 55.3). Palette opens, Escape closes consistently. No regression.
+
+### B-3909 — Trash + restore-db round trip (acceptance)
+- Marked `db_mp3jj2jnavmaxi0e` as `isInTrash=true` in localStorage, navigated `/app/trash`. `restore-db-db_mp3jj2jnavmaxi0e` testid renders along with `trash-db-` and `delete-forever-db-`. Clicked restore — `isInTrash` flipped to false. Parent page `pg_qa_db_uhgak1` (title "QA DB Test") visible in sidebar again. Round trip clean.
+
+### B-3910 — Hide columns + chip unhide + re-hide (acceptance)
+- On `db_mp2qmu4d1va6knov` table view, opened prop-header on Status → clicked `prop-hide-prop_mp2qmu4drjrtqmer`. Chip `hidden-cols-chip-view_mp2qmu4djdr3pyti` appeared reading "1 column hidden(Status) Show all". Clicked "Show all" → chip gone. Re-hid → chip back. Show all again → chip gone. State stable across the cycle.
+
+### B-3911 — AI input STILL single-line (B-3210/B-3806 still open)
+- Opened `/app/db/...` with `ai-btn`. `[data-testid="ai-input"]` is `<input>` (not textarea), placeholder "Ask anything...". Pressing Enter still submits as single line, Shift+Enter cannot insert newline. Recommend swap to autosizing `<textarea>`.
+
+### B-3912 — Sort cycle asc → desc → clear on title prop (acceptance)
+- prop-header on `prop_mp2qmu4d010rz75j`. Clicked `prop-sort-asc-` → view.sorts = [{direction:'asc',propertyId:...}]. Re-opened, clicked `prop-sort-desc-` → desc. Re-opened — `prop-sort-clear-` testid present (because sort is active). Clicked → view.sorts = []. Aligns with B-3820 design.
+
+### B-3913 — `view-rename-<id>` rename flow uses in-app input, not native prompt (acceptance)
+- Clicked `view-menu-view_mp2qmu4djdr3pyti` → menu showed `view-rename-`, `view-delete-`, `view-addprop-`. Clicked rename → `view-rename-input-view_mp2qmu4djdr3pyti` input appeared with current name. Typed "Renamed-3907", pressed Enter → view.name updated. Restored to "All" via direct write. Good — no native prompt.
+
+### B-3914 — Markdown export bookmark uses URL only, ignores bookmarkTitle (P2, open — re-confirms I-3600)
+- Repro: built a page with a bookmark block `{url: 'https://example.com', bookmarkTitle: 'Example site', bookmarkDescription: 'Hello'}`. Triggered `page-opt-export-md`.
+- Output: `[🔖 https://example.com](https://example.com)` — the title and description are dropped, only the URL appears as both link text and href.
+- Expected: emit `[Example site](https://example.com)` (title as link text) or include the description on the next line.
+- Severity P2: bookmark export is rendered but data is lost.
+
+### B-3915 — Markdown export of subpage emits only an HTML comment (P2, open)
+- Same page included a `subpage` block referencing child page "Child page 3914". Export wrote `<!-- subpage -->\n` and nothing else — neither the child page title, nor a markdown link/heading, nor the inlined child content.
+- Expected: at minimum `[Child page 3914](child-page-3914.md)` (link to a sibling export) or an inline heading + children, like Notion's "include subpages" option.
+- Severity P2. Equation block however correctly emitted `$$\nE = mc^2\n$$`.
+
+### B-3916 — Unauthenticated /app redirects to /auth (acceptance)
+- Wiped `sb-...-auth-token` from localStorage and cleared `notion-clone:global.currentUserId`, then `location.href = '/app'`. Page redirected to `/auth`, `document.title === 'Sign in — NotionClone'`. Re-signing in restored normal workspace.
+- Also verified `/app/p/pg_mp2pz5zw6oflgc0j` direct deep link while signed out → also redirected to `/auth`. Permissions gate works for nested page routes too.
+
+### B-3917 — Public form Enter-to-submit verified structurally (acceptance, B-3817 reinforces)
+- The form has 3 visible text/number/date inputs + 1 `button[type="submit"]` inside the `<form>` wrapper. Per HTML spec, this guarantees Enter in any single-line input fires `formdata` → `submit`. Manual `form.requestSubmit()` succeeded earlier (B-3901). Synthetic KeyboardEvent doesn't replicate Enter-submit, but that's a browser quirk — real users get implicit submission.
