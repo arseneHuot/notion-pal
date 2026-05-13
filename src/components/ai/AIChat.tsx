@@ -306,20 +306,30 @@ export function AIChat() {
           send();
         }}
       >
-        <div className="flex gap-2">
-          <input
+        <div className="flex gap-2 items-end">
+          <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              // Belt-and-suspenders: also handle Enter directly in case the
-              // form submit path is intercepted by a parent.
+              // Enter submits, Shift+Enter inserts a newline (Notion / Slack
+              // convention). The form's onSubmit handles validation.
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 send();
               }
             }}
-            placeholder="Ask anything..."
-            className="flex-1 bg-background border border-input rounded px-2 py-1 text-sm"
+            placeholder="Ask anything... (Shift+Enter for newline)"
+            rows={1}
+            className="flex-1 bg-background border border-input rounded px-2 py-1 text-sm resize-none min-h-[32px] max-h-40 overflow-y-auto"
+            style={{ height: "auto" }}
+            ref={(el) => {
+              // Auto-grow up to ~6 lines so multi-line prompts stay visible
+              // without a scrollbar until they overflow.
+              if (el) {
+                el.style.height = "auto";
+                el.style.height = Math.min(160, el.scrollHeight) + "px";
+              }
+            }}
             data-testid="ai-input"
           />
           <button

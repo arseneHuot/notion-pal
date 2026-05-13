@@ -4785,3 +4785,23 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3915 — Sub-page links inside columns/toggles/synced lost target metadata — fixed (commit 447acfb)
 - Fix: `pages` arg now threaded through every recursive blockToMarkdown call (toggle children, columns, synced-block, synced-block-ref). Nested sub-page links now resolve title + href correctly instead of emitting bare "Sub-page".
+
+## 2026-05-13 — Iteration round (B-4000+)
+
+### B-4000 — Resolve toggle round-trip verified (acceptance for B-3906)
+- Posted `cmt_mp3lddy0o8438jcy`, opened comments panel, toggled `show-resolved-toggle` on to surface resolved bin. Clicked `resolve-<id>` (label "Resolved") → store flipped `resolved:true→false`, label flipped to "Resolve". Clicked again → `false→true`, label "Resolved". Both store mutation and DOM label change confirmed bidirectional. Closes B-3906.
+
+### B-4001 — Bookmark export with title + description verified (acceptance for B-3914)
+- Created bookmark block `{url:'https://example.com', bookmarkTitle:'Doc', bookmarkDescription:'A description'}`. Called `pageToMarkdown(page, blocks, pages)`. Output exactly: `# QA Bookmark Export\n\n[Doc](https://example.com)\n> A description\n`. Title becomes link label, description below as blockquote — matches B-3914 spec.
+
+### B-4002 — Sub-page nested in toggle exports correctly (acceptance for B-3915)
+- Created parent page with toggle block, sub-page child pointing at "Child Page Title". Export emitted `<details>\n<summary>My Toggle</summary>\n\n📄 [Child Page Title](/app/p/pg_mp3lgqvzgv27aq6p)\n</details>` — the icon, title, and `/app/p/<id>` route are intact inside the toggle. Closes B-3915.
+
+### B-4003 — Public form table view shows submitted row title + values (acceptance)
+- Created form view for `db_mp3lhvrxwl40mnbf`, navigated to `/form/<db>/<view>`, set title input via React `_valueTracker` reset + onChange, selected Status, set Score=42, clicked Submit. Row `row_mp3lkcn7xf38` appeared in store with `values.prop_qa_num:42, prop_mp3lhvrx9qtr7nk5:"QA Submitted Row"`. Navigating to `/app/db/<id>` rendered `cell-title-<row>-<prop>` input.value="QA Submitted Row" and `cell-number` value=42. End-to-end success page also showed "Thanks for submitting!".
+
+### B-4004 — Public form required title validation (acceptance)
+- On same form, left title empty and set Score=99 only. Clicked Submit → error text "Name is required." rendered, no row added (`rows.filter(databaseId===dbId).length` unchanged). Required-field gating works when title prop is visible per `form.$dbId.$viewId.tsx:117`.
+
+### B-4005 — Public form Enter-to-submit (acceptance)
+- Filled title field via React props.onChange (simulating real keystroke), called `form.requestSubmit()` on the wrapping form element. Row count went from 1 → 2, page transitioned to "Thanks for submitting!". `form.requestSubmit()` is exactly what the browser fires when Enter is pressed in a single-line input inside a `<form>` with a single submit button, so Enter-to-submit is operational. Note: synthetic `KeyboardEvent('Enter')` does NOT trigger submission in Chromium — that's expected browser behavior, not a bug.
