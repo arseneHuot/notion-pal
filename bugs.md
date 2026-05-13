@@ -4873,3 +4873,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-2907 / B-3513 / B-3514 / B-4010 / B-4011 — Calendar event drag-reschedule — fixed (commit 527cd89)
 - Fix: month-grid day cells now have `dragover` + `drop` handlers reading `application/x-cal-event-id`. Event chips are `draggable={e.source === "calendar"}` and dispatch the event id on `dragstart`. New store action `moveCalendarEvent(id, dayKey)` updates the event's `start` to the dropped day while preserving its time-of-day. Verified live: dragging a chip onto a cell 5 days forward updates the event so its local-time YYYY-MM-DD key matches the drop target.
 - Each chip exposes `cal-event-<id>` testid + a "Drag to reschedule" tooltip.
+
+### B-3521 / B-3522 / B-4014 — Mobile sidebar UX — fixed (commit bf30b92)
+- Fix: app.tsx now watches `useRouterState.location.pathname` and auto-closes the sidebar drawer on route change when `matchMedia("(max-width: 768px)").matches`. Added a global keydown listener so Escape closes the drawer on mobile. The drawer infrastructure (sidebar-scrim backdrop + max-md:absolute overlay + open-sidebar hamburger) was already in place — this adds the missing auto-close + Escape behaviours.
