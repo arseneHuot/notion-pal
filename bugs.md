@@ -6538,3 +6538,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7004 — DB route crash on missing row.values — fixed (commit 1d79834) — P1
 - Fix: `loadFromStorage` + cross-tab listener normalize `row.values: {}` for any malformed row. Optional chaining at every `.values[…]` read site as belt-and-suspenders. ErrorBoundary no longer trips on synthetic / imported rows.
+
+### B-7000 — Cross-tab stale event clobbered newer writes — fixed (commit 9e4f323) — P1
+- Fix: `setState` stamps `_lastWriteAt = Date.now()`. Storage event listener + BroadcastChannel handler skip incoming snapshots whose `_lastWriteAt` is strictly older than ours. Verified: marker.isFavorite=true survives a stale (60s old) storage event carrying isFavorite=false.
