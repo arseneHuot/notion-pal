@@ -68,11 +68,21 @@ function PublicFormPage() {
     for (const r of rules) for (const pid of r.showPropertyIds) hidden.add(pid);
     for (const rule of rules) {
       const v = values[rule.ifPropertyId];
+      const target = rule.value;
       let pass = false;
-      if (rule.operator === "equals") pass = Array.isArray(v) ? v.includes(rule.value as never) : v === rule.value;
-      else if (rule.operator === "not-equals") pass = Array.isArray(v) ? !v.includes(rule.value as never) : v !== rule.value;
+      if (rule.operator === "equals") pass = Array.isArray(v) ? v.includes(target as never) : v === target;
+      else if (rule.operator === "not-equals") pass = Array.isArray(v) ? !v.includes(target as never) : v !== target;
       else if (rule.operator === "is-empty") pass = v == null || v === "" || (Array.isArray(v) && v.length === 0);
       else if (rule.operator === "is-not-empty") pass = !(v == null || v === "" || (Array.isArray(v) && v.length === 0));
+      // B-2203: extra operators beyond the schema-strict union.
+      else if ((rule.operator as string) === "greater-than" || (rule.operator as string) === "greaterThan") {
+        pass = Number(v) > Number(target);
+      } else if ((rule.operator as string) === "less-than" || (rule.operator as string) === "lessThan") {
+        pass = Number(v) < Number(target);
+      } else if ((rule.operator as string) === "contains") {
+        if (Array.isArray(v)) pass = v.some((x) => String(x).toLowerCase().includes(String(target ?? "").toLowerCase()));
+        else pass = typeof v === "string" && v.toLowerCase().includes(String(target ?? "").toLowerCase());
+      }
       if (pass) for (const pid of rule.showPropertyIds) hidden.delete(pid);
     }
     return fields.filter((p) => !hidden.has(p.id));

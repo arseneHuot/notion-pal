@@ -30,11 +30,18 @@ export function FormView({ databaseId, viewId }: { databaseId: string; viewId: s
     for (const pid of referenced) hiddenByRules.add(pid);
     for (const rule of conditionalRules) {
       const v = values[rule.ifPropertyId];
+      const target = rule.value;
       let pass = false;
-      if (rule.operator === "equals") pass = Array.isArray(v) ? v.includes(rule.value as never) : v === rule.value;
-      else if (rule.operator === "not-equals") pass = Array.isArray(v) ? !v.includes(rule.value as never) : v !== rule.value;
+      if (rule.operator === "equals") pass = Array.isArray(v) ? v.includes(target as never) : v === target;
+      else if (rule.operator === "not-equals") pass = Array.isArray(v) ? !v.includes(target as never) : v !== target;
       else if (rule.operator === "is-empty") pass = v == null || v === "" || (Array.isArray(v) && v.length === 0);
       else if (rule.operator === "is-not-empty") pass = !(v == null || v === "" || (Array.isArray(v) && v.length === 0));
+      else if ((rule.operator as string) === "greater-than" || (rule.operator as string) === "greaterThan") pass = Number(v) > Number(target);
+      else if ((rule.operator as string) === "less-than" || (rule.operator as string) === "lessThan") pass = Number(v) < Number(target);
+      else if ((rule.operator as string) === "contains") {
+        if (Array.isArray(v)) pass = v.some((x) => String(x).toLowerCase().includes(String(target ?? "").toLowerCase()));
+        else pass = typeof v === "string" && v.toLowerCase().includes(String(target ?? "").toLowerCase());
+      }
       if (pass) for (const pid of rule.showPropertyIds) hiddenByRules.delete(pid);
     }
   }

@@ -2920,3 +2920,115 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-2120 — Long-form paste perf is excellent (P3, info)
 - Steps: focus a text block contentEditable → execCommand("insertText", 10800 chars). Then a second pass with 20kb.
 - Observed: insert time 14ms (10kb) and 21ms (20kb); blocks[].content reflects exactly 10818/20005 chars after blur. No layout jank, no console errors caused by the paste itself.
+
+## 2026-05-13 03:30 — Test agent batch 23
+
+### B-2200 — Public form route `/form/<dbId>/<viewId>` works (P3, info — fixes B-2103)
+- Steps: visit `/form/db_dates_test/v_form`.
+- Observed: page renders with title "Test Form", 5 visible `public-form-field-*` testids (title, date, number, url, files) and one `public-form-submit` button. Hidden field `p_dms` correctly suppressed by the `equals 42` conditional rule on `p_dn`. Resolves B-2103 / I-2100.
+
+### B-2201 — Public form submission appends row to host user's database (P3, info)
+- Steps: fill `public-form-field-p_dt` ("Public form B-2200 submission"), `-p_dn` (42), `-p_dd` (2026-05-15), `-prop_mp34dfab3dc8` (https://example.com/b2200) → click `public-form-submit`.
+- Observed: row count in `localStorage.notion-clone:user:<uid>` → `rows[*].databaseId === "db_dates_test"` goes 5 → 6. New row has `createdBy: "public-form"`, `lastEditedBy: "public-form"`, `values` contains all four filled fields. Form route then renders `public-form-thanks` confirmation.
+
+### B-2202 — Public form conditional logic honored on equals/is-empty operators (P3, info — extends B-2101)
+- Steps: edit `views[v_form].conditionalLogic = [{ifPropertyId:"p_dn", operator:"equals", value:42, showPropertyIds:["p_dms"]}]` → reload `/form/db_dates_test/v_form` → type "42" into `p_dn`.
+- Observed: `p_dms` field appears live (without re-mount). Also verified `is-empty` operator: rule `{ifPropertyId:"p_dt", operator:"is-empty", showPropertyIds:["p_dms"]}` initially shows `p_dms` (title empty) and hides it after typing "hello".
+
+### B-2203 — Conditional-logic operators `greaterThan` / `contains` are silently no-ops (P2, fixed)
+- File: src/routes/form.$dbId.$viewId.tsx lines 72-75.
+- Steps: set rule `{operator:"greaterThan", value:50}` then type "60" into `p_dn`. Set `{operator:"contains", value:"admin"}` then type "admin test" into `p_dt`.
+- Observed: neither rule fires; only `equals`, `not-equals`, `is-empty`, `is-not-empty` are implemented. Schema documents more operators (or the in-app form-rule editor lets you select them), but at runtime they are dropped without warning. Either add the operators or reject unknown ones at save time.
+
+### B-2204 — Public form for a non-form view 404s correctly (P3, info)
+- Steps: visit `/form/db_dates_test/v_dates_list` (real db, real view, but type="list") and `/form/db_not_exists/v_x`.
+- Observed: both render the "Form not found / This form may have been removed or the link is wrong / Go home" empty state. Good.
+
+### B-2205 — Sub-page markdown export resolves linked page title + icon (P3, info — fixes B-1717)
+- Steps: `pageToMarkdown(pg_export_misc, blocks, pages)` where `blk_export_sub` is `type:"sub-page", pageId:"pg_export_subpage"`.
+- Observed: output contains `🌱 [Sub Child](/app/p/pg_export_subpage)` — icon from the target page, title from the target page, link to /app route. Resolves I-1707.
+
+### B-2206 — Sub-page export with missing target page emits generic "Sub-page" link (P3, info)
+- Steps: synth block `{type:"sub-page", pageId:"pg_does_not_exist"}` → markdown export.
+- Observed: line becomes `📄 [Sub-page](/app/p/pg_does_not_exist)` — graceful fallback but the link is dead. Acceptable; would be nicer to either skip or annotate "(missing)".
+
+### B-2207 — Empty-URL image block silently dropped from markdown (P3, fixed)
+- Steps: `pageToMarkdown(pg_edge_export, ...)` where `b_img_empty` has `url:""`.
+- Observed: image block produces 0 output. No placeholder, no `<!-- image -->`. With a valid url ("Complex Export Test" page) export emits `![](https://placekitten.com/200)` correctly. Probably intentional but worth noting — a partially-filled image block round-trip is destructive.
+
+### B-2208 — Public form `BigForm` renders all 32 field types and submission persists (P3, info)
+- Steps: visit `/form/db_bigform/v_bf_form` → 32 `public-form-field-p_big_*` testids appear; each input/select/checkbox-button matches the property type (text, number, select, multi-select, date, checkbox, url, email, tel, status). Fill 9 fields + one multi-select option → submit.
+- Observed: new row appears in `rows` with `databaseId: "db_bigform"`, `createdBy: "public-form"`, and `values` keyed by all filled props including the multi-select as an array `["o1"]`. Row count went 11 → 12.
+
+### B-2209 — Public form checkbox `onChange` driven by React synthetic; programmatic dispatch isn't recorded (P3, info)
+- Steps: in B-2208 toggled `p_big_5` checkbox via `Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'checked').set(el, true)` + `dispatchEvent(new Event('change'))`.
+- Observed: server-side row is missing `p_big_5: true`. The other inputs respond to the same synthetic-event recipe; checkbox seems to require React's synthetic-event path (no `onClick` handler attached). Manual user click is unaffected. Minor automation/QA gotcha; not a real-user bug.
+
+### B-2210 — Inbox `Mark as read` resolves the comment but the row stays until a manual reload (P2, fixed)
+- Steps: `/app/inbox` with an unresolved comment → click `inbox-resolve-cmt_<id>`.
+- Observed: localStorage `comments[*].resolved` flips to `true`, but the inbox list does NOT re-render — the row is still visible. After full page reload the list shows "All caught up! ✨". Likely a useStore selector missing `comments` dependency or `Inbox.tsx` reading from a stale closure.
+
+### B-2211 — useEffect dep-array size warning still fires on page load (P2, open — extends B-2110)
+- Steps: open any `/app/p/<pageId>` with rich content (Meeting notes, Misc Export, etc.) → check console.
+- Observed: 8+ consecutive `Warning: The final argument passed to %s changed size between renders. ... useEffect [[object Object], [object Object]] [[object Object], [object Object], [object Object]]` errors on the very first paint. Going 2 → 3 deps. No tests around the source effect; React 19 will turn this into a hard runtime error.
+
+### B-2212 — TanStack notFoundComponent missing on `/app` route (P3, info)
+- Steps: any in-app navigation that resolves to `/app` not-found path (observed during reload of a deleted page).
+- Observed: console emits `Warning: A notFoundError was encountered on the route with ID "/app", but a notFoundComponent option was not configured, nor was a router level defaultNotFoundComponent configured. Consider configuring at least one of these...`. Fix is one-line: pass `notFoundComponent` to `createRoute`.
+
+### B-2213 — Sidebar page rows still have no drag affordance (P2, open — extends B-2106)
+- Steps: `/app` → query `aside [draggable="true"]`.
+- Observed: 0 draggable elements. Sidebar rows (`expand-pg_*`, `page-menu-pg_*`, `page-new-pg_*`) are click-only. No HTML5 DnD wiring, no DnD library import in `Sidebar.tsx`. Notion's most-used drag target is still inaccessible.
+
+### B-2214 — Database table rows still have no drag handle (P2, open — extends B-2105)
+- Steps: visit `pg_mp33cd7d01u4huok` → inspect first `tbody tr` of the table view (4 rows).
+- Observed: 0 cells with `draggable="true"`, 0 `data-reorder-*` attributes, no row-handle testid. `rows.order` cannot be changed via UI today.
+
+### B-2215 — Calendar week-view event chip still not draggable (P2, open — extends B-2107)
+- Steps: `/app/calendar` → switch `main select` to "week" → inspect `[data-testid="week-day-2026-05-13"]`.
+- Observed: the colored chip `<div>` ("Wed event") inside the day cell has no `draggable` attribute. 7 week-day cells render, 1 event chip; no drag handlers in the WeekStrip path.
+
+### B-2216 — Comment-input has no reply / thread testids; data model lacks threading (P2, open)
+- Steps: open `comments-btn` panel on any page; query `[data-testid*="comment"]`. Examine `localStorage.comments[*]`.
+- Observed: only `comment-input`, `post-comment`, `close-comments`, `comments-btn`. All `comments[*]` rows have `parentId: null` and there is no `threadId` field. Source: `src/components/page/PageComments.tsx` has no `parentId` references. Threaded replies still unimplemented (last batches B-2050+).
+
+### B-2217 — AI chat still returns templated pseudo-answers; no LLM, no markdown rendering (P2, open — extends B-2109)
+- Steps: open `sidebar-ai` → type "python code" → `ai-send`.
+- Observed: response is the search-result template `Based on your workspace, here's what I found about "python code": 1. **Edge Export** — ⚠️ (relevance 1) ...`. Submitting "```python\\nprint(1)\\n```" also produces template output; no fenced-code-block parsing, no `<pre>` element in the rendered chat.
+
+### B-2218 — Public form does not persist sub-page / block content of the submitted row (P3, info)
+- Steps: B-2201 / B-2208 — inspect newly-created row.
+- Observed: `row.blocks = []` even though the host db has rows whose `blocks` array contains text blocks for inline expansion. Acceptable for now — public submission is "values only" — but worth mentioning if forms ever support a "comments / description" field.
+
+### B-2219 — Calendar event chip lives only in `calendarEvents`, not synced to rows of a date-bound db (P3, info)
+- Steps: `t.calendarEvents` has 3 entries; `t.databases.db_dates_test.views[v_dates_cal]` is a calendar view, but its rows are NOT shown on `/app/calendar` either.
+- Observed: `/app/calendar` only renders `calendarEvents.*` items. Database-driven calendar events should also appear; today there are two parallel sources (`calendarEvents` and db-row date columns) with no merge, breaking the "Two-way synced with database date properties" tagline shown atop the page.
+
+### B-2220 — Breadcrumb chrome IS present (revises B-2114) (P3, info)
+- Steps: open `/app/p/pg_export_subpage` (sub-page of `pg_export_misc`).
+- Observed: `<TopBar>` renders `[data-testid="breadcrumbs"]` with `breadcrumb-pg_export_misc → breadcrumb-pg_export_subpage` linked. Earlier B-2114 was wrong — the breadcrumb component does exist; what's missing is rendering ABOVE the page title (it's only in the top bar, which the prior tester missed). Closes that aspect of B-2114 / I-2111.
+
+### B-2221 — Board card drag between groups WORKS end-to-end (P3, info)
+- Steps: `db_a` board view → grab `board-card-r_a1` (group `g_a`) → drop onto `g_b` column → synthetic dragstart/dragover/drop with `text/x-row-id` payload.
+- Observed: `rows.r_a1.values.p_grp` updated from `"g_a"` → `"g_b"` in localStorage. Source `BoardView.tsx:46-53` reads `text/x-row-id` from dataTransfer and writes via `updateRow`. The relevant DnD interaction works for board view (only).
+
+### B-2222 — Trash → Restore round-trip works (P3, info)
+- Steps: `/app/p/<id>` → `page-options` → `page-opt-trash` → `/app/trash` → `restore-<id>`.
+- Observed: `pages[<id>].isInTrash` flips `false → true → false`. Trash list shows `📄 1:1 agenda` with timestamp "Trashed 13/05/2026 02:12:06", plus `restore-<id>` and `delete-forever-<id>` buttons.
+
+### B-2223 — Database table view renders 803 rows un-virtualized (P2, open, extends I-2012)
+- Steps: open `pg_perf500_test` → switch to db_a Main view (`db-view-v_a`).
+- Observed: `table tbody tr` count is 803. No virtualization, no pagination. Combined with sidebar's 30 page rows + 1037 board draggables on a sibling view, the page maintains noticeable input lag for slash menu open/close.
+
+### B-2224 — Page-options menu has `page-opt-trash` but no `page-opt-publish` / `page-opt-duplicate` testids (P3, info)
+- Steps: open page-options popover and inspect testids.
+- Observed: only `page-opt-trash`. Publish, duplicate, move-to, copy-link etc. either live on separate buttons (`share-btn` for publish) or have no QA hook. Document for the next test pass.
+
+### B-2225 — Formula property cell prints `#ERR: Unexpected token +` literally (P3, info)
+- Steps: db_a property `p_fx` has `expression: "1 + +"` (malformed). View row in table.
+- Observed: cell shows `#ERR: Unexpected token +` on every row (×803). Error mode is appropriate but the formula editor should let the user see a parser error inline rather than only in the cell.
+
+### B-2226 — Chart view "line" type renders correctly (P3, info)
+- Steps: db_a chart view → `chart-type-v_a_chart` → "line".
+- Observed: a `<svg class="recharts-surface">` with `g.recharts-cartesian-grid` + polyline ↗ path rendered cleanly. Donut, bar, line all functional. Chart UI is solid.
+

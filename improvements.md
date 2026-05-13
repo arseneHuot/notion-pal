@@ -1068,3 +1068,30 @@ Priority: high / medium / low.
 
 ### I-2111 — Page-level breadcrumb in chrome (low, open)
 - See B-2114. Render parent chain at the top of every `/app/p/<id>` page (above title). Helps with deep nesting and is already accessible in the page object graph.
+
+
+## 2026-05-13 03:30 — Test agent batch 23
+
+### I-2200 — Implement missing conditional-logic operators in public form route (high, open)
+- See B-2203. `src/routes/form.$dbId.$viewId.tsx:72-75` covers only `equals`, `not-equals`, `is-empty`, `is-not-empty`. Add `contains` (string includes), `greater-than` / `less-than` (numeric compare with `Number(v)`), and ideally `before` / `after` for date types. Reject unknown operators at view-save time so authoring is type-safe.
+
+### I-2201 — Re-render Inbox list when comments mutate (high, open)
+- See B-2210. The list shows stale comments after `inbox-resolve-*` is clicked; only refreshes after a full reload. Either select `comments` directly from the store (not the derived `notifications` snapshot) or wrap the list in `useStore` shallow subscriptions so the resolve mutation triggers a re-render.
+
+### I-2202 — Configure `notFoundComponent` on the `/app` route (low, open)
+- See B-2212. Pass `notFoundComponent: () => <NotFound />` (or `defaultNotFoundComponent` at the router level) so the warning stops and users see a friendly screen instead of TanStack's `<p>Not Found</p>`.
+
+### I-2203 — Public form: keep block-content / attachments column round-trippable (low, open)
+- See B-2218. If a property is `type:"files"` the form renders the input but submission writes empty array. Either remove unsupported types from the public form list or wire a real file-upload pipeline (e.g. to Supabase storage).
+
+### I-2204 — Wire "/app/calendar" to also surface database-row date events (medium, open)
+- See B-2219. The page tagline promises two-way sync with database date properties but only renders `calendarEvents.*`. Merge in `Object.values(rows)` whose db has at least one date-typed property and a calendar-view configured, mapped to the configured "date" property.
+
+### I-2205 — Sub-page export when target page is missing (low, open)
+- See B-2206. Fall back to either nothing (silently drop) or annotate `[Sub-page (missing)](#)` so the export doesn't carry a dead absolute /app/p link to a non-existent page.
+
+### I-2206 — Reply / thread model for comments (medium, open)
+- See B-2216. Add `parentId` (and optionally `threadId`) to the Comment type; render replies indented one level inside `PageComments.tsx`. Today every comment is top-level.
+
+### I-2207 — Allow public form route to optionally allow open / unauthenticated submissions but rate-limit them (low, open)
+- The route silently accepts unlimited POSTs to localStorage today. Once the server-side persistence lands, add a per-IP throttle, a Turnstile/captcha hook, or at minimum a "one submission per browser per minute" debounce.

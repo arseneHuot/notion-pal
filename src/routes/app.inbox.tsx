@@ -1,20 +1,22 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useStore, resolveComment } from "@/lib/store";
-import { useMemo } from "react";
 
 export const Route = createFileRoute("/app/inbox")({
   component: InboxPage,
 });
 
 function InboxPage() {
-  const comments = useStore((s) => s.comments);
+  // Select only the unresolved-comments array so React picks up the
+  // change immediately when resolveComment fires (B-2210). With the
+  // shallow-equality cache in useStore this returns a stable reference
+  // unless an item flipped resolved or was added/removed.
+  const items = useStore((s) =>
+    Object.values(s.comments)
+      .filter((c) => !c.resolved)
+      .sort((a, b) => b.createdAt - a.createdAt),
+  );
   const pages = useStore((s) => s.pages);
   const navigate = useNavigate();
-
-  const items = useMemo(
-    () => Object.values(comments).filter((c) => !c.resolved).sort((a, b) => b.createdAt - a.createdAt),
-    [comments],
-  );
 
   return (
     <div className="max-w-3xl mx-auto px-8 py-12">
