@@ -4104,3 +4104,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: `isInTrash` correctly set to `false`. `trashedAt` left at the stale timestamp (1778641383050 in this run).
 - Expected: also reset `trashedAt = null` on restore. Leaving the field populated risks confusing later audit logic.
 - Severity: P3 — data hygiene only.
+
+### B-3218 — Missing DB cell testids — fixed (commit b002171) — closes I-3208
+- Fix: PropertyEditor.tsx now emits `data-testid="cell-<type>-<row>-<prop>"` for formula, rollup, files, verification, unique-id, created-time, last-edited-time, created-by, last-edited-by. The cells were rendering all along — they just lacked testid markers so the tester's `[data-testid^="cell-"]` sweep filtered them out and concluded the types weren't wired.
+
+### B-3217 — close-ai and ai-send missing aria-labels — fixed (commit b002171)
+- Fix: AIChat.tsx adds `aria-label="Close AI chat"` to the X button and `aria-label="Send message"` to the submit button, with matching `title` attrs.
+
+### B-3221 — restore-DB didn't clear `trashedAt` — fixed (commit b002171)
+- Fix: TrashPage's restore-db click now passes `{isInTrash: false, trashedAt: null}` to `updateDatabase`, matching the page-restore behaviour.
