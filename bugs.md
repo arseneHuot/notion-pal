@@ -6451,3 +6451,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-6810 — Sidebar drag across teamspaces is rejected (verified, fixed)
 - Created two pages: A in `tsA`, B in `tsB` (different teamspaces). The Sidebar drop guard at `Sidebar.tsx:231` rejects the drop because `sourcePage.teamspaceId !== page.teamspaceId`. Additionally, even when bypassing the guard and calling `reorderSiblingPages(aId, bId)` directly, the page's `teamspaceId` stays on `tsA` — `reorderSiblingPages` operates on `sortOrder` only and doesn't reparent. Defense in depth confirmed.
 - Status: stable.
+
+### B-6802 — View-count badge over-counted on equals filter — fixed (commit 4edc358) — P1
+- Fix: InlineDatabase's per-view filter evaluator now delegates to the shared `applyFilters` instead of an inline switch. Operator aliases (`equals`/`not-equals`) and date-aware ops now behave identically across the rendering path and the badge. Verified: `equals` filter with 0 matches → badge "0/11".
