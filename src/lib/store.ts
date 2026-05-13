@@ -1408,9 +1408,23 @@ export function reorderDatabaseProperties(
         nextProps = [...without.slice(0, idx), source, ...without.slice(idx)];
       }
     }
+    // Also rewrite each view's `propertyOrder` to mirror the new global
+    // order. Without this, views that DO store their own `propertyOrder`
+    // would keep the stale order and ignore the user's drag-reorder
+    // (B-7503 fallout: now that TableView honors propertyOrder when set,
+    // the drag needs to update it).
+    const nextViews = (db.views ?? []).map((v) => {
+      if (!Array.isArray(v.propertyOrder) || v.propertyOrder.length === 0) return v;
+      const newOrder = nextProps.map((p) => p.id);
+      // Keep any unknown ids out (drops dangling), pick new global order.
+      return { ...v, propertyOrder: newOrder };
+    });
     return {
       ...s,
-      databases: { ...s.databases, [databaseId]: { ...db, properties: nextProps, updatedAt: Date.now() } },
+      databases: {
+        ...s.databases,
+        [databaseId]: { ...db, properties: nextProps, views: nextViews, updatedAt: Date.now() },
+      },
     };
   });
 }

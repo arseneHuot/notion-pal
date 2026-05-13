@@ -25,7 +25,28 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
   const rows = db.rows.map((r) => rowsMap[r]).filter((r) => r && !r.isInTrash);
   const filtered = applyFilters(rows, view.filters ?? [], db);
   const sorted = applySorts(filtered, view.sorts ?? [], db);
-  const visibleProps = db.properties.filter((p) => !(view.hiddenProperties ?? []).includes(p.id));
+  // Honor `view.propertyOrder` when set: take properties in the order they
+  // appear there, drop any dangling IDs, then append any properties not in
+  // the array (newly-added columns, schema additions). Falls back to the
+  // raw `db.properties` order when propertyOrder is empty / missing
+  // (B-7503).
+  const hiddenIds = view.hiddenProperties ?? [];
+  const visibleProps = (() => {
+    const order = view.propertyOrder ?? [];
+    if (order.length === 0) {
+      return db.properties.filter((p) => !hiddenIds.includes(p.id));
+    }
+    const byId = new Map(db.properties.map((p) => [p.id, p]));
+    const ordered: typeof db.properties = [];
+    for (const id of order) {
+      const p = byId.get(id);
+      if (p && !hiddenIds.includes(p.id)) ordered.push(p);
+    }
+    for (const p of db.properties) {
+      if (!order.includes(p.id) && !hiddenIds.includes(p.id)) ordered.push(p);
+    }
+    return ordered;
+  })();
 
   return (
     <div className="overflow-x-auto rounded border border-border">
