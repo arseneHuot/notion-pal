@@ -1836,3 +1836,20 @@ Priority: high / medium / low.
 
 ### I-5510 — Comment resolve toggle could show inline "Resolved by <user>" timestamp (low, open)
 - B-5510 confirms persistence. The "Resolved" button label is the only signal that the action stuck. Adding a tiny "Resolved 2 minutes ago" caption inside the comment row (using `updatedAt`) would communicate when/who without needing to hover. Mirrors Notion's resolved-by-user surface.
+
+## 2026-05-13 — Test agent batch (I-5600 series)
+
+### I-5600 — Breadcrumb should include teamspace name when page is at teamspace root (medium, open)
+- See B-5601. When a page has no parentId but lives in a teamspace, the TopBar breadcrumb collapses to just the page title. Mirror sidebar grouping by prefixing the teamspace (e.g. `Engineering › Welcome`). Could be rendered as a non-clickable subtle chip to disambiguate without adding navigation noise.
+
+### I-5601 — NewViewButton missing "Map" view type in dropdown (low, open)
+- See B-5609. `View["type"]` union includes `"map"` and the `add()` switch handles it (locationProperty fallback), but the dropdown literal at InlineDatabase.tsx:269 hardcodes the 8 other types. Either remove `map` from the union (and the switch case) or expose it in the dropdown. Currently a silent dead branch.
+
+### I-5602 — Cmd+K query could fuzzy-match emoji icons (low, open)
+- See B-5602. Emoji input to Cmd+K returns 0 results even when pages have emoji icons. Optional improvement: include `p.icon` in the search haystack so users can find a page by its emoji. Low priority because most searches are textual.
+
+### I-5603 — Preserve editor selection when closing Cmd+K (medium, open)
+- See B-5608. After Cmd+K open + Esc, focus snaps to `<body>` and the selection is empty. Save the previously-focused element + its Range on palette open, restore on close. Improves keyboard flow when the user opens Cmd+K mid-edit and dismisses without navigating.
+
+### I-5604 — Markdown export sub-page recursion toggle (medium, open)
+- See B-5604. Export only emits a link to the child page, not its content. Add an "include sub-pages" option (and a sensible depth limit) so a 3-deep A→B→C tree exports as one cohesive document. Notion exports a zip with one file per page; we could match that or inline under H2/H3.

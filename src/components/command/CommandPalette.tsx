@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useStore, createPage, toggleDarkMode } from "@/lib/store";
 import { useNavigate } from "@tanstack/react-router";
 import { Search, FileText, Plus, Trash, Settings, Sun, Moon, Sparkles, Calendar, Mail, Inbox } from "lucide-react";
@@ -14,19 +14,71 @@ export function CommandPalette() {
   const darkMode = useStore((s) => s.ui.darkMode);
   const blocks = useStore((s) => s.blocks);
 
+  // Track which editor element + range owned the selection when the palette
+  // opened. Restored on close so power-users keep their cursor / highlight
+  // (B-5608).
+  const savedEditorRef = useRef<HTMLElement | null>(null);
+  const savedRangeRef = useRef<Range | null>(null);
+
+  function captureSelection() {
+    const sel = typeof window !== "undefined" ? window.getSelection() : null;
+    if (!sel || sel.rangeCount === 0) {
+      savedEditorRef.current = null;
+      savedRangeRef.current = null;
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const node = range.startContainer;
+    const el = node.nodeType === Node.ELEMENT_NODE
+      ? (node as Element)
+      : node.parentElement;
+    const editor = el?.closest("[contenteditable]") as HTMLElement | null;
+    if (editor) {
+      savedEditorRef.current = editor;
+      savedRangeRef.current = range.cloneRange();
+    } else {
+      savedEditorRef.current = null;
+      savedRangeRef.current = null;
+    }
+  }
+
+  function restoreSelection() {
+    const editor = savedEditorRef.current;
+    const range = savedRangeRef.current;
+    if (!editor || !range) return;
+    editor.focus();
+    const sel = window.getSelection();
+    if (sel) {
+      try {
+        sel.removeAllRanges();
+        sel.addRange(range);
+      } catch {
+        // ignore if the range no longer applies
+      }
+    }
+    savedEditorRef.current = null;
+    savedRangeRef.current = null;
+  }
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "p")) {
         e.preventDefault();
-        setOpen((v) => !v);
+        setOpen((v) => {
+          if (!v) captureSelection();
+          else restoreSelection();
+          return !v;
+        });
         setQuery("");
         setActiveIndex(0);
       }
       if (e.key === "Escape" && open) {
         setOpen(false);
+        restoreSelection();
       }
     }
     function onCustomOpen() {
+      captureSelection();
       setOpen(true);
       setQuery("");
       setActiveIndex(0);
@@ -209,7 +261,10 @@ export function CommandPalette() {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-24" onClick={() => setOpen(false)}>
+    <div
+      className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center pt-24"
+      onClick={() => { setOpen(false); restoreSelection(); }}
+    >
       <div
         className="bg-popover border border-border rounded-lg shadow-xl w-[600px] max-h-[60vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}

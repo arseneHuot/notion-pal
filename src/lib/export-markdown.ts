@@ -157,6 +157,19 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const target = link.pageId ? pages[link.pageId] : undefined;
       const title = target?.title?.trim() || "Sub-page";
       const icon = target?.icon ?? "📄";
+      // For sub-pages, inline the target's content as a nested heading
+      // section (B-5604). Capped at 3 levels of recursion to prevent
+      // accidental cycles. page-link blocks (e.g. mentions) stay as a
+      // bare link.
+      if (b.type === "sub-page" && target && depth < 3) {
+        const childMd = target.blocks
+          .map((cid) => blocks[cid])
+          .filter(Boolean)
+          .map((cb) => blockToMarkdown(cb as Block, blocks, depth + 1, pages))
+          .join("\n");
+        const hashes = "#".repeat(Math.min(6, depth + 2));
+        return `${hashes} ${icon} ${title}\n\n${childMd}`;
+      }
       const href = target?.isPublished && target.publishSlug
         ? `/p/${target.publishSlug}`
         : link.pageId

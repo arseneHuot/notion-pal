@@ -5652,3 +5652,47 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5506 — Public form multi-select drops options on rapid clicks — fixed (commit 6714131)
 - Fix: multi-select onClick now passes a functional updater. Host `setValues` detects the function and applies it against the LATEST per-prop value. Rapid synchronous clicks no longer collapse to the last click. PublicFormField onChange signature widened to accept `v | (prev) => v`.
+
+## 2026-05-13 — Test agent batch (B-5600 series)
+
+### B-5600 — B-5506 multi-select 3-rapid-click re-verification (acceptance, ok)
+- Steps: at /form/db_mp3lhvrxwl40mnbf/view_b4600_form_select, added a 3rd option `opt_b5600_third` (Urgent) so Tags has Important/Idea/Urgent. Dispatched `.click()` on all 3 chip buttons synchronously in a single JS tick (no awaits in between).
+- Observed (post-fix 6714131): all 3 chips render with `bg-primary text-primary-foreground` (active) immediately after settling. Submitted the form; resulting `rows.row_mp3wbebh9ttg.values["prop_mp3lhvrx92ucm92s"]` is exactly `["opt_mp3lhvrxisvvvsc3","opt_mp3lhvrx1xipx0rc","opt_b5600_third"]`. Functional updater fix holds.
+
+### B-5601 — TopBar breadcrumb ignores teamspaceId on move-to-teamspace (P2, open)
+- Steps: at /app/p/pg_mp2pz5zwikifg7r3 (Welcome, root, teamspaceId:null), clicked `page-options` → `page-opt-move-ts_mp2pz5zwvod19q0j` (Engineering). State writes through: `pages.<id>.teamspaceId = "ts_mp2pz5zwvod19q0j"`.
+- Observed: `[data-testid="breadcrumbs"]` still renders only `🎨 Welcome` — no Engineering prefix. TopBar.tsx:27-34 walks the breadcrumb via `p.parentId` only, never looking at `teamspaceId`. Moving between teamspaces changes the sidebar grouping but is invisible in the TopBar — confusing context loss when you navigate via Cmd+K.
+- Expected: show `Engineering › Welcome` (or icon equivalent) when a page is at a teamspace root.
+
+### B-5602 — Cmd+K query with backtick / emoji / em-dash returns 0 results but no crash (P3, open)
+- Steps: at /app, opened command palette via `open-command-palette`. Typed each of: `` ` ``, `🚀`, `—`, `(`.
+- Observed: each query shows `cmd-empty` ("No results"). No console errors. Bodies on the workspace contain emojis (Welcome has 🎨, Roadmap has 🚀) but `CommandPalette.tsx` still lowercases the query and matches only against `title.toLowerCase()`/stripHtml(content). Regex special chars also don't blow up because the match is `.includes()`, not regex. Search is robust to special chars; emoji search is functionally a no-op.
+
+### B-5603 — Cmd+K first paint <100ms with 1138 pages (P3, acceptance, ok)
+- Steps: planted 1000 synthetic pages on Private teamspace (total 1138). Reloaded. Closed any open palette, then opened via `open-command-palette`.
+- Observed: first rAF after dispatch fires at 8.4ms; second frame at 18.1ms; type-to-first-paint for query "perf" was 30.4ms returning the 5 visible page rows from the windowed list. Well under 100ms budget. No visible jank, no console errors.
+
+### B-5604 — Markdown export does NOT recurse into sub-pages (P2, open)
+- Steps: planted A→B→C (3-deep), each parent with a `sub-page` block referencing the child + a paragraph of content. Triggered `export-page-markdown` with `noDownload:true` on page A.
+- Observed: export output is only `# Page A\n\n<!-- paragraph -->\n\n📄 [Page B](/app/p/pg_b5602_B)\n`. The sub-page link is emitted as a markdown link to B's URL — B's content and the deeper C are NOT inlined. Plus, the `paragraph` block type renders as `<!-- paragraph -->` (export-markdown.ts:57 switch handles `text` but not `paragraph`; my injection used the wrong canonical type, so this is partly a test-data issue — flagging the missing recursion as the real bug).
+- Expected: configurable recursion (Notion exports nested subpages as separate files in a zip, or inlined under headings).
+
+### B-5605 — Public page /p/<slug> renders correct "Comments are disabled" copy (acceptance, ok)
+- Steps: visited /p/getting-started-5000 (published Getting Started). Read banner text.
+- Observed: body contains exact string "Comments are disabled on public pages." (p.$slug.tsx:77, also "Read-only · " prefix). Banner is visible above the page content, no comment composer or comment-btn rendered on the public view.
+
+### B-5606 — Drag synced-block-ref onto another page is inert (acceptance, ok)
+- Steps: at /app/p/pg_mp2pz5zws2l1z775 (Roadmap), located `[data-block-id="blk_b4400_synced_ref"]`. Synthesised `dragstart`+`dragover`+`drop` on `[data-testid="sidebar-page-pg_mp2pz5zwikifg7r3"]` (Welcome sidebar entry).
+- Observed: `parentId` of the ref unchanged (`pg_mp2pz5zws2l1z775`), no new synced-block-ref created on Welcome. DataTransfer.types is empty after the dragstart (no payload registered for block→sidebar drop). As predicted: page-link is the move mechanism, raw ref drag is unhandled.
+
+### B-5607 — Trash route filtering correct + restorePageCascade brings child back (acceptance, ok)
+- Steps: with empty trash, planted parent `pg_b5603_parent` (`isInTrash:true`) and trashed child `pg_b5603_child` (`parentId:pg_b5603_parent`, `isInTrash:true`), plus a non-trashed control. Navigated /app/trash. Observed only the 2 trashed rows (restore-/delete-forever- pairs). Clicked `restore-pg_b5603_parent`.
+- Observed: BOTH parent and child flipped to `isInTrash:false`, `trashedAt:null`. The control was untouched. restorePageCascade (store.ts:649-674) BFS-walks the trash subgraph correctly, so a previously-cascade-trashed child is auto-restored together with its parent.
+
+### B-5608 — Cmd+K open from focused contenteditable destroys selection & focus (P2, open)
+- Steps: at /app/p/pg_mp2pz5zwikifg7r3, focused the first contenteditable and selected the first 5 chars ("Welco"). Dispatched `open-command-palette`. Palette opened. Pressed Escape.
+- Observed: after close, `document.activeElement === document.body`; `window.getSelection().toString() === ""`. The editor selection AND focus are both lost. Notion preserves the editor's selection when you Esc out of Cmd+K. Worth mitigating with a `restoreSelection()` ref on palette close.
+
+### B-5609 — NewViewButton creates all 8 listed view types without crash (acceptance, ok)
+- Steps: at /app/p/pg_mp2pz5zw6oflgc0j (Getting Started, which has inline DB `db_mp3lhvrxwl40mnbf`). Clicked `db-newview-<dbId>` then each of `db-newview-<dbId>-{table,board,calendar,gallery,list,timeline,chart,form}` in turn.
+- Observed: db.views grew 5→13 (+8). No console errors. Each view appeared in the tab strip. Note: `map` view type exists in the discriminated union (InlineDatabase.tsx:249-251 + types.ts) but is NOT in the dropdown list (line 269) — a small parity gap worth flagging as I-5601.
