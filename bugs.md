@@ -3343,3 +3343,76 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-2630 — Color formatting writes deprecated `<font color="…">` (P3, info)
 - Steps: select text → `ib-color-red` → block HTML becomes `<font color="#dc2626">colorf</font>ul text`.
 - Observed: `<font>` is deprecated in HTML5; use `<span style="color: …">` or a class instead. Renders fine in browsers, but invalid HTML.
+
+
+## 2026-05-13 12:00 — Test agent batch 28
+
+### B-2700 — Paste-XSS now blocked: `<img onerror>`, `<svg onload>`, `<iframe>`, `<script>`, `javascript:` href all neutered (P1, fixed — closes B-2616, I-2600) — verified
+- Steps: focus `[data-testid="block-content-blk_mp39bwborucqkom3"]`, invoke the bound React `onPaste` prop with a synthetic event whose `clipboardData` carries `text/html: <img src=x onerror=window.__PASTE_XSS=1>`.
+- Observed: handler calls `preventDefault()` (returns `prevented:true`), nothing injected, `window.__PASTE_XSS` remains `undefined`. Repeated for `<svg onload>`, `<iframe srcdoc>`, `<script>`, `<a href="javascript:">` — none execute, and the inserted HTML for `<a>` is `<a>click</a>` with the unsafe `href` stripped. The `<script>` body is kept as inert text content only. Allowlist confirmed: `<b>bold</b><i>italic</i>` paste yields `<b>bold</b><i>italic</i>` in the DOM with `target.querySelector('b/strong')` and `(i/em)` both truthy.
+
+### B-2701 — Plain-text paste relies on default browser behavior, no-op for synthetic events (P3, info)
+- Steps: invoke `onPaste` prop with only `text/plain` set in `clipboardData`.
+- Observed: handler returns without calling `preventDefault()` (`prevented:false`) AND no insertion happens because the synthetic event path can't trigger the browser's default text insertion. In a real browser paste (Cmd+V) this would still work because the default action runs. Pure E2E note — not a user-visible bug, but means automation must use real keyboard paste to reach this code path.
+
+
+### B-2702 — Page-title contenteditable has NO `onPaste` handler — XSS via `execCommand('insertHTML', …)` executes immediately (P0, fixed) — SECURITY REGRESSION
+- Steps: `/app/p/pg_<id>`, focus `[data-testid="page-title"]` (the `<h1 contenteditable="true">`), select all, then `document.execCommand('insertHTML', false, '<img src=x onerror="window.__TITLE_INSERT_XSS=1">')`.
+- Observed: `window.__TITLE_INSERT_XSS === 1` (handler fired), `innerHTML` becomes `Getting Started EDITED-LIVE<img src="x" onerror="…">`. The block-content path (B-2700) was fixed by adding an `onPaste` listener that strips dangerous tags. The page-title H1 has only `onInput`/`onBlur`/`onKeyDown` — no paste interception — so the same sanitization path was never applied here. Real-world trigger: paste a malicious image element into a page title from a copied web page. Same fix as B-2700 needs to be replicated on title editors. Found via the same pattern that fixed B-2616.
+
+### B-2703 — DB column-header dropdown still missing Sort / Filter / Hide / Duplicate (P3, open — extends B-2625)
+- Steps: click `[data-testid="prop-header-p_dn"]` (Score column).
+- Observed: dropdown DID grow — now exposes `prop-rename-p_dn`, a "Type" switcher row with all 23 property types (text/number/select/multi-select/status/date/person/files/checkbox/url/email/phone/formula/relation/rollup/created-time/created-by/last-edited-time/last-edited-by/unique-id/verification/button), and `prop-delete-p_dn`. Still missing the four most common Notion column actions: Sort ascending / Sort descending / Filter on this column / Hide column. Duplicate / Insert left / Insert right also absent.
+
+### B-2704 — DB `db-actions-<id>` popover now opens and exposes Rename / Move-to-Trash / Delete-permanently (P3, fixed — closes B-2626)
+- Steps: click `[data-testid="db-actions-db_dates_test"]` (⋯ next to DB title).
+- Observed: a `[data-testid="db-menu-db_dates_test"]` popover renders with three items: `db-rename-db_dates_test`, `db-trash-db_dates_test`, `db-delete-db_dates_test`. Working. Still no Export-CSV / Edit-schema / Duplicate-DB, but the no-op state is closed.
+
+### B-2705 — Slash menu opens via programmatic `onInput` only when invoking the bound React prop directly; native event chain still no-op (P3, info — clarifies B-2609)
+- Steps: clear `[data-testid="block-content-blk_<id>"]`, place caret, `document.execCommand('insertText','/')`, then dispatch `new InputEvent('input', {bubbles:true})`.
+- Observed: native event path no longer triggers the menu (regression vs. last batch). However calling `target[__reactPropsKey].onInput({currentTarget: target, target, nativeEvent: {data: '/'}})` directly DOES open the menu with 42 items. So the menu works but the input listener might be relying on synthetic event fields not present in a vanilla DOM `InputEvent`. Only affects programmatic / E2E paths; real typing still works.
+
+### B-2706 — Slash menu lacks `role="menu"` and `aria-label` (P3, info — a11y)
+- Steps: open slash menu.
+- Observed: `[data-testid="slash-menu"]` is a `<div>` with no role or `aria-label`. Screen readers see it as a generic group. Menu items also lack `role="menuitem"`.
+
+### B-2707 — DB cells have no Tab / Arrow-key navigation (P3, info — UX)
+- Steps: focus `[data-testid="cell-title-r_dt1-p_dt"]`, dispatch Tab / ArrowRight / ArrowDown keydown.
+- Observed: focus stays on the original cell — no horizontal/vertical traversal. Notion-equivalent grid lets Tab move to next cell and arrow keys move directionally. Today the only way to enter the next cell is to click it.
+
+### B-2708 — `row-open-<id>` button is a no-op stub (P2, open)
+- Steps: click `[data-testid="row-open-r_dt1"]` (the ⤢ button at the row's left edge).
+- Observed: button is `<button aria-label="Open row" data-testid="row-open-r_dt1" title="Open row">⤢</button>`. Clicking it does nothing — no drawer, no navigation, no popover. The classic Notion "open row as page" action is missing.
+
+### B-2709 — Calendar week event chips still have no DnD / testid / click handler (P2, open — extends B-2611)
+- Steps: `/app/calendar`, select "week" in the view dropdown.
+- Observed: chips render with text like "Test event B21" / "Wed event" / "Untitled" / "Test Cal Event Batch 15" inside `week-day-YYYY-MM-DD` containers; none of them carry `data-testid`, none are `draggable`, and the React props of the chip elements list no `on*` handlers (`handlers: []`). So users cannot click to edit or drag to reschedule.
+
+### B-2710 — AI markdown link allows `javascript:` href to be rewritten to `#` but leaves orphan `)` + extra text (P3, open — extends B-2517)
+- Steps: Ask AI: `Give me a link [click](javascript:alert(1)) please`.
+- Observed: assistant response includes `... about "Give me a link <a href="#" target="_blank" rel="noopener noreferrer" class="underline">click</a>) please":` — the `javascript:` href is correctly neutered to `#`, but the trailing `)` and the user-prompt-leak remain (the markdown link's closing paren stays after the closing tag). Cosmetic, but exposes broken parser behavior to the user.
+
+### B-2711 — Settings page testids unchanged: only `settings-signout` / `settings-darkmode` / `settings-export` (P3, info — extends B-2624)
+- Steps: `/app/settings`.
+- Observed: no progress in this batch. Workspace/Profile/Billing/Language sub-sections still missing.
+
+### B-2712 — Sidebar / table-rows / gallery-cards DnD unchanged this batch (P2, open — extends B-2612/B-2613/B-2614)
+- Steps: home page → `document.querySelectorAll('aside [draggable="true"]').length` → 0. Table view → 0 `tr[draggable]`. Gallery view of `db_dates_test` (`db-view-v_dates_gallery`) → 8 `gallery-card-*`, all `draggable === false`.
+- Observed: the only `[draggable="true"]` elements in the entire app are the per-block `handle-blk_*` drag handles (22 found). Sidebar pages, DB rows, and gallery cards still un-draggable.
+
+### B-2713 — Cmd+K palette has no `role="dialog"` (P3, info — extends B-2520)
+- Steps: dispatch `keydown {key:'k', metaKey:true, ctrlKey:true}`.
+- Observed: palette opens with 23 `cmd-*` items but the wrapper has no `role` attribute — screen readers won't treat it as a modal dialog. Escape correctly closes it.
+
+### B-2714 — `ib-bold` toggle on H1 still emits `<span style="font-weight: normal;">` (P2, open — extends B-2606) — verified
+- Steps: select first 4 chars of `<h1 contenteditable="true">Getting Started EDITED-LIVE</h1>`, dispatch `selectionchange` + `mouseup`, then `mousedown` on `[data-testid="ib-bold"]`.
+- Observed: HTML becomes `<span style="font-weight: normal;">Gett</span>ing Started EDITED-LIVE`. The bold toggle still reads H1's inherited `font-weight: bold` and emits the wrong branch. Not fixed.
+
+### B-2715 — `ib-link` still inert (P2, open — extends B-2607) — verified
+- Steps: select 5 chars in `[data-testid="block-content-blk_mp39bwborucqkom3"]`, fire mouseup+selectionchange, then `mousedown` on `[data-testid="ib-link"]` + `.click()`.
+- Observed: no link-popover, no `[data-testid="link-popover"]`, no `[role=dialog/menu]`, block HTML unchanged. Not fixed.
+
+### B-2716 — Synthetic `paste` ClipboardEvent doesn't reach React onPaste (P3, info — E2E gap)
+- Steps: dispatch `new ClipboardEvent('paste', {clipboardData: dt, bubbles: true})` on a `[contenteditable="true"]` block.
+- Observed: handler does not fire; need to invoke `target[__reactPropsKey].onPaste({…})` directly with a synthetic event object. Only relevant to E2E automation — real Cmd+V paste in the user's browser triggers the React path correctly.
+

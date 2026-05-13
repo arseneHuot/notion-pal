@@ -1192,3 +1192,31 @@ Priority: high / medium / low.
 
 ### I-2610 — Empty form view route resolves `/form/<dbId>/<viewId>` cleanly (low, info)
 - See B-2627. Confirmed `/form/db_dates_test/v_form` works (renders title/property fields). I-2211's earlier "0 should resolve to first form" need is moot if callers use the real viewId.
+
+
+## 2026-05-13 12:00 — Test agent batch 28
+
+### I-2700 — Replicate paste sanitization across ALL contenteditable surfaces, not just block content (high, open) — security
+- See B-2702. The fix in B-2700 only attached `onPaste` to `[data-testid^="block-content-"]`. The page-title `<h1>` editor still accepts raw HTML via `execCommand('insertHTML',…)` and runs `onerror` immediately. Audit and instrument every contenteditable: page-title, callout content, synced-block source, list-item text, code-block (probably already textarea), table-cell title. Use a single shared `onPaste` helper that calls the existing sanitizer; bind it via a hook or HOC so future contenteditables can't be added without paste protection.
+
+### I-2701 — Surface AI link-stripping with a tooltip/strike + clean up trailing `)` (low, open — extends I-2508)
+- See B-2710. The link parser now neuters `javascript:` to `#`, but the result is `<a href="#">click</a>) please` — the orphan `)` looks like a typo and there's no indication to the user that their unsafe link was rewritten. Render as a struck-through link with a tooltip "Unsafe link blocked" and consume the closing paren during parse.
+
+### I-2702 — Slash menu a11y (high for SR users, low overall) (low, open)
+- See B-2706. Add `role="menu"` to `[data-testid="slash-menu"]`, `role="menuitem"` to each `slash-*` button, manage `aria-activedescendant` for the keyboard-highlighted item, and label the menu with `aria-label="Insert block"`.
+
+### I-2703 — DB cells: keyboard navigation (Tab / Shift+Tab / arrows) (medium, open)
+- See B-2707. Wire `Tab` (next prop), `Shift+Tab` (prev prop), `ArrowDown`/`ArrowUp` (row), `Enter` (commit & move down) on `[data-testid^="cell-"]`. Notion's grid uses keyboard-first editing for power users; today it's mouse-only.
+
+### I-2704 — DB column-header: add Sort / Filter / Hide / Duplicate / Insert (medium, open — refines I-2605)
+- See B-2703. Now that the header dropdown exists (Rename + Type + Delete), extend it: Sort ascending, Sort descending, Filter on this column, Hide column, Duplicate column, Insert left, Insert right. Match Notion's column menu order.
+
+### I-2705 — `row-open-<id>` should open a row drawer / sub-page detail (medium, open)
+- See B-2708. The button exists with the right testid + aria-label but does nothing. Either implement an inline drawer (à la Notion) or navigate to `/app/p/<rowAsPage>` — the row data already has its own ID.
+
+### I-2706 — Calendar week-event chips: testid + draggable + onClick (medium, open — extends I-2604)
+- See B-2709. Add `data-testid="week-event-<eventId>"`, `draggable={true}`, and `onClick={openEventEditor(eventId)}` to each chip. Without these, automation can't reach individual events and users can't reschedule via drag.
+
+### I-2707 — Cmd+K palette: add `role="dialog"` + `aria-modal="true"` + focus-trap (low, open — extends I-2520)
+- See B-2713. Palette currently renders as a plain `<div>` with no dialog semantics. Add `role="dialog"`, `aria-modal="true"`, `aria-label="Command palette"`, and trap focus inside while open.
+

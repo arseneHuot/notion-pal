@@ -181,6 +181,15 @@ function PageHeader({ page }: { page: ReturnType<typeof useStore<NonNullable<Ret
         suppressContentEditableWarning
         className="text-4xl font-bold outline-none w-full"
         onInput={(e) => setTitle(e.currentTarget.innerText)}
+        onPaste={(e) => {
+          // Force a plain-text paste — the title never needs rich HTML and
+          // we MUST NOT let `<img onerror>` payloads run (B-2702).
+          e.preventDefault();
+          const text =
+            e.clipboardData?.getData("text/plain") ??
+            (e.clipboardData?.getData("text/html") ?? "").replace(/<[^>]+>/g, "");
+          document.execCommand("insertText", false, text);
+        }}
         onBlur={() => commitTitle(title)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {
