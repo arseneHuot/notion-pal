@@ -4011,3 +4011,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: 2 mutations. Previously B-3121 reported 50.
 - Conclusion: B-3121 / I-3108 looks effectively addressed (perhaps memoization was applied). Should be promoted to "fixed" pending an explicit confirmation in source.
 
+
+### B-3205 — /app/calendar crash on malformed DB — fixed (commit 7cf7822) — P0
+- Fix: app.calendar.tsx now skips any DB where `Array.isArray(db.properties)` or `Array.isArray(db.rows)` is false. Calendar route renders normally even when the store contains a synthetic / migration-tail DB with no properties array. Verified: injecting `{id, isInTrash:false}` (no properties / rows) no longer trips the ErrorBoundary.
+
+### B-3206 — Cmd+K palette crash on undefined title/name — fixed (commit 7cf7822) — P0
+- Fix: CommandPalette filter now uses `(p.title ?? "").toLowerCase()`, `(d.name ?? "").toLowerCase()`, and iterates `p.blocks ?? []` so a page persisted without a title (older schema, malformed write) cannot kill the palette on a single keystroke. Verified: injecting a page `{id, blocks: []}` (no title) and typing "O" returns 17 results, no ErrorBoundary.
