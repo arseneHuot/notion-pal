@@ -6339,3 +6339,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Static check of `duplicateView` (store.ts:1611-1642): given a single source view named "Initial", calling it 5 times yields names "Initial (Copy)", "Initial (Copy 2)", "Initial (Copy 3)", "Initial (Copy 4)", "Initial (Copy 5)" — the `while (existingNames.has(candidate)) candidate = ... (Copy ${n++})` loop is correct.
 - Live verification not completed: the inline-db block I injected (`blk_6606_inlinedb` → fresh `db_6606_dup_test`) did not render its `view-menu-{viewId}` toggle even after reload+scroll, so I couldn't click `view-duplicate-` five times in-DOM. Logic is verified by inspection only.
 - Status: open (verification gap, not a bug). See I-6600 for an injection-friendly fixture.
+
+### B-6105 — Restore-DB didn't cascade to rows — fixed (commit 1ecaf29) — P1
+- Fix: new `restoreDatabaseCascade(databaseId)` walks `state.rows` and clears `isInTrash` on every row whose `databaseId === db.id`. TrashPage's restore-db button calls this. Verified live with two synthetic trashed rows: all three (DB + row1 + row2) end up isInTrash=false.
