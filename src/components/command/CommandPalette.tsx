@@ -45,9 +45,11 @@ export function CommandPalette() {
       .filter((p) => !p.isInTrash)
       .filter((p) => {
         if (!q) return true;
-        if (p.title.toLowerCase().includes(q)) return true;
-        // Also search block content
-        for (const bid of p.blocks) {
+        // Defensive: malformed / partially-hydrated pages can have a missing
+        // title or blocks array. Coalesce to safe defaults so the palette
+        // never throws on a single keystroke (B-3206).
+        if ((p.title ?? "").toLowerCase().includes(q)) return true;
+        for (const bid of p.blocks ?? []) {
           const b = blocks[bid];
           if (b && "content" in b && typeof b.content === "string" && stripHtml(b.content).toLowerCase().includes(q)) return true;
         }
@@ -56,7 +58,7 @@ export function CommandPalette() {
       .slice(0, 10);
 
     const matchingDbs = Object.values(databases)
-      .filter((d) => !d.isInTrash && (!q || d.name.toLowerCase().includes(q)))
+      .filter((d) => !d.isInTrash && (!q || (d.name ?? "").toLowerCase().includes(q)))
       .slice(0, 5);
 
     const actions: { id: string; label: string; icon: React.ReactNode; action: () => void; group: string }[] = [
@@ -147,7 +149,7 @@ export function CommandPalette() {
       for (const p of Object.values(pages)) {
         if (p.isInTrash) continue;
         if (blockMatches.length >= 5) break;
-        for (const bid of p.blocks) {
+        for (const bid of p.blocks ?? []) {
           const b = blocks[bid];
           if (!b || !("content" in b) || typeof b.content !== "string") continue;
           const plain = stripHtml(b.content);

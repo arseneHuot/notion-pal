@@ -3952,3 +3952,62 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3118 — `row-open-*` no-op in table view — false negative (info)
 - Verified: clicking `[data-testid="row-open-r_dt1"]` DOES open the drawer with `data-testid="row-detail-drawer"`. The tester checked for `[data-testid="row-detail"]` (without the `-drawer` suffix), which doesn't exist. Drawer renders with role-equivalent semantics and a close button at `row-detail-close`. No code change needed.
+
+### B-3200 — Duplicate slash menus appear when filter is reused in same block (P2, open)
+- Repro: focus an empty contenteditable, set textContent to "/database" and dispatch input event; then change to "/data". Query `document.querySelectorAll('[data-testid="slash-menu"]').length`.
+- Observed: 2 slash-menu instances render at the same position (top:8, left:0), each with the same 8 db-* slash items, yielding 16 visible items. Counts confirmed: every slash-db-* testid appears exactly twice.
+- Expected: only one slash menu in the DOM at any time. Closing/reopening should unmount the previous instance, not leave it orphaned. Filtering should not produce stacked menus.
+- Severity: P2 — Cmd+K result counts and downstream automation (and a11y trees) will see duplicates.
+
+### B-3201 — Verification of fixes B-3107, B-3109, B-3111, B-3118 (info, fixed)
+- B-3107: confirmed `prop("Title")` returns title value ("Early"); empty expression renders em-dash placeholder span (`text-muted-foreground italic` with title="Set an expression for this formula property").
+- B-3109: `/database` shows all 8 db-* variants (table, board, calendar, list, gallery, timeline, chart, form). `/databases` plural works too.
+- B-3111: not re-verified yet (separate iteration below).
+- B-3118: drawer testid is `row-detail-drawer` — previous report used the wrong selector. Will re-confirm in this run.
+
+### B-3202 — Slash menu /list filter omits To-do (P3, open)
+- Repro: focus an empty paragraph, type `/list`. Check `[data-testid^="slash-"]` items.
+- Observed: shows slash-bullet, slash-numbered, slash-toggle, slash-db-list. To-do is missing.
+- Expected: Per fix-verification note, `/list` should match to-do (since to-do is conceptually a list with checkboxes). Either include "list" in to-do's category/keywords or make filterSlash also walk the keywords array.
+- Severity: P3 — minor discoverability.
+
+### B-3203 — B-3116 still open: no page version history UI (P2, open)
+- Repro: open page-options (`[data-testid="page-options"]` button at top of any page). Inspect menu items.
+- Observed: menu items are: Remove from favorites, Duplicate, Turn into wiki, Word count, Copy link, Export as Markdown, Print / save as PDF, Move to [teamspace…], Move to Trash. No "History" / "Version history".
+- Expected: an entry to view past snapshots, given `page.history: []` is part of the schema.
+
+### B-3204 — Trashed database shows "0 rows" even when row data still in store (P2, open)
+- Repro: navigate `/app/trash`. The trashed db `db_synth_trash_3100` is labelled "🧪Untitled database 0 rows Restore Delete".
+- Observed: the badge shows "0 rows" even though prior tests created rows in this DB (and the localStorage state still references rows for active databases). Either the trash page is reading from a different row source or the soft-deleted DB has its rows wiped on trash (data loss).
+- Expected: if rows survive trashing (Notion does keep them so Restore works), count should reflect that. If they're wiped, Restore won't restore data — confirm intent.
+
+
+### B-3205 — P0 CRASH: /app/calendar throws `db.properties.find is not a function` (P0, open)
+- Repro: navigate to `/app/calendar`. Page immediately renders the error boundary "This page didn't load — db.properties.find is not a function". Try Again does NOT recover.
+- Stack: `CalendarPage` at `src/routes/app.calendar.tsx:61:38` inside `useMemo`. Implies `db.properties` is now an object (or undefined) instead of an array. Likely a recent schema migration introduced `properties` as a record, but CalendarPage still calls `.find()` on it.
+- Observed: top-level route is broken; users cannot view calendar at all.
+- Expected: render the calendar even when no database is configured, or guard `Array.isArray(db?.properties)` before calling `.find`.
+- Severity: P0 — complete feature outage.
+
+### B-3206 — P0 CRASH: Cmd+K palette throws `Cannot read properties of undefined (reading 'toLowerCase')` once user types a query (P0, open)
+- Repro: on any page, press Cmd+K (palette opens cleanly with empty query). Type any letter (e.g. "O" for "OKR"). Error boundary instantly renders "This page didn't load — Cannot read properties of undefined (reading 'toLowerCase')". The whole route is replaced by the error boundary; only Reload/Go home recover.
+- Stack: `CommandPalette` at `src/components/command/CommandPalette.tsx:53:50` inside `Array.filter` over a `useMemo`. One of the searchable items has an undefined title/name; the filter calls `.toLowerCase()` on it unconditionally.
+- Observed: palette is unusable for any non-empty query — primary discovery surface dies after a single keystroke.
+- Expected: filter callback should coalesce `(item.title ?? item.name ?? '').toLowerCase()`.
+- Severity: P0 — primary discovery surface goes dark.
+
+### B-3207 — Comment replies cannot have their own replies (single-level threading only) (P3, open)
+- Repro: open comments, post a comment, click Reply, post a nested reply. Inspect the reply DOM for a Reply button.
+- Observed: the reply only has a Delete button — no "Reply" / "post-reply" button on the reply itself. Threading depth caps at 1 level.
+- Expected: Notion supports threading depth (replies can be replied to, with visible indentation per level). Either add nested reply support or document explicitly that threading is single-level.
+- Indent: replies are indented 13px from parent (works visually).
+
+### B-3208 — Reply Post button testid is `reply-submit-*` not `post-reply-*` (P3, info)
+- Confirmed: `[data-testid^="reply-submit-"]` posts the reply. The "post-reply-*" naming was a tester guess.
+- Severity: P3 — naming inconsistency vs `post-comment` for the top-level form. Consider renaming to `post-reply-<id>` for symmetry.
+
+### B-3209 — Performance: keystroke now triggers only 2 mutations (was 50) — improvement (P3, info/fixed)
+- Repro: focus an editable, attach MutationObserver to body (childList+subtree+attributes+characterData), call `document.execCommand('insertText', false, 'q')`, sleep 220ms.
+- Observed: 2 mutations. Previously B-3121 reported 50.
+- Conclusion: B-3121 / I-3108 looks effectively addressed (perhaps memoization was applied). Should be promoted to "fixed" pending an explicit confirmation in source.
+

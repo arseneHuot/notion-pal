@@ -1310,3 +1310,16 @@ Priority: high / medium / low.
 
 ### I-3108 — Memoize Block list rendering to reduce sibling re-renders (medium, open)
 - See B-3121. A single keystroke triggers 50 mutations across the page body. Likely the BlockList component re-renders all children when one block mutates because the selector returns a new array reference. Wrap individual Block components in React.memo + use shallowEqual selectors per block.
+
+### I-3200 — Calendar page must gracefully handle missing or non-array `db.properties` (high, open)
+- See B-3205. Add an `Array.isArray` guard or normalise `properties` to an array on read so the calendar route doesn't crash when a database schema is between migrations.
+
+### I-3201 — Command palette filter should coalesce missing titles (high, open)
+- See B-3206. In `CommandPalette.tsx:53`, wrap the title/name access in a nullish-coalescing default so an undefined title doesn't tank the palette. Also worth pre-filtering items that have no usable label rather than letting them flow to filter logic.
+
+### I-3202 — Nested reply threading (medium, open)
+- See B-3207. Allow comment replies to receive their own replies, with visual indentation per level (and a max depth like 5 to avoid runaway nesting). Reuse the same `reply-input-cmt_<id>` / `reply-submit-cmt_<id>` testid pattern for each nested level.
+
+### I-3203 — Sidebar pages should be draggable for reordering (medium, open)
+- See B-3209 (drag sweep). Block handles are draggable, but sidebar page tiles have `draggable=false`. Notion lets you drag sidebar pages to reorder, nest under another page, or move to a different teamspace. Consider adding HTML5 drag handlers to page tiles.
+

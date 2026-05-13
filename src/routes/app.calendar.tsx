@@ -57,6 +57,11 @@ function CalendarPage() {
     }
     for (const db of Object.values(databases)) {
       if (db.isInTrash) continue;
+      // Defensive: a malformed DB written by a migration / synthetic seed
+      // can have `properties` as undefined or a non-array. Skip it so the
+      // calendar route never trips its ErrorBoundary (B-3205).
+      if (!Array.isArray(db.properties)) continue;
+      if (!Array.isArray(db.rows)) continue;
       const dateProp = db.properties.find((p) => p.type === "date");
       const titleProp = db.properties.find((p) => p.type === "title");
       if (!dateProp) continue;
