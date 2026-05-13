@@ -1957,3 +1957,9 @@ Priority: high / medium / low.
 
 ### I-6205 — Custom drag preview for sidebar / block DnD (P3, open)
 - See B-6211. App relies on the browser default drag image. Use `dataTransfer.setDragImage(clonedNode, x, y)` to render a slim "pill" with just the icon+title, similar to Notion. Significantly reduces visual clutter when dragging deeply-indented sidebar pages.
+
+### I-6300 — Cmd+K: preserve last selection index across open/close cycles (P3, open)
+- See B-6307. Close path currently wipes both `query` and `selectedIndex` from the palette's local state. Persist `selectedIndex` (and optionally `query`) in a small zustand slice or `sessionStorage` keyed to the workspace. On open, restore the query, re-run the filter, and if the previously selected page is still present, restore its index; otherwise default to 0. Matches the "open, look, close, reopen" workflow used to fan over recent pages.
+
+### I-6301 — Public/Export: trashed sub-page link uses internal `/app/p/<id>` URL (P3, open)
+- See B-6302. The markdown export for trashed sub-pages emits `📄 [title](/app/p/<pageId>)`. That URL is only meaningful inside the app — for an exported `.md` consumed externally the link is broken. Either (a) emit a bare title without href when the target is trashed, or (b) emit a `<!-- trashed: title -->` comment so downstream tools can warn. Today's behavior leaks an internal route into portable Markdown.

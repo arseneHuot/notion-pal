@@ -180,6 +180,11 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
         const hashes = "#".repeat(Math.min(6, depth + 2));
         return `${hashes} ${icon} ${title}\n\n${childMd}`;
       }
+      // Trashed targets: don't emit a `/app/p/<id>` link that's broken
+      // outside the app context (I-6301). Render as `icon title (deleted)`.
+      if (target?.isInTrash) {
+        return `${icon} ${title} <!-- (deleted) -->`;
+      }
       const href = target?.isPublished && target.publishSlug
         ? `/p/${target.publishSlug}`
         : link.pageId

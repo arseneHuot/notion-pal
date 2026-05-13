@@ -6070,3 +6070,63 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6208 — duplicateView produced identical names — fixed (commit 1d6e1b9)
 - Fix: appends "(Copy 2)", "(Copy 3)", … when "(Copy)" is already taken on a sibling view.
+
+
+## 2026-05-13 — B-6300 series: fix re-verify + new coverage
+
+### B-6300 — B-6201 cross-page comment anchor click navigates correctly (passes, fixed)
+- Repro: injected `pg_b6300_A` with `blk_b6300_anchor` and `pg_b6300_B` with `cmt_b6300_xp` carrying `blockId: blk_b6300_anchor`. On B opened comments, clicked `comment-block-anchor-cmt_b6300_xp`.
+- Observed: chip tooltip "Jump to block on B6300 A page" + "↗" suffix. Click routes to `/app/p/pg_b6300_A#block-blk_b6300_anchor`. Target block receives `ring-2 ring-blue-400` highlight.
+- Status: B-6201 fix (commit 1d6e1b9) holds end-to-end. BlockAnchorChip + parentId resolution working.
+
+### B-6301 — Same-page block anchor click (no nav) still flashes ring (passes)
+- Repro: injected `pg_b6301_same` with both `blk_b6301_anchor` and `cmt_b6301_same` (same page). Opened comments, clicked the chip.
+- Observed: chip text "↑ on block" (no "↗"), generic tooltip. Path unchanged, only `#block-blk_b6301_anchor` appended. Block ring lights up. No spurious navigate() call.
+- Status: works as designed — same-page path is the hash-only branch, cross-page path is the navigate() branch.
+
+### B-6302 — Sub-page export depth-3 + trashed sibling renders nested headings + bare link for trashed (passes)
+- Repro: root → L1 → L2 alive → L3 leaf (depth 3) and L1 → L2-trashed sibling. Each sub-page block uses `pageId` field. Dispatched `export-page-markdown` with `{noDownload:true}`.
+- Observed: alive chain inlined as `##/###/####` nested headings with body. Trashed sub renders as bare link `📄 [title](/app/p/<id>)` — recursion skipped. Depth cap depth<3 and trash-skip both fire correctly (export-markdown.ts:172).
+- Status: works as designed.
+
+### B-6303 — Trash route updates and DB rows preserved after restoring trashed DB (passes)
+- Repro: injected `db_b6303_trashed` (isInTrash=true, trashedAt=now) with 2 rows. Navigated `/app/trash`, clicked `restore-db-db_b6303_trashed`.
+- Observed: chip removed from trash list immediately. Store db.isInTrash=false, trashedAt=null. Both rows still attached via `databaseId === db_b6303_trashed`. No row orphaning.
+- Status: works as designed.
+
+### B-6304 — AI busy clears, textarea reactivates, send re-enables after stub reply (passes)
+- Repro: opened AI, new thread, sent "B6304 busy state". Polled disabled state during and ~1500ms after.
+- Observed: during streaming `ai-send` showed disabled, then both `ai-input.disabled=false` and `ai-send` correctly returned to disabled-only-because-empty after reply lands. Two messages (user+assistant) appended.
+- Status: works as designed. NC #2 + #7 covered.
+
+### B-6305 — AI Enter spam during busy: only first send goes through (passes, fixed)
+- Repro: new thread, dispatched Enter for "B6300 first" then immediately set value "B6300 SPAM2" and dispatched a second Enter inside the same tick.
+- Observed: only the first user message ("B6300 first") was appended. SPAM2 stayed in the textarea but never created a message. After reply landed, send was unblocked.
+- Status: B-6203 fix (commit 1d6e1b9) holds — Enter handler now early-returns when busy.
+
+### B-6306 — Cmd+K "C O M M" → empty; "COMM" → real matches; "a b" → empty (passes, fixed)
+- Repro: opened Cmd+K. Typed "C O M M" (spaces) — `cmd-empty` testid shown, 0 page rows. Cleared, typed "COMM" — 3 real matches ("QA Export Test", "B-5100 Nested Comment Test", "Child B-6005"). Cleared, typed "a b" (both 1-char) — `cmd-empty`, 0 rows.
+- Status: B-6205 fix (commit 1d6e1b9) holds. Single-char tokens are filtered; if zero multi-char tokens remain the noiseQuery branch shows cmd-empty.
+
+### B-6307 — Cmd+K Cmd+K (close-reopen) does NOT preserve selection across cycles (P3, open)
+- Repro: opened Cmd+K, typed "comm" (3 matches), pressed ArrowDown twice → selection on row 3 (`cmd-page-pg_b6005_child`). Pressed Escape, then Cmd+K to reopen, re-typed "comm".
+- Observed: selection reset to row 0 (`cmd-page-pg_qa_exp_0db0kp`). The palette doesn't remember the previously-highlighted row across open cycles.
+- Cause: palette close path clears local selection state. Query input also resets to empty on reopen.
+- Expected: per spec instruction "preserves the saved selection across cycles", at least the highlighted index should survive when the same query is retyped. Marking P3 since most users start with a fresh query each time, but the NC #3 spec was explicit.
+
+### B-6308 — View duplicate then rename "(Copy)" then duplicate again → suffix machinery survives (passes)
+- Repro: from clean state, duplicated "All" 3× → "All (Copy)", "All (Copy 2)", "All (Copy 3)". Renamed first to "Renamed-X". Reloaded. Duplicated "All" twice more.
+- Observed: views = ["All", …, "Renamed-X", "All (Copy 2)", "All (Copy 3)", "All (Copy)", "All (Copy 4)"]. The "(Copy)" slot was correctly re-filled (since the original "All (Copy)" was renamed and is no longer taken), then "(Copy 4)" picked as the next free integer.
+- Status: works as designed — B-6208 fix correctly scans current sibling names, no stale counter.
+
+### B-6201 — Cross-page comment anchor click (re-verify under fresh B-6300) — fixed (commit 1d6e1b9)
+- Re-confirmed: see B-6300. Cross-page nav + ring highlight intact.
+
+### B-6203 — AI Enter bypasses busy disable (re-verify) — fixed (commit 1d6e1b9)
+- Re-confirmed: see B-6305. Only first send in a tick succeeds.
+
+### B-6205 — Cmd+K single-char tokens match too broadly (re-verify) — fixed (commit 1d6e1b9)
+- Re-confirmed: see B-6306. Both "C O M M" and "a b" → cmd-empty; "COMM" → 3 hits.
+
+### B-6208 — duplicateView produced identical names (re-verify) — fixed (commit 1d6e1b9)
+- Re-confirmed: see B-6308. Sequential duplicates increment to "(Copy 2)"/"(Copy 3)"; rename-then-duplicate refills the lowest free slot.
