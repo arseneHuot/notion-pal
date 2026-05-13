@@ -5860,3 +5860,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: created parent `pg_b5900_export_parent` with a `sub-page` block pointing at `pg_b5900_trashed_sub` (`isInTrash:true`, content "Secret in trash"). Fired `export-page-markdown` with `noDownload:true`.
 - Observed: `__lastExportedMarkdown` = `# Parent For Trash Export\n\n## 🗑 Trashed Sub\n\nSecret in trash\n`. Trashed page title AND body content leak into the parent's export.
 - Expected: skip / omit the body for trashed targets (export-markdown.ts:170 should also gate on `!target.isInTrash`), or fall back to the link-only branch. Today restoring privacy from the trash bin does not extend to exports.
+
+### B-5910 — Markdown export inlined trashed sub-pages — fixed (commit 640a856) — P1
+- Fix: sub-page inline branch now requires `!target.isInTrash`. Trashed targets emit a bare link instead. Verified live: parent + trashed sub-page exports without trashed body in markdown.
+
+### B-5909 — Block-anchor chip stays enabled when target missing — fixed (commit 640a856)
+- Fix: PageComments queries `[data-block-id]` to detect missing targets. Chip renders disabled with strike-through, "(missing)" suffix, tooltip "The referenced block no longer exists".
