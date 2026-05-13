@@ -156,16 +156,53 @@ export function InlineToolbar() {
       editor?.dispatchEvent(new InputEvent("input", { bubbles: true }));
       return;
     }
+    // Unwrap any existing color spans inside the selection BEFORE applying
+    // the new color (B-6400). Without this, sequential color picks nested
+    // 5 spans deep — and CSS cascade made the INNERMOST color (the FIRST
+    // pick) the visible one. Now each apply produces a single fresh
+    // wrapping span at the same level.
+    const COLOR_SEL = 'span[data-color], font, span[style*="color"]';
+    {
+      const editor = sel.anchorNode?.parentElement?.closest("[contenteditable]") as HTMLElement | null;
+      const toElement = (n: Node | null): Element | null =>
+        !n ? null : n.nodeType === Node.ELEMENT_NODE ? (n as Element) : n.parentElement;
+      const unwrap = (node: Element) => {
+        const parent = node.parentNode;
+        while (node.firstChild && parent) parent.insertBefore(node.firstChild, node);
+        parent?.removeChild(node);
+      };
+      const ancestors: Element[] = [];
+      for (const start of [
+        toElement(range.startContainer),
+        toElement(range.endContainer),
+        toElement(range.commonAncestorContainer),
+      ]) {
+        let cur: Element | null = start;
+        while (cur && cur !== editor && cur !== document.body) {
+          if (cur.matches?.(COLOR_SEL) && !ancestors.includes(cur)) {
+            ancestors.push(cur);
+          }
+          cur = cur.parentElement;
+        }
+      }
+      const contents = range.extractContents();
+      contents.querySelectorAll(COLOR_SEL).forEach((node) => unwrap(node as Element));
+      range.insertNode(contents);
+      ancestors.forEach((node) => unwrap(node));
+    }
+    // Re-grab the (now-clean) range — `extractContents` collapsed it so we
+    // need a fresh range over the new fragment.
+    const newRange = window.getSelection()?.getRangeAt(0) ?? range;
     const span = document.createElement("span");
     span.setAttribute("data-color", "1");
     span.style.color = color;
     try {
-      range.surroundContents(span);
+      newRange.surroundContents(span);
     } catch {
       // Selection crosses element boundaries — fall back to extract+wrap.
-      const frag = range.extractContents();
+      const frag = newRange.extractContents();
       span.appendChild(frag);
-      range.insertNode(span);
+      newRange.insertNode(span);
     }
     const editor = sel.anchorNode?.parentElement?.closest("[contenteditable]") as HTMLElement | null;
     editor?.dispatchEvent(new InputEvent("input", { bubbles: true }));

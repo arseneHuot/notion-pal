@@ -6133,3 +6133,67 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### I-6301 — Markdown export trashed sub-page link — done (commit 10fc6cc)
 - Fix: trashed sub-page emits `<icon> <title> <!-- (deleted) -->` instead of an `/app/p/<id>` URL that breaks outside the app.
+
+## 2026-05-13 — Iteration B-6400 testing pass
+
+### I-6301 verify — Trashed sub-page export emits deleted comment, no /app/p link (passes)
+- Repro: injected page A (`pg_b6400_srcA`) with one `sub-page` block referencing trashed page B (`pg_b6400_trashB`, isInTrash=true, icon "🗑"). Navigated to A, dispatched `export-page-markdown` with `{noDownload:true}`, read `window.__lastExportedMarkdown`.
+- Observed: `"# Source Page\n\n🗑 Deleted Target <!-- (deleted) -->\n"`. No `/app/p/<id>` URL anywhere. Matches the spec exactly.
+- Status: I-6301 fix (`src/lib/export-markdown.ts:185-187`) holds.
+
+### B-6400 — Sequential color picks: final color does NOT visibly win; 5 spans nest (P2, open)
+- Repro: select text, call applyColor red→blue→green→orange→purple in sequence (each over the same selection). InlineToolbar.tsx:159-169 wraps the existing span each time.
+- Observed: DOM ends up as 5 nested `<span data-color="1" style="color:purple">…<span color:red>text</span>…</span>`. Per CSS cascade the INNERMOST color wins, so the visible text is RED (first applied) — the user-applied "purple" is never seen. Confirmed: `getComputedStyle(innermost).color === "rgb(255,0,0)"`.
+- Expected: each new color application should replace the existing color span(s) (unwrap then re-wrap, or update existing data-color descendant). Final picked color should always win.
+- Side cost: 5 nested empty wrapper spans bloat the DOM and break copy/paste semantics.
+
+### B-6401 — Comment replies beyond depth 2 are completely hidden in the Comments pane (P1, open)
+- Repro: injected 5 comments with `cmt_b6400_nest1.parentId=null`, `nest2.parentId=nest1`, `nest3.parentId=nest2`, etc. Opened Comments pane on `pg_b6400_srcA` via `open-comments` event.
+- Observed: pane renders `comment-row-cmt_b6400_nest1` (level 1) and `reply-row-cmt_b6400_nest2` (level 2). Levels 3, 4, 5 are NOT rendered anywhere. PageComments.tsx:65-141 only iterates two levels: top-level then `repliesByParent[c.id]` — there's no recursive descent for replies-of-replies.
+- Expected: render the full chain recursively, or clamp at level N with a "+3 more replies" affordance. Today the data is stored fine (we can create cmt nest3+) but the user never sees it, which silently swallows their work.
+- Note: the AI Chat panel already supports threads of arbitrary depth; the Comments pane is the outlier.
+
+### B-6402 — Public form: validation error message does NOT clear when user starts fixing the field (P3, open)
+- Repro: route `/form/<dbId>/<viewId>` (PublicFormPage). Hit Submit with title empty → renders `public-form-error` "Title is required." (form.$dbId.$viewId.tsx:138). Start typing in the title input.
+- Observed: error stays visible until the user clicks Submit AGAIN. `setValues` handler at line 236-244 does not call `setError(null)` / `setError("")`.
+- Expected: the moment the user changes any field, the live error should disappear (or at least re-validate). Notion's public forms do this immediately, otherwise it reads "Title is required" even when the title is filled.
+
+### B-6403 — Database with 220 rows (drag-reorder smooth) (passes)
+- Repro: injected `db_b6400_200rows` with 220 rows on a host page. Programmatic dragstart→dragover→drop from `row_b6400_5` onto `row_b6400_200`.
+- Observed: drag dispatch + DOM mutation completed in ~10ms. After: row 5 correctly inserted before row 200; sibling order otherwise intact. No frame drops in render observed. dataRowIds count stayed at 220 throughout.
+- Status: works as designed.
+
+### B-6404 — Cmd+K hash navigation: back/forward preserves block highlight (passes)
+- Repro: page with multiple data-block-id elements. Set `location.hash = #block-<id1>` → highlighted via PageView.tsx:55-62. Set hash to `#block-<id2>` → highlight moves. `history.back()` → returns to id1 and the persistent ring re-renders; `history.forward()` → id2 highlight returns; `history.back()` again → id1 again.
+- Observed: each transition correctly re-applies the `ring-2 ring-blue-400` and `data-block-highlight="1"` on the target block. No stale highlights.
+- Status: hashchange listener on PageView.tsx:65 holds across full back/forward cycles.
+
+### B-6405 — Synced-block-ref pointing to deleted source renders "no source" UX (passes)
+- Repro: injected `blk_b6400_syncref` with `sourceId: "blk_does_not_exist"` on a fresh page.
+- Observed: page renders the pink-bordered "Synced reference — no source" panel with a `synced-source-input-<id>` text input + "Link" button. Block.tsx:1343 fallback fires when `source === undefined`.
+- Status: works as designed.
+
+### B-6406 — Cmd+K on /auth route is fully inert (passes)
+- Repro: signed out, visited `/auth`. Dispatched Cmd+K via `document`+`window` keydown.
+- Observed: no `role="dialog"` appears, no `command-palette` testid, body length stayed at 105 chars (form unchanged). No console errors. CommandPalette is only mounted inside AppShell.
+- Status: works as designed.
+
+### B-6407 — Comment resolve → edit while resolved → unresolve preserves editedAt + final resolved state (passes)
+- Repro: created `cmt_b6400_re` (resolved:false). Toggled resolved=true, edited content (sets editedAt), toggled resolved=false. Re-read from storage.
+- Observed: final = `{resolved:false, content:"edited content", editedAt:<ts>, updatedAt:<ts>}`. Both fields coexist correctly. PageComments.tsx:335 shows the "(edited)" italic affordance regardless of resolved toggle.
+- Status: works as designed.
+
+### B-6408 — View rename + immediate duplicate uses the renamed name (passes)
+- Repro: renamed first view of `db_b6400_200rows` to "MyRenamed", then duplicated it. duplicateView (store.ts:1611-1642) reads `src.name` from `_state` so it always sees the freshly-renamed value.
+- Observed: copy name = "MyRenamed (Copy)". Original "All (Copy)" suffix machinery isn't involved.
+- Status: works as designed.
+
+### B-6409 — AI panel long single-line input wraps (passes)
+- Repro: opened AI chat, set the `ai-input` textarea value to 200 'a' characters via React's value setter + input event.
+- Observed: `wordBreak:normal`, `overflowWrap:break-word`, `whiteSpace:pre-wrap`, `overflow-x:auto`. scrollWidth (312) ≤ width (322), so NO horizontal scrollbar — text wraps to multiple lines. Height capped at 128px (max-h-40) with internal scroll if it exceeds.
+- Status: works as designed. AIChat.tsx:325-349 has proper wrap CSS.
+
+### B-6410 — Trash restore parent + descendants (passes, race not reproducible)
+- Repro: injected parent `pg_b6400_parent` + child `pg_b6400_c1` + grandchild `pg_b6400_c2`, all isInTrash=true. The store.restorePageCascade (store.ts:649-674) BFS-collects all descendants in trash and restores them in a SINGLE setState.
+- Observed: atomic update — no intermediate state where parent is restored but child still trashed. No race.
+- Status: works as designed.

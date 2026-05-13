@@ -233,7 +233,7 @@ function PublicFormPage() {
                 <PublicFormField
                   property={p}
                   value={values[p.id]}
-                  onChange={(v) =>
+                  onChange={(v) => {
                     setValues((cur) => ({
                       ...cur,
                       // Functional updates: when the field passes a callback,
@@ -241,8 +241,13 @@ function PublicFormPage() {
                       // synchronous clicks (multi-select toggle, etc.) don't
                       // collapse to the last click (B-5506).
                       [p.id]: typeof v === "function" ? (v as (prev: unknown) => unknown)(cur[p.id]) : v,
-                    }))
-                  }
+                    }));
+                    // Clear any standing validation error as soon as the
+                    // user edits a field — the next submit re-validates,
+                    // so the stale "is required" stops shouting at them
+                    // mid-fix (B-6402 / I-6402).
+                    if (error) setError(null);
+                  }}
                 />
               </div>
             ))}

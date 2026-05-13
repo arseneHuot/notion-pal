@@ -62,124 +62,23 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
         {pageComments.length === 0 && (
           <div className="text-xs text-muted-foreground italic">No comments yet.</div>
         )}
-        {pageComments.map((c) => {
-          const replies = repliesByParent[c.id] ?? [];
-          const isReplying = replyTo === c.id;
-          return (
-            <div key={c.id} className={`rounded border border-border p-2 ${c.resolved ? "opacity-50" : ""}`} data-testid={`comment-row-${c.id}`}>
-              <CommentRow comment={c} user={user} />
-              <div className="flex gap-2 mt-2">
-                <button
-                  onClick={() => resolveComment(c.id)}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                  data-testid={`resolve-${c.id}`}
-                >
-                  <Check className="size-3" /> {c.resolved ? "Resolved" : "Resolve"}
-                </button>
-                <button
-                  onClick={() => setReplyTo(isReplying ? null : c.id)}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                  data-testid={`reply-${c.id}`}
-                >
-                  <MessageSquare className="size-3" /> {isReplying ? "Cancel" : `Reply${replies.length ? ` (${replies.length})` : ""}`}
-                </button>
-                <button
-                  onClick={() => setEditingId(editingId === c.id ? null : c.id)}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                  data-testid={`comment-edit-${c.id}`}
-                >
-                  <Pencil className="size-3" /> {editingId === c.id ? "Cancel" : "Edit"}
-                </button>
-                <button
-                  onClick={() => deleteComment(c.id)}
-                  className="text-xs text-destructive hover:underline"
-                  data-testid={`comment-delete-${c.id}`}
-                >
-                  Delete
-                </button>
-              </div>
-              {editingId === c.id && (
-                <CommentEditor
-                  initial={c.content ?? ""}
-                  onSave={(next) => { updateComment(c.id, next); setEditingId(null); }}
-                  onCancel={() => setEditingId(null)}
-                  commentId={c.id}
-                />
-              )}
-              {replies.length > 0 && (
-                <div className="mt-2 pl-3 border-l border-border space-y-2">
-                  {replies.map((r) => (
-                    <div key={r.id} className="text-sm" data-testid={`reply-row-${r.id}`}>
-                      <CommentRow comment={r} user={user} />
-                      <div className="flex gap-2 mt-1">
-                        <button
-                          onClick={() => setEditingId(editingId === r.id ? null : r.id)}
-                          className="text-xs text-muted-foreground hover:text-foreground"
-                          data-testid={`comment-edit-${r.id}`}
-                        >
-                          {editingId === r.id ? "Cancel" : "Edit"}
-                        </button>
-                        <button
-                          onClick={() => deleteComment(r.id)}
-                          className="text-xs text-destructive hover:underline"
-                          data-testid={`comment-delete-${r.id}`}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                      {editingId === r.id && (
-                        <CommentEditor
-                          initial={r.content ?? ""}
-                          onSave={(next) => { updateComment(r.id, next); setEditingId(null); }}
-                          onCancel={() => setEditingId(null)}
-                          commentId={r.id}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {isReplying && (
-                <div className="mt-2 pl-3 border-l border-border">
-                  <textarea
-                    value={replyText}
-                    onChange={(e) => setReplyText(e.target.value)}
-                    onKeyDown={(e) => {
-                      // Cmd/Ctrl+Enter posts the reply (parity with the
-                      // top-level composer, B-4216).
-                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-                        e.preventDefault();
-                        if (replyText.trim()) {
-                          addComment({ pageId, content: replyText, parentId: c.id });
-                          setReplyText("");
-                          setReplyTo(null);
-                        }
-                      }
-                      if (e.key === "Escape") setReplyTo(null);
-                    }}
-                    placeholder="Reply… (Cmd+Enter to post)"
-                    className="w-full bg-background border border-input rounded px-2 py-1 text-sm min-h-[44px] resize-none"
-                    data-testid={`reply-input-${c.id}`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!replyText.trim()) return;
-                      addComment({ pageId, content: replyText, parentId: c.id });
-                      setReplyText("");
-                      setReplyTo(null);
-                    }}
-                    disabled={!replyText.trim()}
-                    className="mt-1 text-xs bg-primary text-primary-foreground rounded px-2 py-1 disabled:opacity-50"
-                    data-testid={`reply-submit-${c.id}`}
-                  >
-                    Post reply
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {pageComments.map((c) => (
+          <CommentNode
+            key={c.id}
+            comment={c}
+            depth={0}
+            repliesByParent={repliesByParent}
+            user={user}
+            pageId={pageId}
+            replyTo={replyTo}
+            setReplyTo={setReplyTo}
+            replyText={replyText}
+            setReplyText={setReplyText}
+            editingId={editingId}
+            setEditingId={setEditingId}
+            topLevel
+          />
+        ))}
       </div>
       <div className="p-3 border-t border-border">
         <textarea
@@ -216,6 +115,148 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
           <Send className="size-3" /> Post
         </button>
       </div>
+    </div>
+  );
+}
+
+function CommentNode({
+  comment: c,
+  depth,
+  repliesByParent,
+  user,
+  pageId,
+  replyTo,
+  setReplyTo,
+  replyText,
+  setReplyText,
+  editingId,
+  setEditingId,
+  topLevel,
+}: {
+  comment: Comment;
+  depth: number;
+  repliesByParent: Record<string, Comment[]>;
+  user: ReturnType<typeof useAuth>["user"];
+  pageId: string;
+  replyTo: string | null;
+  setReplyTo: (v: string | null) => void;
+  replyText: string;
+  setReplyText: (v: string) => void;
+  editingId: string | null;
+  setEditingId: (v: string | null) => void;
+  topLevel?: boolean;
+}) {
+  // Hard-cap visual nesting at 6 levels so very deep threads don't blow out
+  // the pane. Replies beyond the cap render flat under the deepest visible
+  // level (B-6401 / I-6401).
+  const MAX_VISIBLE_DEPTH = 6;
+  const replies = repliesByParent[c.id] ?? [];
+  const isReplying = replyTo === c.id;
+  const containerClass = topLevel
+    ? `rounded border border-border p-2 ${c.resolved ? "opacity-50" : ""}`
+    : "text-sm";
+  const containerTestid = topLevel ? `comment-row-${c.id}` : `reply-row-${c.id}`;
+  return (
+    <div className={containerClass} data-testid={containerTestid}>
+      <CommentRow comment={c} user={user} />
+      <div className="flex gap-2 mt-1">
+        {topLevel && (
+          <button
+            onClick={() => resolveComment(c.id)}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+            data-testid={`resolve-${c.id}`}
+          >
+            <Check className="size-3" /> {c.resolved ? "Resolved" : "Resolve"}
+          </button>
+        )}
+        <button
+          onClick={() => setReplyTo(isReplying ? null : c.id)}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          data-testid={`reply-${c.id}`}
+        >
+          <MessageSquare className="size-3" /> {isReplying ? "Cancel" : `Reply${replies.length ? ` (${replies.length})` : ""}`}
+        </button>
+        <button
+          onClick={() => setEditingId(editingId === c.id ? null : c.id)}
+          className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+          data-testid={`comment-edit-${c.id}`}
+        >
+          <Pencil className="size-3" /> {editingId === c.id ? "Cancel" : "Edit"}
+        </button>
+        <button
+          onClick={() => deleteComment(c.id)}
+          className="text-xs text-destructive hover:underline"
+          data-testid={`comment-delete-${c.id}`}
+        >
+          Delete
+        </button>
+      </div>
+      {editingId === c.id && (
+        <CommentEditor
+          initial={c.content ?? ""}
+          onSave={(next) => { updateComment(c.id, next); setEditingId(null); }}
+          onCancel={() => setEditingId(null)}
+          commentId={c.id}
+        />
+      )}
+      {isReplying && (
+        <div className="mt-2 pl-3 border-l border-border">
+          <textarea
+            value={replyText}
+            onChange={(e) => setReplyText(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                if (replyText.trim()) {
+                  addComment({ pageId, content: replyText, parentId: c.id });
+                  setReplyText("");
+                  setReplyTo(null);
+                }
+              }
+              if (e.key === "Escape") setReplyTo(null);
+            }}
+            placeholder="Reply… (Cmd+Enter to post)"
+            className="w-full bg-background border border-input rounded px-2 py-1 text-sm min-h-[44px] resize-none"
+            data-testid={`reply-input-${c.id}`}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              if (!replyText.trim()) return;
+              addComment({ pageId, content: replyText, parentId: c.id });
+              setReplyText("");
+              setReplyTo(null);
+            }}
+            disabled={!replyText.trim()}
+            className="mt-1 text-xs bg-primary text-primary-foreground rounded px-2 py-1 disabled:opacity-50"
+            data-testid={`reply-submit-${c.id}`}
+          >
+            Post reply
+          </button>
+        </div>
+      )}
+      {replies.length > 0 && (
+        <div
+          className={depth < MAX_VISIBLE_DEPTH ? "mt-2 pl-3 border-l border-border space-y-2" : "mt-2 space-y-2"}
+        >
+          {replies.map((r) => (
+            <CommentNode
+              key={r.id}
+              comment={r}
+              depth={depth + 1}
+              repliesByParent={repliesByParent}
+              user={user}
+              pageId={pageId}
+              replyTo={replyTo}
+              setReplyTo={setReplyTo}
+              replyText={replyText}
+              setReplyText={setReplyText}
+              editingId={editingId}
+              setEditingId={setEditingId}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

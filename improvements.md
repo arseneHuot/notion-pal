@@ -1963,3 +1963,12 @@ Priority: high / medium / low.
 
 ### I-6301 — Public/Export: trashed sub-page link uses internal `/app/p/<id>` URL (P3, open)
 - See B-6302. The markdown export for trashed sub-pages emits `📄 [title](/app/p/<pageId>)`. That URL is only meaningful inside the app — for an exported `.md` consumed externally the link is broken. Either (a) emit a bare title without href when the target is trashed, or (b) emit a `<!-- trashed: title -->` comment so downstream tools can warn. Today's behavior leaks an internal route into portable Markdown.
+
+### I-6400 — Inline color picker: replace existing color spans instead of nesting (high, open)
+- See B-6400. Today `applyColor()` always wraps a new `<span data-color="1">` around the selection. After N sequential color applies you get N nested spans where the INNERMOST (i.e. the FIRST applied) color wins per CSS cascade — the user's last pick is silently overridden. Before wrapping, walk the selection's range and (a) unwrap any descendant `data-color` spans inside `range.commonAncestorContainer`, or (b) update the existing color span's style if the selection is exactly contained. This fixes both the visual-wrong-color issue and the DOM-bloat issue in one shot.
+
+### I-6401 — Comments pane: recursive reply rendering (high, open)
+- See B-6401. PageComments.tsx currently has a hardcoded two-level renderer. Extract `<CommentNode comment={c} depth={d}>` that recursively descends `repliesByParent[c.id]` with `pl-3 border-l` per level and a depth cap of e.g. 6 with a "+N more" collapse. Today, level-3+ replies are stored in the comments dict but never displayed, so a user replying to a reply-to-a-reply silently loses their thread.
+
+### I-6402 — Public form: live-clear validation error on field change (medium, open)
+- See B-6402. In `setValues`'s callback (form.$dbId.$viewId.tsx:236-244), also call `setError(null)` whenever `error` is currently set. Or wire `useEffect(() => setError(null), [values])`. This gives users immediate feedback that their input addressed the validation problem rather than leaving the stale error visible until next Submit.
