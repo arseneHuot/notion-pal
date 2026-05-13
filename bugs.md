@@ -4809,3 +4809,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-3210 / B-3806 / B-3911 — AI input single-line — fixed (commit 41057a4)
 - Fix: AIChat replaced `<input type="text">` with a `<textarea>`. Enter still submits the form (form's onSubmit); Shift+Enter inserts a newline (Notion/Slack convention). Auto-grows up to ~6 lines via a ref callback (`min-h-[32px] max-h-40 overflow-y-auto`). Placeholder updated to "Ask anything... (Shift+Enter for newline)".
 - Verified live: setting value to "Line 1\nLine 2\nLine 3" preserves all three newlines in the textarea.
+
+### B-3711 / B-3013 / B-2909 / B-2805 — DB table row drag-reorder — fixed (commit c11ffbb) — closes I-3703
+- Fix: TableView `<tr>` is now `draggable` with `dragstart/dragover/drop` handlers using a `application/x-row-id` DataTransfer payload. New store action `reorderDatabaseRows(databaseId, sourceRowId, targetRowId)` moves the source so it lands immediately before the target (or appends if null target). A small `row-handle-<id>` ⋮⋮ hint appears on hover with `cursor-grab`. Each row exposes `data-row-id` + `row-<id>` testid.
+- Verified live: synthetic drag of row[0] onto row[1] on a 7-row table reorders so source sits immediately before target. Persists to localStorage.
