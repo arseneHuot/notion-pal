@@ -5915,3 +5915,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Observed: palette closes, navigates to target page, but `document.activeElement` returns to `BODY`. Source-page caret never restored even when staying on same page; even on the destination page no editor focus.
 - Cause: action callback at CommandPalette.tsx:228-244 calls `setOpen(false)` directly, skipping `restoreSelection()` (the path used by click-outside / Escape). Page-item and action paths share the same gap. Mix of B-5608 + B-5704: navigation works but cursor is lost.
 - Expected: call `restoreSelection()` before navigation, OR focus the highlighted block's contenteditable after the scroll-into-view.
+
+### B-6005 — NewViewButton dropdown missing map — fixed (commit c249321)
+- Fix: dropdown literal extended to include `"map"`. The View union already supported map and `add()` handled the case; the dropdown was the only blocker.
+
+### B-6009 — Cmd+K page dupe (title + block) — fixed (commit c249321)
+- Fix: block-snippet loop skips any page whose id is in `matchingPages`. Title match takes precedence; no duplicate row in the palette.
