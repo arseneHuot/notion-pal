@@ -5702,3 +5702,50 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5608 — Cmd+K closed destroys editor selection — fixed (commit 33e485a)
 - Fix: CommandPalette captures the focused contenteditable + Range on open and restores both on close (Cmd+K toggle, Escape, scrim click). Cancelling out of the palette no longer loses cursor / highlight.
+
+## 2026-05-13 — Test agent batch (B-5700 series)
+
+### B-5700 — B-5604 sub-page export inlining re-verified (acceptance, ok)
+- Steps: planted A→B→C 3-deep, each with text block + sub-page block. Navigated to /app/p/pg_b5700_A. Dispatched `export-page-markdown` with `{noDownload:true}`.
+- Observed: `window.__lastExportedMarkdown` = `"# Page A\n\nBody of A\n\n## 📗 Page B\n\nBody of B\n### 📕 Page C\n\nBody of C\n"`. All three page bodies inlined under H1/H2/H3. Fix (commit 33e485a) holds. The export-markdown.ts `depth < 3` gate at line 164 produces the right header level via `Math.min(6, depth + 2)`.
+
+### B-5701 — B-5608 Cmd+K selection restore re-verified (acceptance, ok)
+- Steps: focused the first contenteditable on Page A (`blk_b5700_pA`), set a Range covering chars 0..5 ("Body "). Opened palette via `open-command-palette`. Dispatched Escape on `command-input`.
+- Observed: after close, `window.getSelection().toString() === "Body "` AND `document.activeElement === editor`. CommandPalette.tsx:23-60 captures and restores the editor + Range correctly. Fix (commit 33e485a) holds.
+
+### B-5702 — Sub-page export depth cap inlines 4 levels, links the 5th (acceptance, ok)
+- Steps: extended A→B→C with D (4th) and E (5th). Triggered `export-page-markdown {noDownload:true}` on A.
+- Observed: A/B/C/D bodies all inlined under #..####, E rendered as a bare link `📓 [Page E](/app/p/pg_b5700_E)`. The `depth < 3` guard in export-markdown.ts:164 allows depth 0/1/2 (the root + 3 nested sub-page inlines). The header level caps at H6 via `Math.min(6, depth + 2)` so very deep trees stay valid Markdown.
+
+### B-5703 — Cmd+K toggle parity (acceptance, ok)
+- Steps: with no palette open, dispatched `keydown {key:"k", metaKey:true}` on window. Palette opened (`command-input` present). Dispatched the same again.
+- Observed: palette closed cleanly (`command-input` absent). CommandPalette.tsx:64-72 toggles `open` on each Cmd+K; selection capture/restore wires through the toggle path correctly.
+
+### B-5704 — Sub-page export cycle re-inlines bodies before depth cap kicks in (P2, open)
+- Steps: planted cyclic graph `pg_b5701_A`↔`pg_b5701_B` (A has sub-page→B, B has sub-page→A). Exported A with `{noDownload:true}`.
+- Observed: output traverses A→B→A→B before falling back to a link on the 5th step: `# Cycle A\n\nCycle body A\n\n## 🔃 Cycle B\n\nCycle body B\n### 🔁 Cycle A\n\nCycle body A\n#### 🔃 Cycle B\n\nCycle body B\n🔁 [Cycle A](/app/p/pg_b5701_A)\n`. Both A's and B's bodies appear twice. The recursion guard in export-markdown.ts:164 uses only `depth < 3`, not a visited-page set — so cycles inflate the export with duplicate content.
+- Expected: track visited `pageId`s; on re-visit emit a link immediately instead of re-inlining.
+
+### B-5705 — TopBar breadcrumb still ignores teamspace move (P2, open, dup of B-5601)
+- Steps: at /app/p/pg_mp2pz5zw6oflgc0j (Getting Started, root, teamspaceId:ts_mp2pz5zwqdkgmzis "Private"), clicked `page-options` → `page-opt-move-ts_mp2pz5zwvod19q0j` (Engineering). State writes through (`teamspaceId: "ts_mp2pz5zwvod19q0j"`).
+- Observed: breadcrumb stays `🧭 Getting Started`. TopBar.tsx walk only follows `parentId`, never `teamspaceId`. Same root cause as B-5601 — keeping the ticket open. Restored Private teamspace post-test.
+
+### B-5706 — NewViewButton dropdown still lacks "map" view type (acceptance, ok / I-5601 still open)
+- Steps: re-read InlineDatabase.tsx:269. The literal `["table","board","calendar","gallery","list","timeline","chart","form"]` is unchanged. `View["type"]` union includes `"map"`; `viewIcon` (line 176) and `renderView` (line 198) both handle it.
+- Observed: confirmed dead branch. Already tracked as I-5601 — no new bug.
+
+### B-5707 — AI textarea Enter submits multi-line input, Shift+Enter doesn't (acceptance, ok)
+- Steps: clicked `sidebar-ai` to open AI panel. Set `ai-input` value to "line1", dispatched Shift+Enter (no submit). Set value to "line1\nline2", dispatched plain Enter.
+- Observed: Shift+Enter didn't submit (msg count unchanged), Enter posted the multi-line "line1\nline2" message. `[data-testid^="ai-msg-"]` count went from 12 → 13; last user message body contains the newline character. AIChat.tsx:327-334 keydown branch is correct: `if (e.key === "Enter" && !e.shiftKey)`. Note: in a headless dispatch Shift+Enter alone doesn't insert a newline character — browsers fire `beforeinput`/`input` for that. Real users get the newline via keypress; the test simulates the newline via direct value-set, which is the closest faithful playback.
+
+### B-5708 — Cmd+K block-match click scrolls + highlights target block (acceptance, ok)
+- Steps: at /app/p/pg_mp2pz5zw6oflgc0j, opened palette and typed "quick brown" (matches `blk_4900_snippet_test`). Clicked `cmd-block-blk_4900_snippet_test`.
+- Observed: location.hash → `#block-blk_4900_snippet_test`; target block has `ring-1 ring-blue-400` classes (highlight ring); block sits inside viewport (rect.top=324). CommandPalette.tsx:236-242 calls `scrollIntoView({behavior:"smooth", block:"center"})` and toggles the ring for ~1.5s. Works as documented.
+
+### B-5709 — Comment chain edit cycle: parent + reply both editable, updatedAt advances (acceptance, ok)
+- Steps: seeded `cmt_b5704_parent` and `cmt_b5704_reply` (parentId chain) on Getting Started. Opened comments panel, clicked `comment-edit-cmt_b5704_parent`, set `comment-edit-input-...` to "Parent v2 EDITED", clicked save. Repeated for the reply with "Reply v2 EDITED".
+- Observed: store reflects `content:"Parent v2 EDITED"` and `content:"Reply v2 EDITED"`, both with refreshed `updatedAt` timestamps (~600ms apart). No cross-contamination — editing the reply doesn't perturb the parent. Threaded edit flow is solid.
+
+### B-5710 — PageView crashes if a Comment record lacks `content` field (P2, open)
+- Steps: while preparing B-5709 I accidentally seeded `cmt_b5704_parent` with `body` instead of `content`. Clicking `comment-edit-...` swapped the error boundary to "This page didn't load — Cannot read properties of undefined (reading 'trim')". PageComments.tsx:236 calls `initial.trim()` on the `CommentEditor` prop seeded from `c.content`.
+- Cause: no defensive default for `content` in the editor. A malformed import or schema migration leaves `c.content === undefined`, taking down the entire `/app/p/<id>` route. Trivial fix: `initial={c.content ?? ""}` at PageComments.tsx:99 and :128. The `?? ""` keeps the disabled-save guard working without crashing.

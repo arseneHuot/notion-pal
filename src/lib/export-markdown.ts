@@ -36,12 +36,17 @@ export function pageToMarkdown(page: Page, blocks: Record<string, Block>, pages:
   lines.push(`# ${title}`);
   lines.push("");
 
+  // Track which sub-pages we've already inlined during THIS export so cycles
+  // (A→B→A) emit a link the second time around instead of recursing
+  // forever (B-5704 / I-5700). The depth cap is still in place as a fallback.
+  const visited = new Set<string>([page.id]);
+
   let numberedRun = 0;
   for (const blockId of page.blocks) {
     const b = blocks[blockId];
     if (!b) continue;
     if (b.type !== "numbered-list") numberedRun = 0;
-    const md = blockToMarkdown(b, blocks, 0, pages);
+    const md = blockToMarkdown(b, blocks, 0, pages, visited);
     if (b.type === "numbered-list") {
       numberedRun += 1;
       lines.push(`${numberedRun}. ${md}`);
@@ -54,7 +59,7 @@ export function pageToMarkdown(page: Page, blocks: Record<string, Block>, pages:
   return lines.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
-function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number, pages: Record<string, Page> = {}): string {
+function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number, pages: Record<string, Page> = {}, visited: Set<string> = new Set()): string {
   const indent = "  ".repeat(depth);
   switch (b.type) {
     case "heading-1":
@@ -81,7 +86,7 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const children = Object.values(blocks)
         .filter((cb) => cb.parentId === b.id)
         .sort((a, c) => a.order - c.order);
-      const childMd = children.map((c) => blockToMarkdown(c, blocks, depth + 1, pages)).join("\n");
+      const childMd = children.map((c) => blockToMarkdown(c, blocks, depth + 1, pages, visited)).join("\n");
       return `<details>\n<summary>${head}</summary>\n\n${childMd}\n</details>`;
     }
     case "callout": {
@@ -158,14 +163,17 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const title = target?.title?.trim() || "Sub-page";
       const icon = target?.icon ?? "📄";
       // For sub-pages, inline the target's content as a nested heading
-      // section (B-5604). Capped at 3 levels of recursion to prevent
-      // accidental cycles. page-link blocks (e.g. mentions) stay as a
-      // bare link.
-      if (b.type === "sub-page" && target && depth < 3) {
+      // section (B-5604). Two safety nets: a depth cap (max 3 levels
+      // beyond the root) AND a `visited` set so an A→B→A cycle emits a
+      // link the second time A is reached. page-link blocks (mentions)
+      // stay as a bare link.
+      if (b.type === "sub-page" && target && depth < 3 && !visited.has(target.id)) {
+        const nextVisited = new Set(visited);
+        nextVisited.add(target.id);
         const childMd = target.blocks
           .map((cid) => blocks[cid])
           .filter(Boolean)
-          .map((cb) => blockToMarkdown(cb as Block, blocks, depth + 1, pages))
+          .map((cb) => blockToMarkdown(cb as Block, blocks, depth + 1, pages, nextVisited))
           .join("\n");
         const hashes = "#".repeat(Math.min(6, depth + 2));
         return `${hashes} ${icon} ${title}\n\n${childMd}`;
@@ -203,7 +211,7 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
         for (const cid of blockIds) {
           const cb = blocks[cid];
           if (cb) {
-            const md = blockToMarkdown(cb, blocks, depth, pages);
+            const md = blockToMarkdown(cb, blocks, depth, pages, visited);
             if (md.trim()) {
               out.push(md);
               emittedSomething = true;
@@ -217,7 +225,7 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const children = Object.values(blocks)
         .filter((cb) => cb.parentId === b.id)
         .sort((a, c) => a.order - c.order);
-      return children.map((c) => blockToMarkdown(c, blocks, depth, pages)).join("\n");
+      return children.map((c) => blockToMarkdown(c, blocks, depth, pages, visited)).join("\n");
     }
     case "synced-block-ref": {
       const ref = b as Extract<Block, { type: "synced-block-ref" }>;
@@ -226,7 +234,7 @@ function blockToMarkdown(b: Block, blocks: Record<string, Block>, depth: number,
       const children = Object.values(blocks)
         .filter((cb) => cb.parentId === source.id)
         .sort((a, c) => a.order - c.order);
-      return children.map((c) => blockToMarkdown(c, blocks, depth, pages)).join("\n");
+      return children.map((c) => blockToMarkdown(c, blocks, depth, pages, visited)).join("\n");
     }
     case "button": {
       const bb = b as Extract<Block, { type: "button" }>;

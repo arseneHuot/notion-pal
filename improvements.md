@@ -1853,3 +1853,24 @@ Priority: high / medium / low.
 
 ### I-5604 — Markdown export sub-page recursion toggle (medium, open)
 - See B-5604. Export only emits a link to the child page, not its content. Add an "include sub-pages" option (and a sensible depth limit) so a 3-deep A→B→C tree exports as one cohesive document. Notion exports a zip with one file per page; we could match that or inline under H2/H3.
+
+
+## 2026-05-13 — Test agent batch (I-5700 series)
+
+### I-5700 — Sub-page export needs visited-set, not just depth counter (medium, open)
+- See B-5704. Today export-markdown.ts:164 caps recursion by depth alone (`depth < 3`). With a cycle A→B→A the same page bodies get inlined repeatedly until the cap finally trips. Track `visitedPageIds: Set<string>` threaded through `blockToMarkdown`, and on re-visit emit the link form immediately. Also worth a heuristic warning toast when the export contained a truncated branch so users know content was elided.
+
+### I-5701 — CommentEditor should default `initial` to "" (low, open)
+- See B-5710. Malformed `Comment` records (missing `content`) crash the PageView via `CommentEditor`'s `value.trim()` on a `useState(undefined)` value. Two-character fix at PageComments.tsx:99 and :128 (`initial={c.content ?? ""}`) hardens the route against legacy / partial imports.
+
+### I-5702 — Sub-page export depth cap should be configurable (low, open)
+- See B-5702. The 3-level inline cap is hardcoded. Some users will want one-level (just link the sub-pages), others want full recursion. Surface as an export option on the page-options menu (or as a query param on the `export-page-markdown` event detail) defaulting to the current 3.
+
+### I-5703 — Shift+Enter in AI textarea should programmatically insert "\n" (low, open)
+- See B-5707. Real keystrokes work; programmatic `KeyboardEvent` doesn't actually insert a newline (browsers ignore synthetic keys for editing intent). For test harnesses and accessibility tools, intercept Shift+Enter in the keydown branch and call `setText(v => v.slice(0, sel) + "\n" + v.slice(sel))` so the behavior is identical regardless of input source.
+
+### I-5704 — Cmd+K block highlight could persist longer on big pages (low, open)
+- B-5708 confirmed the 1500ms ring timeout. For very long pages where smooth scroll takes ~600ms, the user effectively gets <1s of highlight. Extend to 2500ms (or until next interaction) so the block stays visually anchored after the scroll settles.
+
+### I-5705 — Comment edit save button should disable while saving (low, open)
+- B-5709 shows save is synchronous. If the store goes async (future Supabase write-through), double-click on save could create duplicate updates. Add a `saving` state inside `CommentEditor` and disable the save button between click and resolution. Pre-emptive guard.

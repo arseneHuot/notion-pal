@@ -96,7 +96,7 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
               </div>
               {editingId === c.id && (
                 <CommentEditor
-                  initial={c.content}
+                  initial={c.content ?? ""}
                   onSave={(next) => { updateComment(c.id, next); setEditingId(null); }}
                   onCancel={() => setEditingId(null)}
                   commentId={c.id}
@@ -125,7 +125,7 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
                       </div>
                       {editingId === r.id && (
                         <CommentEditor
-                          initial={r.content}
+                          initial={r.content ?? ""}
                           onSave={(next) => { updateComment(r.id, next); setEditingId(null); }}
                           onCancel={() => setEditingId(null)}
                           commentId={r.id}
@@ -217,7 +217,9 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
 }
 
 function CommentEditor({ initial, onSave, onCancel, commentId }: { initial: string; onSave: (next: string) => void; onCancel: () => void; commentId: string }) {
-  const [value, setValue] = useState(initial);
+  // Defensive: malformed imports can persist `Comment.content` as
+  // undefined / null. Coalesce so .trim() never throws (B-5710 / I-5701).
+  const [value, setValue] = useState((initial ?? "") as string);
   return (
     <div className="mt-2">
       <textarea
