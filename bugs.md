@@ -3675,3 +3675,140 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Fix: `src/lib/store.ts` attaches a `window` `storage` event listener AND a BroadcastChannel("notion-clone") on first `initializeForUser`. When another tab writes to `notion-clone:user:<uid>`, we parse the incoming JSON, replace `_state`, and notify subscribers. `setState` posts a `{type:"rehydrate"}` BroadcastChannel message after every write for lower-latency fan-out within one browser.
 - Verified: synthetic `StorageEvent` with `key: notion-clone:user:<uid>` is received; `BroadcastChannel` is supported in the preview browser.
 - Caveat: last-write-wins. Two tabs concurrently editing the same field will clobber each other's in-flight edits — full CRDT semantics are out of scope. Good enough for the typical "edit in one tab, see in another" use case.
+
+
+## 2026-05-13 ~15:00 — QA agent verification batch (commits 14baeb8 + f62df5c)
+
+### B-3000 — B-2803/I-2800 title execCommand insertHTML flattening — verified FIXED (P0, fixed)
+- Repro: focus h1 page-title, select all, `execCommand('insertHTML', false, '<b>X</b><i>Y</i><span style="color:red">Z</span>')`.
+- Observed: `childCount: 1` (text node only), `innerHTML: "XYZ"`, `innerText: "XYZ"`. MutationObserver flattens within the same microtask.
+- Expected: flatten to plain text. PASS.
+
+### B-3001 — B-2630/I-2608 color tool emits span data-color — verified FIXED (P1, fixed)
+- Repro: select text "COLORME" in a paragraph block, open inline toolbar, click ib-color (mousedown), click ib-color-red (mousedown).
+- Observed: HTML becomes `<span data-color="1" style="color: rgb(220, 38, 38);">COLORME</span>`. No `<font>` tag emitted.
+- Expected: span wrapper with data-color marker. PASS.
+
+### B-3002 — B-2810/B-2715/B-2607/I-2602 ib-link popover renders & persists — verified FIXED (P1, fixed)
+- Repro: select text, open inline toolbar, mousedown ib-link, then focus the URL input (which triggers selectionchange).
+- Observed: `[data-testid="ib-link-popover"]` renders with input + apply button. Popover survives selectionchange when input gains focus.
+- Expected: popover persists. PASS.
+
+### B-3003 — B-2814/I-2808 settings subsection testids — verified FIXED (P2, fixed)
+- Repro: navigate to /app/settings, query for testids.
+- Observed: all 6 testids found — settings-profile, settings-workspace, settings-billing, settings-language, settings-notifications, settings-connections.
+- Expected: present. PASS.
+
+### B-3004 — B-2815/I-2807 sidebar chevron aria-labels — verified FIXED (P2, fixed)
+- Repro: sample `[data-testid^="expand-pg_"]` buttons.
+- Observed: aria-label set (e.g. "Expand BOLDEDITALRED"), aria-expanded="false", title="Expand". 0 unlabeled in sample.
+- Expected: labeled chevrons. PASS.
+
+### B-3005 — B-2816/I-2707 Cmd+K palette dialog semantics — verified FIXED (P2, fixed)
+- Repro: click `sidebar-search` (Cmd+K key shortcut also exists; see B-3006).
+- Observed: `[data-testid="command-palette"]` has role="dialog", aria-modal="true", aria-label="Command palette". PASS.
+
+### B-3006 — Cmd+K keyboard shortcut does NOT trigger command palette (P2, open) — regression / never wired
+- Repro: dispatch `new KeyboardEvent('keydown', { key:'k', metaKey:true, ctrlKey:true })` to window+document.
+- Observed: palette does NOT open. Only clicking `sidebar-search` opens it.
+- Expected: ⌘K (or Ctrl+K) should open the palette per the displayed `<kbd>⌘K</kbd>` shortcut hint in the sidebar.
+
+### B-3007 — B-2914/I-2806 cross-tab sync via StorageEvent — verified FIXED (P2, fixed)
+- Repro: synthetic `StorageEvent('storage', { key: 'notion-clone:user:<uid>', oldValue, newValue })` with a tweaked page title, then navigate.
+- Observed: `BroadcastChannel` is supported. Rendered title updates to the new value pushed by the event.
+- Expected: rehydrate on storage event. PASS.
+
+### B-3008 — B-2918/B-2919/B-2920 view-menu / cal-prev / cal-next / toggle-blk aria — verified FIXED (P2, fixed)
+- Repro: open page with DB calendar view + a toggle block.
+- Observed: view-menu-<viewId> aria="View options", cal-prev-<dbId> aria="Previous month", cal-next-<dbId> aria="Next month", toggle-blk_* aria="Expand toggle" + aria-expanded. All labeled.
+- Expected: labeled. PASS.
+
+### B-3009 — Inline toolbar `ib-color` button missing aria-label (P3, open) — a11y nit
+- Repro: inspect `[data-testid="ib-color"]` outerHTML in inline toolbar.
+- Observed: button has `title="Text color"` but NO `aria-label`. Other ib-* buttons (ib-bold, ib-italic, ib-link, etc.) all have aria-label.
+- Expected: aria-label="Text color" for screen-reader parity.
+
+### B-3010 — Inline toolbar Apply-link button no-op via .click() (P2, open) — possible regression
+- Repro: open ib-link popover, set input.value="https://example.com" via native setter + dispatch input event, click `[data-testid="ib-link-apply"]`.
+- Observed: nothing happens, block HTML stays "LINKME", popover stays open.
+- Expected: link applied (anchor tag) AND/OR popover closes. Likely needs mousedown handler instead of click — matches the ib-color toolchain.
+
+### B-3011 — Cmd+K palette block-content search does not surface block snippets (P2, open)
+- Repro: open command palette, type "orientation" (substring of a block's text "Here's a quick orientation").
+- Observed: shows the parent page TestColor under Pages group. NO separate Blocks group or snippet shown.
+- Expected: per spec "two result groups appear" (pages AND blocks) when query matches both.
+
+
+### B-3012 — Sidebar pages still not draggable (P2, open) — confirms B-2908 still open
+- Repro: inspect sidebar `[data-testid="page-menu-pg_*"]` row's parent `.group` div.
+- Observed: `draggable` attr is null. No `onDragStart`/`onDragOver`/`onDrop` listeners on row.
+- Expected: pages reorder via drag.
+
+### B-3013 — Table rows still not draggable (P2, open) — confirms B-2909 still open
+- Repro: switch to table view for db_dates_test, inspect `tr` elements.
+- Observed: `draggable` attr null on every `tr`, no drag handlers.
+- Expected: rows reorderable via DnD.
+
+### B-3014 — Calendar day cells lack drop targets (P2, open) — confirms B-2907 still open
+- Repro: open db calendar view (e.g. db_dates_test/v_dates_cal). Cells have testid `cal-add-YYYY-MM-DD`.
+- Observed: React props on cell are `onClick, className, data-testid, children`. No `onDragOver`/`onDrop`. Chips ARE draggable but nothing accepts the drop.
+- Expected: drag a chip to a new day to reschedule.
+
+### B-3015 — Public-form submit creates row — verified WORKS (P2, fixed/info)
+- Repro: visit /form/db_dates_test/v_form, fill `public-form-field-p_dt` (Title) + p_dn (Score), click `public-form-submit`.
+- Observed: row count for db_dates_test went 8 -> 9. Last row has values { p_dn: 42, p_dt: "QA_FORM_TEST" }, createdBy: "public-form", uniqueIdSeq: 9. UI shows "Thanks for submitting!".
+- Expected: row created in host's localStorage. PASS.
+
+### B-3016 — AI chat sanitizes vbscript / file / javascript hrefs — verified WORKS (P0, fixed/info)
+- Repro: send `Test [v](vbscript:alert(1)) and [f](file:///etc/passwd) and [j](javascript:alert(1)) links` in ai-input.
+- Observed: assistant reply renders the link text only with `<a href="#">` placeholders. No vbscript:, file://, or javascript: appears in rendered HTML.
+- Expected: dangerous protocols stripped to "#". PASS.
+
+### B-3017 — Markdown export covers most block types — verified WORKS (P2, fixed/info)
+- Repro: page-options → "Export as Markdown" on pg_mp33cd7d01u4huok. Captured blob via URL.createObjectURL interceptor.
+- Observed: 544-byte text/markdown blob. Includes # title, ##/heading, **bold**, *italic*, `<!-- synced reference: no source -->` for empty synced refs, `<!-- (embedded database) -->`, `$$ … $$` for equations, ``` fenced code, button `[🚀 Go to Roadmap]`, `<details>/<summary>` for toggles, `<!-- multi-column layout: -->` for columns.
+- Gap: code block content was empty in this sample even though page has a code block; the leading `/` from the empty `/`-block leaks as plain text. Worth a follow-up — see I-3001.
+
+### B-3018 — Cmd+K keyboard shortcut DOES work via document/body — false alarm on earlier B-3006
+- Re-verified by dispatching `keydown` with key:'k', metaKey:true on document.body — palette opens. Strike B-3006.
+
+### B-3019 — Cmd+B / Cmd+I / Cmd+/ / Cmd+D / Cmd+K shortcuts all functional (P2, fixed/info)
+- Repro: paragraph block keydown for each.
+- Observed: Cmd+B wraps `<b>`; Cmd+I wraps `<i>`; Cmd+/ opens `[data-testid="slash-menu"]`; Cmd+D duplicates block (block-content count 15→16); Cmd+K opens palette.
+- Expected: all work. PASS.
+
+### B-3020 — Public published page strips inline `<img onerror>` (P0, fixed/info)
+- Repro: append a block with content `<img src=x onerror="window.__xss_fired=true">XSS_PROBE` to a published page in localStorage. Visit /p/getting-started.
+- Observed: "XSS_PROBE" text renders, but rendered HTML has no `onerror` and `window.__xss_fired` stays false.
+- Expected: sanitized. PASS.
+
+### B-3021 — Trash cascade restore — verified WORKS (P2, fixed/info)
+- Repro: create parent + child page (parentId pointer), click `pmenu-trash-<parent>`, then `/app/trash` → `restore-<parent>`.
+- Observed: both pages get isInTrash:true after parent trash; both get isInTrash:false after parent restore.
+- Expected: cascade works. PASS.
+
+### B-3022 — Trash route crashes on synthetic trashed DB (P1, open) — POSSIBLE regression
+- Repro: inject a database into state.databases with `isInTrash: true` plus 2 rows (synthetic; no views array gaps but minimal title/properties/views/workspaceId). Navigate to /app/trash.
+- Observed: full ErrorBoundary screen "This page didn't load — Cannot read properties of undefined (reading 'length')".
+- Expected: graceful render. Likely missing defensive check on `views?.length` or `rows?.length` in TrashPage / database-trash-row component. The same DB renders fine when isInTrash:false.
+- Implementer note: cannot reproduce purely via UI because trashing a DB inline-block from a page may add fields that synthetic state lacks; check the rendering selector for `db?.views?.length ?? 0`.
+
+### B-3023 — Calendar route `/app/calendar` has 35 unlabeled day-add buttons (P3, open) — a11y
+- Repro: visit /app/calendar, count buttons without aria-label / title / text.
+- Observed: 35/153 unlabeled — all `[data-testid="day-add-YYYY-MM-DD"]` (icon-only Plus buttons in each cell).
+- Expected: aria-label="Add event on May 13" (or similar). Other routes (/app, /app/inbox, /app/mail, /app/settings, /app/templates, /app/trash) all report 0 unlabeled.
+
+### B-3024 — Comment threading renders nested (P2, fixed/info)
+- Repro: inject parent comment with childrenIds:[child] + child with parentId:parent. Open comments-btn panel.
+- Observed: both rendered. Child row is rendered INSIDE the parent container, in a `<div class="mt-2 pl-3 border-l border-border space-y-2">` indented block. `parent.contains(childRow) === true`.
+- Expected: visual nesting + correct DOM hierarchy. PASS.
+
+### B-3025 — 1000-keystroke perf flood on paragraph (P2, info)
+- Repro: select paragraph block, run `for (i=0;i<1000;i++) document.execCommand('insertText',false,'a')`.
+- Observed: 2048ms total, 2.049ms per character on a page with 17 blocks + an inline DB.
+- Expected: <5ms/char target met. Sub-linear (no jank). Note: react re-renders are debounced — actual user keystrokes at 5-10/sec would see no degradation.
+
+### B-3026 — ib-link Apply button click() no-op — Enter key works (P3, open) — refines B-3010
+- Repro: open ib-link popover, set input value via native setter, dispatch input event, then click `[data-testid="ib-link-apply"]`.
+- Observed: nothing happens. Apply handler is `onMouseDown` only (no `onClick`). `dispatchEvent(MouseEvent('mousedown'))` works, as does Enter on the input.
+- Expected: either accept `click` OR add a hint. Real users who click do trigger mousedown so the issue is test-only — keep priority low. Drop B-3010 in favor of B-3026.

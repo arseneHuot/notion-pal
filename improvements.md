@@ -1250,3 +1250,34 @@ Priority: high / medium / low.
 ### I-2808 — Settings page sub-sections (workspace/profile/billing/language/notifications/connections) (medium, open — extends I-2624)
 - See B-2814. Three testids in three batches — settings has been frozen. Even an empty stub of `[data-testid="settings-workspace"]` / `[data-testid="settings-profile"]` / `[data-testid="settings-billing"]` / `[data-testid="settings-language"]` would unblock E2E and signal future direction.
 
+
+
+## 2026-05-13 ~15:00 — QA agent verification batch
+
+### I-3000 — Label `day-add-YYYY-MM-DD` calendar Plus icons (high, open)
+- See B-3023. Bulk-fix all 35 calendar add-cell buttons: `aria-label={\`Add event on \${format(date, 'MMM d, yyyy')}\`}` + `title={...}`. Removes 35 unlabeled buttons from /app/calendar.
+
+### I-3001 — Markdown export should serialize code-block content + skip empty `/`-placeholder blocks (medium, open)
+- See B-3017. ``` fenced code block exported with empty body even though the block has language metadata; if `content` is empty, omit the block or render a single-line empty fence. Also the leading `/` from a placeholder block leaked as content — slash-menu trigger blocks (`type:text, content:'/'`) should be excluded from export.
+
+### I-3002 — TrashPage needs defensive coalescing (high, open)
+- See B-3022. The fatal "Cannot read properties of undefined (reading 'length')" boots the whole trash route. Wrap rendering of trashed databases in optional chaining: `(db.views ?? []).length`, `(db.rows ?? []).length`, `(db.properties ?? {})`. Currently a single malformed DB record (e.g. one created before the views/rows fields were introduced) makes the entire trash inaccessible.
+
+### I-3003 — `ib-color` inline-toolbar button missing aria-label (low, open)
+- See B-3009. Add `aria-label="Text color"` to the `<button>` that renders the "A" glyph (`[data-testid="ib-color"]`). Currently only has `title`. Other ib-* buttons all have aria-label.
+
+### I-3004 — `ib-link-apply` should also bind `onClick` (low, open)
+- See B-3026. Mousedown-only binding diverges from typical button affordance. Either ALSO bind onClick (with `e.preventDefault()` to avoid selection loss) OR add a hint test that explains. Real users unaffected; tests are.
+
+### I-3005 — Cmd+K palette block-content snippet group (medium, open)
+- See B-3011. Spec calls for two result groups when query matches both a page title and a block text. Currently only Pages group renders; block-text matches surface as a page-only result (TestColor for "orientation"). Add a "Blocks" group beneath Pages with the matching snippet and a click handler that navigates and scrolls to the block.
+
+### I-3006 — Sidebar pages drag-drop reorder (medium, open) — restates I-2804 sidebar slice
+- See B-3012. Still no `draggable` attribute on sidebar page rows. Highest-value DnD remaining; covers page hierarchy reorder which is core to the Notion experience.
+
+### I-3007 — Table-row drag-drop reorder (medium, open) — restates I-2804 table slice
+- See B-3013. `<tr>` elements need `draggable={true}` + react-dnd or HTML5 DnD handlers + a visible drop indicator between rows.
+
+### I-3008 — Calendar event chip drop targets (medium, open) — restates I-2804 calendar slice
+- See B-3014. Chips already have `draggable="true"`. Need to add `onDragOver={(e)=>e.preventDefault()}` and `onDrop={(e)=>rescheduleRow(chipId, day)}` to each `cal-add-*` cell. Smallest delta of the three.
+

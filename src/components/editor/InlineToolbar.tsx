@@ -251,6 +251,7 @@ export function InlineToolbar() {
           />
           <button
             onMouseDown={(e) => { e.preventDefault(); commitLink(linkUrl.trim()); }}
+            onClick={(e) => { e.preventDefault(); commitLink(linkUrl.trim()); }}
             className="text-xs bg-primary text-primary-foreground rounded px-2"
             data-testid="ib-link-apply"
           >
@@ -282,6 +283,7 @@ function ColorPicker({ onPick }: { onPick: (color: string) => void }) {
         onMouseDown={(e) => { e.preventDefault(); setOpen((v) => !v); }}
         className="p-1.5 rounded hover:bg-accent font-bold text-sm"
         title="Text color"
+        aria-label="Text color"
         data-testid="ib-color"
       >
         A

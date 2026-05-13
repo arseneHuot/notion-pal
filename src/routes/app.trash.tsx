@@ -69,7 +69,7 @@ function TrashPage() {
                 <span className="text-2xl">{d.icon ?? "🗄️"}</span>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium truncate">{d.name || "Untitled database"}</div>
-                  <div className="text-xs text-muted-foreground">{d.rows.length} rows</div>
+                  <div className="text-xs text-muted-foreground">{d.rows?.length ?? 0} rows</div>
                 </div>
                 <button
                   onClick={() => updateDatabase(d.id, { isInTrash: false })}

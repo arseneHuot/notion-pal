@@ -138,9 +138,50 @@ export function CommandPalette() {
       group: "Databases",
     }));
 
+    // Block-content snippets (B-3011): when the user types a multi-char query,
+    // surface up to 5 block matches with a short text excerpt and the parent
+    // page label. Clicking jumps to the page and we also scroll the block
+    // into view via a hash-anchor query.
+    const blockMatches: { id: string; label: string; icon: React.ReactNode; action: () => void; group: string }[] = [];
+    if (q.length >= 2) {
+      for (const p of Object.values(pages)) {
+        if (p.isInTrash) continue;
+        if (blockMatches.length >= 5) break;
+        for (const bid of p.blocks) {
+          const b = blocks[bid];
+          if (!b || !("content" in b) || typeof b.content !== "string") continue;
+          const plain = stripHtml(b.content);
+          const idx = plain.toLowerCase().indexOf(q);
+          if (idx === -1) continue;
+          const start = Math.max(0, idx - 20);
+          const snippet = (start > 0 ? "…" : "") + plain.slice(start, idx + q.length + 30) + (plain.length > idx + q.length + 30 ? "…" : "");
+          blockMatches.push({
+            id: `block-${bid}`,
+            label: `${snippet}  ·  ${p.title || "Untitled"}`,
+            icon: <span className="text-base">¶</span>,
+            action: () => {
+              navigate({ to: "/app/p/$pageId", params: { pageId: p.id } });
+              setOpen(false);
+              // Scroll the matched block into view after the route settles.
+              setTimeout(() => {
+                const el = document.querySelector(`[data-block-id="${bid}"]`);
+                if (el && "scrollIntoView" in el) {
+                  (el as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+                  (el as HTMLElement).classList.add("ring-1", "ring-blue-400");
+                  setTimeout(() => (el as HTMLElement).classList.remove("ring-1", "ring-blue-400"), 1500);
+                }
+              }, 200);
+            },
+            group: "Block matches",
+          });
+          break; // one snippet per page
+        }
+      }
+    }
+
     const matchedActions = actions.filter((a) => !q || a.label.toLowerCase().includes(q));
 
-    return [...matchedActions, ...pageItems, ...dbItems];
+    return [...matchedActions, ...pageItems, ...dbItems, ...blockMatches];
   }, [pages, databases, blocks, query, darkMode, navigate]);
 
   useEffect(() => {

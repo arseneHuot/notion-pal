@@ -171,6 +171,8 @@ function CalendarPage() {
                         addEvent(k);
                       }}
                       className="hover:bg-accent rounded"
+                      aria-label={`Add event on ${date.toLocaleDateString(undefined, { month: "long", day: "numeric" })}`}
+                      title="Add event"
                       data-testid={`day-add-${k}`}
                     >
                       <Plus className="size-3" />
