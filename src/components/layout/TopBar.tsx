@@ -140,8 +140,9 @@ export function TopBar() {
   );
 }
 
-function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean; isFavorite?: boolean }; close: () => void }) {
+function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean; isFavorite?: boolean; teamspaceId?: string | null }; close: () => void }) {
   const navigate = useNavigate();
+  const teamspaces = useStore((s) => Object.values(s.teamspaces));
   return (
     <div className="absolute right-4 top-12 bg-card border border-border rounded-md shadow-lg py-1 w-64 z-40" data-testid="page-options-menu">
       <MenuItem
@@ -203,6 +204,19 @@ function PageOptionsMenu({ page, close }: { page: { id: string; isWiki: boolean;
           setTimeout(() => window.print(), 100);
         }}
       />
+      <div className="border-t border-border my-1" />
+      <div className="px-3 py-1 text-[10px] uppercase text-muted-foreground">Move to teamspace</div>
+      {teamspaces.map((ts) => (
+        <MenuItem
+          key={ts.id}
+          label={`${ts.icon} ${ts.name}`}
+          testid={`page-opt-move-${ts.id}`}
+          onClick={() => {
+            updatePage(page.id, { teamspaceId: ts.id, parentId: null });
+            close();
+          }}
+        />
+      ))}
       <div className="border-t border-border my-1" />
       <MenuItem
         label="Move to Trash"

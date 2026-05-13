@@ -3032,3 +3032,87 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: db_a chart view → `chart-type-v_a_chart` → "line".
 - Observed: a `<svg class="recharts-surface">` with `g.recharts-cartesian-grid` + polyline ↗ path rendered cleanly. Donut, bar, line all functional. Chart UI is solid.
 
+## 2026-05-13 02:35 — Test agent batch 25
+
+### B-2400 — Comment threading wired end-to-end (P2, fixed — closes B-2216) (info)
+- File: src/components/page/PageComments.tsx lines 12-114.
+- Steps: open `/app/p/pg_mp349of8lvv9kk0m` → `comments-btn` → post `Top-level comment for threading test` via `comment-input` + `post-comment`. Click `reply-cmt_<id>` button on the new comment row → `reply-input-cmt_<id>` textarea appears → type `This is a child reply` → click `reply-submit-cmt_<id>`.
+- Observed: child comment row saved to `comments` with `parentId: cmt_<parentId>`, `resolved:false`. UI renders `reply-row-cmt_<childId>` nested under the parent. localStorage confirmed `{id:"cmt_mp3brkgorfagvv78", parentId:"cmt_mp3breeekodbyvwk", content:"This is a child reply"}`. Top-level resolve / reply / reply-row testids all exist.
+
+### B-2401 — AI assistant renders fenced code block as `<pre><code>` when prompt mentions "code" (P2, fixed — closes B-2217) (info)
+- File: hint in AI assistant render path; observed downstream.
+- Steps: `/app/p/pg_mp349of8lvv9kk0m` → `sidebar-ai` → `ai-new-thread` → ai-input "show me a python code snippet" → `ai-send`.
+- Observed: assistant message HTML contains `<pre class="bg-card border border-border rounded p-2 my-1 overflow-x-auto text-xs"><code class="font-mono"># adjust to your data\nprint('found ' + str(${matches.length}) + ' results')\n</code></pre>`. Both `pre` and `code` elements present.
+
+### B-2402 — AI fenced block only fires when the user prompt contains the literal token "code" (P3, info)
+- Same test setup as B-2401.
+- Steps: send prompt `hello world response` after the threading test → message rendered with no `<pre>` element, just the "Based on your workspace…" search template.
+- Observed: code-block emission appears prompt-keyword-gated rather than driven by detecting actual code in the (still-templated) response. Acceptable, but if the AI ever returns real fenced output the renderer needs to detect ```…``` markers in the text, not the prompt. Re-files as a follow-up to I-2106.
+
+### B-2403 — AI assistant `${matches.length}` is rendered literally instead of interpolated (P2, fixed)
+- Same `<pre>` block as B-2401: the code shows `print('found ' + str(${matches.length}) + ' results')`. The template author meant `${matches.length}` to be a JS template-literal substitution, but the source string uses single quotes / regular concat, so the placeholder leaks into the UI.
+- Expected: either inline the actual hit count (`matches.length`) at render time, or replace with a static "N" placeholder.
+
+### B-2404 — Resolving a parent comment hides its child replies even when child.resolved=false (P2, open)
+- File: src/components/page/PageComments.tsx line 18 + 24-25.
+- Steps: after B-2400, click `resolve-cmt_mp3breeekodbyvwk` (parent). With `showResolved=false` (default), the parent row disappears AND `reply-row-cmt_mp3brkgorfagvv78` also disappears. The child's `resolved` flag in localStorage is still `false` though.
+- Expected: either cascade-resolve the children (set `child.resolved=true` when parent resolves) so the state is consistent, OR keep them visible as orphans. Today the child is "alive but orphaned/invisible" — when the user later toggles `showResolved`, an unresolved child re-appears nested under a resolved parent.
+
+### B-2405 — Sidebar pages still un-draggable (P2, open — extends B-2213)
+- Steps: `/app` → `aside [draggable="true"]` returns 0. 44 page-row buttons exist with no DnD wiring in `Sidebar.tsx` (lines 220-310 are only click handlers).
+- Same status as last batch; no progress shipped here.
+
+### B-2406 — Calendar week-view event chips still un-draggable (P2, open — extends B-2215)
+- Steps: `/app/calendar` → switch to "week" view → 4 event chips render in week-day cells; none has `draggable="true"`. Drag-to-move of events still unsupported.
+
+### B-2407 — Database table rows still un-draggable (P2, open — extends B-2214)
+- Steps: `/app/p/pg_mp33cd7d01u4huok` table view → 4 `<tbody><tr>` rows, none has `draggable` attribute, no `row-handle-*` testid. `rows.order` cannot be changed via UI.
+
+### B-2408 — Gallery cards are not draggable for reorder (P2, open)
+- Steps: db_dates_test gallery view → 7 `gallery-card-r_<id>` cards rendered; `card.draggable === false` for every card. Notion gallery supports drag-to-reorder; this app does not.
+
+### B-2409 — No "Move to teamspace" action anywhere in the page-menu (P2, fixed)
+- Files: `src/components/layout/Sidebar.tsx:218-310`, `src/components/page/PageView.tsx` (page-options popover).
+- Steps: sidebar `page-menu-pg_<id>` exposes `pmenu-favorite`, `pmenu-duplicate`, `pmenu-newsub`, `pmenu-copylink`, `pmenu-trash`. The chrome `page-options` popover exposes `page-opt-favorite`, `page-opt-duplicate`, `page-opt-wiki`, `page-opt-wordcount`, `page-opt-copylink`, `page-opt-export-md`, `page-opt-print`, `page-opt-trash`.
+- Observed: no `move-to`, `change-teamspace`, or similar. Pages are pinned to their original teamspaceId for life; the data model supports the operation (`pages[id].teamspaceId`), but no UI surfaces it. With 3 teamspaces in seed data (`Private`, `Engineering`, `Shared`) this is a notable gap.
+
+### B-2410 — Database view tabs lack row-count badges (P3, fixed)
+- Steps: open `/app/p/pg_mp33cd7d01u4huok` → inspect `[data-testid^="db-view-"]` tabs.
+- Observed: tab text is just `▦ Main`, `🧾 Form`, `≣ List`, `▢ Gallery`, `📅 Calendar`, `⇆ Timeline`. No count next to the name (Notion shows e.g. `Main · 7`). With per-view filters/sorts, the count would help — verified `db_dates_test` Main view filter `Tags contains blue` cuts 7 rows → 4 with no visible indication that filtering is active.
+
+### B-2411 — Synced-block-ref pages render the mirrored content correctly (P3, info)
+- Steps: `/app/p/pg_mp36yevcqwbxc3v0` (OKRs) — page has 54 `synced-block-ref` rows referencing source `blk_mp33cd7dvdil4mjz` / `blk_mp33cd7dwqtkopvq`.
+- Observed: 50 `synced-ref-blk_<id>` containers rendered, each showing the source's current children including the live-updated text `LIVE-MIRROR-1778627431314`. Source block also rendered with `synced-source-*` testid. Synced-block path works.
+
+### B-2412 — Public form submission round-trip succeeds (P3, info — closes B-2209 with a real click)
+- Steps: `/form/db_bigform/v_bf_form` → 32 fields → fill text `p_big_0` and toggle the actual `<input type="checkbox">` inside `public-form-field-p_big_5` via `.click()` (NOT programmatic descriptor) → `public-form-submit`.
+- Observed: db_bigform row count 13 → 14. New row `row_mp3bukh5bhzp` carries `values:{p_big_0:"Form submission test batch 25", p_big_5:true}`, `createdBy:"public-form"`. Checkbox is recorded when toggled via real click — B-2209 was an automation gotcha only.
+
+### B-2413 — Public form `/form/<dbId>/<viewIndex>` 404s; only `/form/<dbId>/<viewId>` works (P3, info — clarifies B-2200)
+- Steps: visit `/form/db_bigform/0` (using the view's array index `0`) → "Form not found" empty state. Visit `/form/db_bigform/v_bf_form` (using `view.id`) → renders the 32-field form.
+- Observed: the public-form route requires the literal `view.id` string, not the position. Users who guess the URL from the view tabs (which have no exposed id) won't get the right link. Together with `share-btn → Copy form link` (cf. I-2100), this is the main UX risk for forms.
+
+### B-2414 — Command palette has comprehensive testids but no `role="dialog"` (P3, info — extends I-2109)
+- Steps: `sidebar-search` click → palette opens with `cmd-new-page`, `cmd-calendar`, `cmd-mail`, `cmd-inbox`, `cmd-trash`, `cmd-settings`, `cmd-dark-mode`, `cmd-ai`, plus `cmd-page-pg_<id>` for each page. Typing "meeting" filters down to 5 results. Esc closes the palette.
+- Observed: no `[role="dialog"]`, no `[cmdk-root]` / `[cmdk-input]` testids. Functionally great, screen-reader announcement is poor.
+
+### B-2415 — Trash delete-forever immediately removes the page (P3, info)
+- Steps: trash a new template-created page → `/app/trash` → click `delete-forever-pg_<id>`.
+- Observed: `pages[id]` deleted from localStorage without an explicit confirmation modal (we auto-stubbed `window.confirm = () => true`; the source likely uses the native one). UX note: with no in-app confirm dialog, automation tests that mock `confirm` lose the modal entirely. Acceptable given the trash gate, but worth noting for I-2215-style coverage.
+
+### B-2416 — Templates panel — Decision log (ADR) template instantiates a new page (P3, info)
+- Steps: `sidebar-templates` → `template-decision-log-adr`.
+- Observed: page count 21 → 22; new page `Decision log (ADR)` opened, fully populated with the template's blocks. All 8 listed templates (`template-meeting-notes`, `…-project-brief`, `…-daily-journal`, `…-reading-list`, `…-okrs`, `…-runbook`, `…-decision-log-adr`, `…-1-1-agenda`) are wired.
+
+### B-2417 — Filter cuts visible row count from 7 → 4 with no on-screen indicator (P3, info — extends B-2410)
+- Steps: `db_dates_test` has 7 rows total. Main table view has filter `Tags contains blue` → 4 rows render. No `filter-active-*` badge, no row count, no "filtered" label.
+- Expected: a visible badge "Filtered (4 of 7)" or row count "7" / "4" next to the view name.
+
+### B-2418 — Timeline view renders 360 bars for a 7-row database (P2, open)
+- Steps: `db_dates_test` → `db-view-v_dates_tl`.
+- Observed: 360 `[data-testid^="timeline-bar-"]` (likely one per day in the visible range × 7 rows). Reasonable for an empty Gantt grid but performance impact when many DBs render in one page; consider virtualizing the day cells.
+
+### B-2419 — AI assistant returns templated workspace-search response, not real LLM (P2, open — confirms B-2217 still applies)
+- Steps: prompts "hello world response" and "show me a python code snippet" → both produce the `Based on your workspace, here's what I found about "<query>": 1. <strong>X</strong> — icon (relevance N)…` template.
+- Observed: same as B-2217; the markdown-code-block path (B-2401) is a band-aid that injects a python `print()` template when "code" is in the query.
+

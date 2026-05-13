@@ -148,7 +148,13 @@ export function AIChat() {
       answer = `I couldn't find anything specific in your workspace about "${question}". Here are some ideas:\n\n- Create a new page to capture this\n- Try a more specific search\n- Browse Recents from Home`;
       if (wantsCode) {
         const lang = /python/i.test(question) ? "python" : /javascript|\bjs\b/i.test(question) ? "javascript" : /\bsql\b/i.test(question) ? "sql" : "";
-        answer += `\n\nHere's a starter snippet:\n\n\`\`\`${lang}\n${lang === "python" ? "def hello():\n    print('Hello from NotionClone')" : lang === "sql" ? "SELECT * FROM pages WHERE title ILIKE '%notion%'" : "function hello() { console.log('Hello from NotionClone'); }"}\n\`\`\``;
+        const snippet =
+          lang === "python"
+            ? "def hello():\n    print('Hello from NotionClone')"
+            : lang === "sql"
+              ? "SELECT * FROM pages WHERE title ILIKE '%notion%'"
+              : "function hello() { console.log('Hello from NotionClone'); }";
+        answer += "\n\nHere's a starter snippet:\n\n```" + lang + "\n" + snippet + "\n```";
       }
     } else {
       answer = `Based on your workspace, here's what I found about "${question}":\n\n`;
@@ -158,7 +164,12 @@ export function AIChat() {
       answer += `\nWould you like a summary of any of these?`;
       if (wantsCode) {
         const lang = /python/i.test(question) ? "python" : /javascript|\bjs\b/i.test(question) ? "javascript" : /\bsql\b/i.test(question) ? "sql" : "";
-        answer += `\n\nQuick code template:\n\n\`\`\`${lang}\n${lang === "python" ? "# adjust to your data\nprint('found ' + str(${matches.length}) + ' results')" : "// adjust to your data\nconsole.log(`found ${matches.length} results`)"}\n\`\`\``;
+        const count = matches.length;
+        const snippet =
+          lang === "python"
+            ? `# adjust to your data\nprint(f'found {${count}} results')`
+            : `// adjust to your data\nconsole.log('found ' + ${count} + ' results')`;
+        answer += "\n\nQuick code template:\n\n```" + lang + "\n" + snippet + "\n```";
       }
     }
     return { answer, sources: matches.map((m) => ({ pageId: m.p.id, title: m.p.title || "Untitled" })) };

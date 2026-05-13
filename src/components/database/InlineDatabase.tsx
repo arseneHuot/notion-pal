@@ -15,6 +15,7 @@ import { uid } from "@/lib/id";
 
 export function InlineDatabase({ databaseId, initialViewId }: { databaseId: string; initialViewId: string | null }) {
   const db = useStore((s) => s.databases[databaseId]);
+  const rowsMap = useStore((s) => s.rows);
   const [activeViewId, setActiveViewId] = useState<string | null>(initialViewId);
 
   if (!db) {
@@ -23,6 +24,36 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
   const activeView = useMemo(() => {
     return db.views.find((v) => v.id === activeViewId) ?? db.views[0];
   }, [db.views, activeViewId]);
+
+  // Per-view filtered row count for badges (B-2410 / B-2417).
+  const viewCounts = useMemo(() => {
+    const out: Record<string, { visible: number; total: number }> = {};
+    const allRows = db.rows.map((id) => rowsMap[id]).filter((r) => r && !r.isInTrash);
+    for (const v of db.views) {
+      const filtered = (v.filters ?? []).length > 0
+        ? allRows.filter((r) =>
+            (v.filters ?? []).every((f) => {
+              // Lightweight evaluator — operator subset that's enough for badges.
+              const val = r.values[f.propertyId];
+              switch (f.operator) {
+                case "is": return val === f.value;
+                case "is-not": return val !== f.value;
+                case "is-empty": return val == null || val === "" || (Array.isArray(val) && val.length === 0);
+                case "is-not-empty": return !(val == null || val === "" || (Array.isArray(val) && val.length === 0));
+                case "contains":
+                  if (Array.isArray(val)) return val.some((x) => String(x).toLowerCase().includes(String(f.value ?? "").toLowerCase()));
+                  return typeof val === "string" && val.toLowerCase().includes(String(f.value ?? "").toLowerCase());
+                case "greater-than": return Number(val) > Number(f.value);
+                case "less-than": return Number(val) < Number(f.value);
+                default: return true;
+              }
+            }),
+          )
+        : allRows;
+      out[v.id] = { visible: filtered.length, total: allRows.length };
+    }
+    return out;
+  }, [db, rowsMap]);
 
   if (!activeView) return null;
 
@@ -37,16 +68,24 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
           data-testid={`db-name-${databaseId}`}
         />
         <div className="flex items-center gap-1 ml-2 mb-1">
-          {db.views.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => setActiveViewId(v.id)}
-              className={`text-xs px-2 py-1 rounded-t ${v.id === activeView.id ? "bg-accent font-medium" : "hover:bg-accent/50 text-muted-foreground"}`}
-              data-testid={`db-view-${v.id}`}
-            >
-              {viewIcon(v.type)} {v.name}
-            </button>
-          ))}
+          {db.views.map((v) => {
+            const c = viewCounts[v.id] ?? { visible: 0, total: 0 };
+            const isFiltered = (v.filters ?? []).length > 0 && c.visible !== c.total;
+            return (
+              <button
+                key={v.id}
+                onClick={() => setActiveViewId(v.id)}
+                className={`text-xs px-2 py-1 rounded-t flex items-center gap-1 ${v.id === activeView.id ? "bg-accent font-medium" : "hover:bg-accent/50 text-muted-foreground"}`}
+                data-testid={`db-view-${v.id}`}
+                title={isFiltered ? `${c.visible} of ${c.total} rows after filters` : `${c.total} rows`}
+              >
+                <span>{viewIcon(v.type)} {v.name}</span>
+                <span className="text-[10px] rounded-full px-1.5 bg-muted/60" data-testid={`db-view-count-${v.id}`}>
+                  {isFiltered ? `${c.visible}/${c.total}` : c.total}
+                </span>
+              </button>
+            );
+          })}
           <NewViewButton databaseId={databaseId} onCreate={(viewId) => setActiveViewId(viewId)} />
         </div>
         <div className="ml-auto flex items-center gap-1">

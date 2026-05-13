@@ -1095,3 +1095,24 @@ Priority: high / medium / low.
 
 ### I-2207 — Allow public form route to optionally allow open / unauthenticated submissions but rate-limit them (low, open)
 - The route silently accepts unlimited POSTs to localStorage today. Once the server-side persistence lands, add a per-IP throttle, a Turnstile/captcha hook, or at minimum a "one submission per browser per minute" debounce.
+
+### I-2208 — Cascade comment resolve to children (medium, open)
+- See B-2404. When resolving a parent comment, also mark all child comments (`comments.*.parentId === parent.id`) as resolved (or expose an explicit "resolve thread" action vs. "resolve this comment"). Today the child stays unresolved but invisible.
+
+### I-2209 — "Move page to teamspace" action (medium, open)
+- See B-2409. Add a `pmenu-move-to-*` submenu in the Sidebar page menu and a `page-opt-move-to-*` item in the PageView options. Data model already has `pages[id].teamspaceId` — only UI is missing.
+
+### I-2210 — Row-count / filter badges on view tabs (low, open)
+- See B-2410 / B-2417. Append `· {filteredCount}` (or `{filteredCount} / {totalCount}` when filtered) to each `db-view-*` tab label. Helps users notice when a filter is hiding rows.
+
+### I-2211 — Public form route must accept either viewId or view index (low, open)
+- See B-2413. `/form/<dbId>/0` should resolve to the first form view in `db.views` instead of 404. Either rewrite via redirect or accept both formats.
+
+### I-2212 — Gallery card drag-reorder (medium, open)
+- See B-2408. Add HTML5 DnD to `gallery-card-*` so users can reorder cards within a view; updates `rows.order`.
+
+### I-2213 — Detect fenced code in AI output rather than gating on prompt keyword (medium, open)
+- See B-2402 / B-2403. Parse the response text for triple-backtick fences and emit `<pre><code>` only when found; today the renderer emits the `<pre>` block based on the user prompt containing "code", and the example contains an unsubstituted `${matches.length}` template literal that leaks to the UI.
+
+### I-2214 — Timeline grid virtualization (medium, open)
+- See B-2418. With 360 bars per 7-row db, pages with multiple inline timeline views render thousands of divs. Virtualize day cells / clip to viewport.
