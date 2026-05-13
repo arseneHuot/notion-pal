@@ -1156,3 +1156,39 @@ Priority: high / medium / low.
 ### I-2511 — Settings: add `settings-workspace`, `settings-profile`, `settings-billing`, `settings-language` testids (low, open)
 - See B-2516. Settings page currently exposes only `settings-signout`, `settings-darkmode`, `settings-export`. Add canonical sub-section testids for E2E coverage as those screens land.
 
+
+
+## 2026-05-13 01:10 — Test agent batch 27
+
+### I-2600 — Sanitize at paste / `beforeinput` time too, not only at persist (high, open) — security
+- See B-2616. The contenteditable accepts raw `<img onerror>` via `execCommand('insertHTML', …)` which fires `onerror` immediately even though `blur()` later clears the content. Add a `paste` and `beforeinput` handler that strips `<script>`, `<img onerror>`, `<svg onload>`, `<iframe>`, etc. before they enter the DOM. Use DOMPurify with the same allowlist as the render-time sanitizer (B-2503 fix).
+
+### I-2601 — Fix `ib-bold` toggle inversion (high, open)
+- See B-2606. The current logic treats H1's inherited `font-weight: bold` as "selection is bold" and emits the un-bold branch, producing `<span style="font-weight: normal;">…</span>`. Either (a) check the actual selection's computed `<strong>`/`<b>` ancestor (not just computed style which inherits), or (b) emit `<strong>` always when the user clicks bold and let the toolbar visually reflect state via active classname.
+
+### I-2602 — Wire `ib-link` to a link-popover (medium, open)
+- See B-2607. Bold/italic/strike/code/color all work but `ib-link` is a dead button. Open a small popover with a URL input + Apply/Remove buttons; insert `<a href="…" target="_blank" rel="noopener">selected text</a>` after sanitizing the URL (allowlist `https:`, `http:`, `mailto:`, page links).
+
+### I-2603 — Wire `ib-ai` to inline-AI menu (low, open)
+- See B-2608. Notion's inline AI offers Improve / Translate / Summarize / Ask. Today the button does nothing — either remove it from the toolbar or wire it up.
+
+### I-2604 — Calendar week-event chips: add `[data-testid="week-event-<eventId>"]`, draggability, and click-to-edit (medium, open)
+- See B-2611. Chips currently render but have no DnD, no testid, no click handler. Add a testid per chip, mark `draggable={true}`, fire `onClick` to open the existing event detail / compose popover.
+
+### I-2605 — DB column-header dropdown: sort, filter, hide, duplicate, delete (medium, open)
+- See B-2625. Today the header only opens a Rename input. Match Notion's column dropdown: Sort ascending/descending, Filter, Hide column, Duplicate, Insert left/right, Delete.
+
+### I-2606 — DB `db-actions-<id>` ellipsis button needs a real popover (low, open)
+- See B-2626. Currently the `⋯` button at the database title is a no-op. Add a popover with Rename DB, Edit schema, Duplicate, Move to trash, Export CSV, etc.
+
+### I-2607 — Cross-tab realtime: subscribe to `storage` event AND re-render active page detail (medium, open — extends I-2503)
+- See B-2615. The sidebar already re-renders from storage events (eventually), but the active page detail (title at `data-testid="page-title"` and block list) is stuck. Hook the storage event into `useStore.persist.rehydrate()` rather than relying on a partial subscription.
+
+### I-2608 — Use `<span style="color: …">` instead of deprecated `<font>` (low, open)
+- See B-2630. The color tool emits `<font color="#dc2626">…</font>`. Switch to `<span style="color: var(--c-red)">…</span>` or a `text-red-600` class so the HTML is valid and works with dark-mode color tokens.
+
+### I-2609 — Add `aria-label` to icon-only buttons (low, open) — a11y
+- See B-2629. 25 buttons have no accessible name. Sweep drag handles, plus buttons, view-tab carets, and the `⋯` overflow buttons; add descriptive labels ("Reorder block", "Add block below", "More options for Title column").
+
+### I-2610 — Empty form view route resolves `/form/<dbId>/<viewId>` cleanly (low, info)
+- See B-2627. Confirmed `/form/db_dates_test/v_form` works (renders title/property fields). I-2211's earlier "0 should resolve to first form" need is moot if callers use the real viewId.

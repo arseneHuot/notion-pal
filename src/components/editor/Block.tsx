@@ -581,10 +581,30 @@ function useEditable(
     }
   }
 
+  // Sanitize any HTML clipboard payload before letting the browser insert
+  // it (B-2616). Without this an `<img onerror>` payload fires during the
+  // native paste, before our onInput-time sanitizer runs.
+  function onPaste(e: React.ClipboardEvent<HTMLDivElement>) {
+    const cb = e.clipboardData;
+    if (!cb) return;
+    const html = cb.getData("text/html");
+    const text = cb.getData("text/plain");
+    if (html) {
+      e.preventDefault();
+      const safe = sanitizeHtml(html);
+      // Insert via execCommand so the caret advances naturally.
+      document.execCommand("insertHTML", false, safe);
+      // updateBlock fires from the onInput handler immediately after.
+    } else if (text) {
+      // Plain text: let the browser handle it (no HTML payload, no XSS).
+    }
+  }
+
   return {
     ref,
     onInput,
     onKeyDown,
+    onPaste,
     slashOpen,
     slashQuery,
     slashPos,
@@ -659,6 +679,7 @@ function TextLikeBlock({ block, pageId }: { block: Block; pageId: string }) {
           data-placeholder={placeholder}
           onInput={editable.onInput}
           onKeyDown={editable.onKeyDown}
+          onPaste={editable.onPaste}
           data-testid={`block-content-${block.id}`}
         />
       </div>
@@ -723,6 +744,7 @@ function TodoBlockEl({ block, pageId }: { block: Block; pageId: string }) {
           data-placeholder="To-do"
           onInput={editable.onInput}
           onKeyDown={editable.onKeyDown}
+          onPaste={editable.onPaste}
           data-testid={`block-content-${block.id}`}
         />
       </div>
@@ -764,6 +786,7 @@ function ToggleBlockEl({ block, pageId }: { block: Block; pageId: string }) {
           data-placeholder="Toggle"
           onInput={editable.onInput}
           onKeyDown={editable.onKeyDown}
+          onPaste={editable.onPaste}
           data-testid={`block-content-${block.id}`}
         />
       </div>
@@ -803,6 +826,7 @@ function CalloutBlockEl({ block, pageId }: { block: Block; pageId: string }) {
           data-placeholder="Type some text..."
           onInput={editable.onInput}
           onKeyDown={editable.onKeyDown}
+          onPaste={editable.onPaste}
           data-testid={`block-content-${block.id}`}
         />
       </div>

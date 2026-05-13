@@ -3216,3 +3216,130 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: `Object.keys(localStorage)` shows 10 `notion-clone:user:<uuid>` keys (multiple test accounts), each carrying a full `{pages, blocks, databases, rows, ...}` snapshot. Switching the auth token loads the right one.
 - Observed: per-user persistence is fine, but no per-workspace persist key — if a user has multiple workspaces, the entire `workspaces` map lives in one blob. Minor scaling concern.
 
+
+
+## 2026-05-13 01:10 — Test agent batch 27
+
+### B-2600 — XSS guard for text-block content holds against `<img>`, `<svg>`, `<iframe>`, `javascript:` (P0, fixed — closes B-2503) — verified
+- Steps: set `blocks["b_text_html"].content = '<img src=x onerror="window.__XSS__=1">PAYLOAD_TEST'` → reload `/app/p/pg_edge_export`; also tried `<svg onload="…">`, `<iframe src="javascript:…">`, and `<a href="javascript:…">`.
+- Observed: rendered DOM contains only `PAYLOAD_TEST` (img/svg/iframe stripped). `<a>` retained but `href` attribute removed. `window.__XSS__`, `__XSS_SVG__`, `__XSS_HREF__`, `__XSS_IFR__` all remain `undefined`. Sanitizer is now in place at render time.
+
+### B-2601 — AI markdown lists now render as `<ol>`/`<ul>` and `_underscore_` becomes `<em>` (P2, fixed — closes B-2505 / B-2506) — verified
+- Steps: send "give me 3 bullet steps for python code" → response has `<ol class="list-decimal">` with three `<li>`s plus a `<pre>` code block (real python f-string). Send `[v](vbscript:alert(1)) [f](file:///etc/passwd) [c](https://safe.example.com)` → response renders `<ul class="list-disc">` for ideas list. Send `repeat back _italic_ and *star italic*` → two `<em>` elements with correct text.
+- Observed: list rendering and italic parsing both fixed in `AIChat.tsx`. Code path: `tokenRe` regex now handles `_x_` AND `*x*` AND `__x__` AND `**x**`.
+
+### B-2602 — AI link parser rewrites `vbscript:`, `file:`, `data:` to `#` (P3, info — confirms B-2517 still applies)
+- Steps: send `[v](vbscript:alert(1)) and [f](file:///etc/passwd) plus [c](https://safe.example.com)`.
+- Observed: rendered links — `v` → `href="#"`, `f` → `href="#"`, `c` → `href="https://safe.example.com"`. Safe. Trailing `)` characters still leak into body (B-2517).
+
+### B-2603 — Block drag handles now exist on every page block (P2, fixed — closes I-2505) — verified
+- Steps: `/app/p/pg_mp349of8lvv9kk0m` → `[data-testid^="handle-"]` returns 9 cursor-grab handles (one per block). Fire `dragstart` on `handle-blk_mp349of9q9vilh1g`, `dragover` + `drop` on `handle-blk_mp349of9r46xq8h4` (position 2). Re-read `pages.pg_mp349of8lvv9kk0m.blocks` from localStorage.
+- Observed: order changed — `blk_mp349of9q9vilh1g` moved from index 0 to index 2; other blocks shifted up. DnD reorder works.
+
+### B-2604 — Block-level edge-export blocks now render real UI (image/video/table/button/code/ToC/breadcrumb) (P2, fixed — closes B-2515)
+- Steps: `/app/p/pg_edge_export` → inspect each block's `outerHTML`.
+- Observed: `b_img_empty` → "Add image / Embed" placeholder. `b_video_empty` → "Add video / Embed". `b_table_empty` → "+ Row / + Column" controls. `b_button` → "🎯 Click me" rendered button. `b_code_no_lang` → language picker (javascript, typescript, …, plain text) + Copy + `x = 1` content. `b_toc` → "Table of contents / No headings yet" (and on a page with headings, lists them: "Untitled heading / Agenda / Decisions / Action items"). `b_breadcrumb` → "⚠️ Edge Export" (current page). Note: `block-content-<id>` testid is still absent for these block types — they expose `data-block-id` and `data-block-type` attrs instead.
+
+### B-2605 — Inline-toolbar `ib-italic`, `ib-strike`, `ib-code`, `ib-color-*` actually mutate the selection now (P2, fixed — closes I-2506 partially)
+- Steps: select 3 chars on a `[contenteditable="true"]` block; fire `mousedown` on `ib-italic` → block HTML becomes `Meeting <i>notes</i>`. `ib-strike` → `<strike>Hello</strike> world testing`. `ib-code` → `plain <code class="bg-muted px-1 rounded text-xs font-mono">code</code> text`. `ib-color-red` → `<font color="#dc2626">colorf</font>ul text`.
+- Observed: italic / strike / code / color all work. Toolbar uses `mousedown` event so selection is preserved.
+
+### B-2606 — Inline-toolbar `ib-bold` still inverts to `font-weight:normal` instead of bold (P2, open — partial regression of B-2513)
+- Steps: select "Meeting" (chars 0–7) on an unbolded H1 `[contenteditable="true"]` block, fire `mousedown` on `[data-testid="ib-bold"]`.
+- Observed: block HTML becomes `<span style="font-weight: normal;">Meeting</span> notes` — not `<strong>Meeting</strong>` or `<b>Meeting</b>`. The current toggle logic appears to read computed style (which inherits from H1's `font-weight: bold`), decides the selection IS bold, and emits the "un-bold" branch. Other 3 buttons (italic/strike/code) don't have this issue because their default state is "off".
+
+### B-2607 — Inline-toolbar `ib-link` does nothing (P2, open — extends I-2506)
+- Steps: select 5 chars, fire `mousedown` on `[data-testid="ib-link"]`.
+- Observed: no link-input popover appears. Block HTML unchanged ("click here"). No `link-popover` or `ib-link-input` testid in DOM. Feature wired up visually but no handler / popover.
+
+### B-2608 — Inline-toolbar `ib-ai` does nothing (P3, open)
+- Steps: select text, mousedown on `[data-testid="ib-ai"]`.
+- Observed: no popover, no inline-AI panel, no Improve/Translate/Summarize menu. Button is decorative.
+
+### B-2609 — Slash menu now opens via programmatic `/` insertion (P2, fixed — closes B-2512) — verified
+- Steps: focus a `[contenteditable="true"]` block, fire `keydown { key: '/' }`, then `execCommand('insertText', '/')`, then `input` event.
+- Observed: `[data-testid="slash-menu"]` appears with full block-type list — `slash-text`, `slash-h1`, `slash-h2`, `slash-h3`, `slash-bulleted-list`, `slash-numbered-list`, `slash-todo`, `slash-toggle`, `slash-quote`, `slash-divider`, `slash-callout`, `slash-page`, `slash-code`, plus toggle-headings. Menu trigger works via either real keystroke or programmatic input dispatch. Closes E2E gap.
+
+### B-2610 — Calendar week view now renders chips for events whose `start` is in the visible week (P2, fixed — closes B-2509 partially)
+- Steps: `/app/calendar` → select=week. The 3 seeded `calendarEvents` rows have `start` timestamps 2026-05-12 / 13 / 15.
+- Observed: `week-day-2026-05-12` shows "Test event B21"; `week-day-2026-05-13` shows "Wed event" + an "Untitled" db-row; `week-day-2026-05-15` shows "Test Cal Event Batch 15"; `week-day-2026-05-14` shows "Untitled". Renderer is using `e.start` as the date key now (not a missing `e.date` field) — bug B-2509's premise was incorrect. Chips still un-draggable (B-2611).
+
+### B-2611 — Calendar week-event chips still un-draggable AND no `[data-testid^="week-event-"]` (P2, open — extends B-2509)
+- Steps: same as B-2610 → 4 chips render but `chip.draggable === false`. No DnD; no testid prefix exposed for individual chips so E2E can't even click them to edit/delete.
+- Observed: chips are plain `<div>`s with truncate styling. No drag handles, no testids, no click-to-edit affordance.
+
+### B-2612 — Sidebar pages still un-draggable (P2, open — extends B-2508)
+- Steps: `/app` → `aside [draggable="true"]` returns 0. No `sidebar-page-row-*` testid; sidebar uses `expand-/page-menu-/page-new-` triplets that don't carry `draggable`.
+- Observed: no progress this batch — page reorder / re-parent via DnD still unimplemented.
+
+### B-2613 — Database table rows still un-draggable (P2, open — extends B-2510)
+- Steps: `/app/p/pg_mp33cd7d01u4huok` → table view → 0 `tr[draggable]`, 0 `row-handle-*`, 0 `row-drag-*`.
+- Observed: no row reorder; only block-handle DnD exists (B-2603) and that's per-block, not per-DB-row.
+
+### B-2614 — Gallery cards still un-draggable (P2, open — extends B-2511)
+- Steps: gallery view of `db_dates_test` → 7 `gallery-card-*` cards; all have `card.draggable === false`.
+- Observed: no progress.
+
+### B-2615 — Cross-tab realtime sync still broken (P2, open — extends B-2507)
+- Steps: in tab A mutate `pages.pg_mp33cd7d01u4huok.title = "CROSS_TAB_TEST_*"` in localStorage and `dispatchEvent(new StorageEvent("storage", …))`.
+- Observed: `[data-testid="page-title"]` keeps showing the old title; sidebar text DOES eventually show the new title (the next time the React tree re-renders for any reason), but the active page detail does not. Half-broken.
+
+### B-2616 — Pasted rich HTML via `execCommand('insertHTML', …)` executes `onerror` (P1, fixed) — transient XSS
+- Steps: focus a `[contenteditable="true"]` block, call `document.execCommand('insertHTML', false, '<img src=x onerror="window.__INSERT_XSS__=1">')`.
+- Observed: `window.__INSERT_XSS__` becomes `1` (the handler fired) and innerHTML contains the raw `<img onerror=…>`. After `blur()` and re-read of the store, the block's persisted `content` is `""` — so the XSS is NOT stored (the blur-write path strips it). But the JS already ran in the active tab. Real-world trigger: paste rich HTML copied from a malicious page into a Notion block. The paste handler does NOT sanitize at the moment of insertion; it only sanitizes at persist/render. The block's `[contenteditable]` accepts arbitrary HTML through the browser's paste pipeline + insertHTML. Mitigation: intercept `paste` and `beforeinput` to strip dangerous tags before they hit the DOM.
+
+### B-2617 — Performance: 1500-block page loads in ~144 ms with 62 FPS scroll (P3, info — closes I-2214 partially for non-timeline use)
+- Steps: seed a `pg_perf1500_test` page with 1500 plain text blocks via store mutation, then reload.
+- Observed: `performance.navigation.loadEventEnd ≈ 144 ms`; `[data-block-id^="b_perf1500_"]` returns all 1500; total DOM nodes 26,093. RequestAnimationFrame test during 60×scroll yields 78 frames in 1264 ms → ~62 FPS — no jank. Typing 20 chars in the title with 1500 blocks present takes ~45 ms. No virtualization, but performance is acceptable up to this volume.
+
+### B-2618 — Mail page renders user-provided subject/body as text (no XSS) (P3, info — good)
+- Steps: compose with subject `XSS-Subject <img src=x onerror="window.__MAIL_XSS__=1">end` and body `Body with <script>window.__MAIL_BODY_XSS__=1</script> end`; send; open the message.
+- Observed: subject and body display the literal angle-bracketed text; `window.__MAIL_XSS__` and `window.__MAIL_BODY_XSS__` remain `undefined`. Mail is rendered safely.
+
+### B-2619 — Trash restore works; `restore-<pageId>` / `delete-forever-<pageId>` testids exposed (P3, info — closes I-2519 path)
+- Steps: set `pages.pg_mp349of8lvv9kk0m.isInTrash = true` in localStorage, navigate `/app/trash`, click `restore-pg_mp349of8lvv9kk0m`.
+- Observed: page leaves trash, store flag flips back to `false`, sidebar / page-view re-renders normally. Trash UI is functional.
+
+### B-2620 — Templates page instantiates a new page on click (P3, info)
+- Steps: `/app/templates` → `[data-testid="template-meeting-notes"]` etc. exist for all 8 templates. Click `template-meeting-notes`.
+- Observed: navigates to `/app/p/pg_<new>` with title "Meeting notes" and the canonical block template. Working as expected.
+
+### B-2621 — Cmd+K opens command palette (P3, info)
+- Steps: `document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, metaKey: true }))`.
+- Observed: palette opens with 23 items: `cmd-new-page`, `cmd-calendar`, `cmd-mail`, `cmd-inbox`, `cmd-trash`, `cmd-settings`, `cmd-dark-mode`, `cmd-ai`, plus `cmd-page-*` for every page. Search input filters by typed text. Escape closes. Still no `role="dialog"` (B-2520).
+
+### B-2622 — DB table `db-newrow` adds to store but not always visible (filter masks new row) (P3, info)
+- Steps: `/app/p/pg_mp33cd7d01u4huok` (db_dates_test, filter "Tags contains blue"), click `db-newrow-db_dates_test`.
+- Observed: store `databases.db_dates_test.rows.length` goes from 7 → 8 → 9 (this batch's previous "12" claim came from earlier sessions), but the rendered tbody still shows 4 (the filter excludes rows with empty Tags). Expected behavior — bug is documentation-only: there's no UI hint that the just-created row was filtered out.
+
+### B-2623 — Settings → Export downloads full JSON (~540 KB) (P3, info — closes I-2516)
+- Steps: `/app/settings` → click `settings-export`; intercept `URL.createObjectURL` and read the blob.
+- Observed: exports a 540,206-byte JSON containing `workspace`, `teamspaces`, `pages`, `blocks`, `databases`, `rows`, etc. Top-level shape matches in-memory store. Works.
+
+### B-2624 — Settings page surface unchanged (P3, open — extends B-2516)
+- Steps: `/app/settings`.
+- Observed: still only `settings-signout`, `settings-darkmode`, `settings-export`. No `settings-workspace`, `settings-profile`, `settings-billing`, `settings-language` rows. Same as last batch.
+
+### B-2625 — DB column-header click only exposes "Rename"; no Sort / Filter / Hide / Delete (P3, open)
+- Steps: `/app/p/pg_mp33cd7d01u4huok` → click `[data-testid="prop-header-p_dt"]` (Title column).
+- Observed: opens a Rename input only. Notion-equivalent column header should offer Sort ascending/descending, Filter, Hide column, Duplicate, Delete. None present.
+
+### B-2626 — DB `db-actions-<id>` popover empty / non-functional (P3, open)
+- Steps: click `[data-testid="db-actions-db_dates_test"]` (the `⋯` button at the right of the database name row).
+- Observed: no menu opens; no `[role="menu"]` or popover content appears. Button is a no-op stub.
+
+### B-2627 — Public form select / multi-select rendering works visually (P3, info)
+- Steps: `/form/db_dates_test/v_form` → main text includes "TitleWhenScoreTagsredbluegreen…".
+- Observed: form lists property labels and multi-select option chips. Fillable via the standard form-fill testids (B-2412 covers automation gap).
+
+### B-2628 — Page favorite toggle works via `pmenu-favorite-<id>` (P3, info)
+- Steps: click `page-menu-pg_mp349of8lvv9kk0m`, then `pmenu-favorite-pg_mp349of8lvv9kk0m`.
+- Observed: `pages.pg_mp349of8lvv9kk0m.isFavorite` flips true. Sidebar Favorites section re-renders.
+
+### B-2629 — 25 buttons in main app lack accessible name / aria-label (P3, info — a11y)
+- Steps: query all `<button>` on `/app/p/pg_mp33cd7d01u4huok` after data hydrates → 185 total; 25 have neither text content nor `aria-label` nor `title`.
+- Observed: most are icon-only buttons (drag handles, plus buttons, dropdown carets). Screen readers will announce them as "button" with no purpose. Add `aria-label` per icon button.
+
+### B-2630 — Color formatting writes deprecated `<font color="…">` (P3, info)
+- Steps: select text → `ib-color-red` → block HTML becomes `<font color="#dc2626">colorf</font>ul text`.
+- Observed: `<font>` is deprecated in HTML5; use `<span style="color: …">` or a class instead. Renders fine in browsers, but invalid HTML.
