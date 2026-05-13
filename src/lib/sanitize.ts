@@ -7,6 +7,15 @@ const ALLOWED_TAGS = new Set([
   "B", "STRONG", "I", "EM", "U", "S", "STRIKE", "CODE", "BR", "SPAN", "A", "MARK",
 ]);
 
+// Tags whose textContent is itself executable / dangerous when surfaced
+// as plain text. We DROP these tags entirely (children included) rather
+// than the default "unwrap children" strategy used for other disallowed
+// tags. Preserving the body would leak JS source as visible text and
+// could be reinjected by a downstream consumer (I-4700).
+const DROP_WITH_CONTENT = new Set([
+  "SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE", "IFRAME", "OBJECT", "EMBED",
+]);
+
 const ALLOWED_ATTR: Record<string, Set<string>> = {
   A: new Set(["href", "title", "target", "rel"]),
   // `data-color` is the marker the color tool sets so it can find and unwrap
@@ -41,6 +50,13 @@ function walk(root: Node) {
 
   for (const el of elements) {
     const tag = el.tagName.toUpperCase();
+    if (DROP_WITH_CONTENT.has(tag)) {
+      // Hard-drop: don't surface the script/style body as visible text
+      // (I-4700). `el.parentNode` may be null if we already removed an
+      // ancestor in this iteration.
+      el.parentNode?.removeChild(el);
+      continue;
+    }
     if (!ALLOWED_TAGS.has(tag)) {
       // Strip the tag but keep its text content.
       const parent = el.parentNode;

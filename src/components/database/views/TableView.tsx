@@ -63,6 +63,13 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
                 const sourceId = e.dataTransfer.getData("application/x-row-id");
                 if (!sourceId || sourceId === row.id) return;
                 e.preventDefault();
+                // Cross-DB drops are refused by the store action — surface a
+                // toast so the user understands why nothing happened (I-4702).
+                const sourceRow = getStoreState().rows[sourceId];
+                if (sourceRow && sourceRow.databaseId !== databaseId) {
+                  window.dispatchEvent(new CustomEvent("toast", { detail: "Cannot move rows between databases" }));
+                  return;
+                }
                 reorderDatabaseRows(databaseId, sourceId, row.id);
               }}
             >

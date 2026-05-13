@@ -21,6 +21,26 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
   if (!db) {
     return <div className="text-sm text-muted-foreground">Database not found.</div>;
   }
+  // Show a placeholder when the database is in the trash so users don't see
+  // a stale inline UI in the middle of their page (I-4701).
+  if (db.isInTrash) {
+    return (
+      <div
+        className="my-4 border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground flex items-center gap-2"
+        data-testid={`db-trashed-placeholder-${databaseId}`}
+      >
+        <span>🗄️</span>
+        <span className="flex-1">Database "{db.name || "Untitled"}" is in the Trash.</span>
+        <button
+          onClick={() => updateDatabase(databaseId, { isInTrash: false, trashedAt: null } as Partial<typeof db>)}
+          className="text-xs bg-primary text-primary-foreground rounded px-2 py-1"
+          data-testid={`db-restore-${databaseId}`}
+        >
+          Restore
+        </button>
+      </div>
+    );
+  }
   const activeView = useMemo(() => {
     return db.views.find((v) => v.id === activeViewId) ?? db.views[0];
   }, [db.views, activeViewId]);

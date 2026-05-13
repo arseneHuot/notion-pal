@@ -1643,3 +1643,15 @@ Priority: high / medium / low.
 
 ### I-4603 — Cross-DB row drops should at least be a no-op (low, open)
 - Follow-up to I-4602. Even after guarding `reorderDatabaseRows`, the TableView `onDrop` swallows the event. Notion's behaviour is to either (a) silently no-op (current acceptable target) or (b) prompt "Move row to <DB-B>?" with explicit property remapping. Pick one; today it appears to "work" but corrupts state. The smallest robust fix is to early-return in `onDrop` when `state.rows[sourceId].databaseId !== databaseId` and clear the drop indicator.
+
+### I-4700 — Sanitizer preserves <script> body as visible text (low, open)
+- `sanitizeHtml('<script>alert(1)</script>hello')` returns `"alert(1)hello"` — the script tag is stripped but its inner text content remains in the DOM. Safe (no execution), but ugly: a paste with attempted XSS leaks confusing strings into the published page. Mitigation in sanitize.ts:42-52 should special-case `SCRIPT`/`STYLE`/`NOSCRIPT`/`TEMPLATE`/`XMP` to also drop their text-children before unwrapping. One-line fix: `if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT' || tag === 'TEMPLATE') { el.remove(); continue; }` before the keep-text branch.
+
+### I-4701 — Trashed inline DBs still show on host page until reload (low, open)
+- Acceptance flow above only verified the trash UI surfaces a restored DB. Worth adding a follow-up: inline DB blocks embedded in a page should hide when the database `isInTrash:true` (currently they may render with empty rows/views because TableView guards on `db.isInTrash` but the host page block still reserves space + toolbar). Confirm by trashing a DB that has an `inlinePageId` reference; if the inline block still draws header/toolbar, polish to a "Database moved to Trash — restore?" placeholder.
+
+### I-4702 — Cross-DB row drop should give a UX cue, not silently no-op (low, open)
+- Now that B-4611's store guard is in place, the table-view onDrop swallows the cross-DB drag with no feedback. Users will be confused why their drag did "nothing". Add a quick `toast("Move between databases not supported yet")` or visual reject animation in TableView.tsx:62-67 when `state.rows[sourceId]?.databaseId !== databaseId`.
+
+### I-4703 — View tabs lack keyboard navigation and ARIA roles (low, open)
+- The view tab strip uses plain `<button data-testid="db-view-…">` without `role="tab"`/`role="tablist"`, no `aria-selected`, no arrow-key navigation. Screen readers announce them as a flat button list. Add tablist semantics + Left/Right arrow handling + Home/End. Low impact on power users but a clean a11y win.

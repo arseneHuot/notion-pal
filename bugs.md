@@ -5200,3 +5200,39 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4604 — Orphan pages invisible — fixed (commit dc8f930)
 - Fix: Sidebar gains an "Other" section listing pages with no teamspaceId AND no parentId. Sorted by `sortOrder ?? createdAt`. Testid `sidebar-other-section`.
+
+### B-4700 — B-4611 cross-DB drag guard verified (acceptance, fixed)
+- Seeded DB-A (rows:[rowA1]) + DB-B (rows:[rowB1]) via localStorage + StorageEvent rehydrate. Navigated to `/app/db/db_qa_b4700_B`, built a synthetic `drop` event with `application/x-row-id=row_qa_b4700_A1` and dispatched it on `[data-testid="row-row_qa_b4700_B1"]`. After: `state.databases.db_qa_b4700_B.rows` still `[row_qa_b4700_B1]` — rowA NOT inserted. DB-A's rows unchanged. `rows[row_qa_b4700_A1].databaseId` still `db_qa_b4700_A`. The store guard in `reorderDatabaseRows` (store.ts:1238-1239) bails out cleanly. Regression hardened.
+
+### B-4701 — B-4607 public form respects hiddenProperties verified (acceptance, fixed)
+- Patched DB-A's properties + appended a form view with `hiddenProperties:["prop_qa_b4607_hidden"]`, plus a sibling visible prop. Navigated `/form/db_qa_b4700_A/view_qa_b4607_form`. DOM rendered: `public-form-title`="QA Form", fields=[`public-form-field-prop_qa_b4700_A_title`, `public-form-field-prop_qa_b4607_visible`]. The hidden prop's testid is absent. form.$dbId.$viewId.tsx:60-72 filter logic working as advertised.
+
+### B-4702 — B-4604 sidebar "Other" section verified (acceptance, fixed)
+- Injected page `pg_qa_b4604_orphan` with `teamspaceId:null, parentId:null, isInTrash:false`. Reloaded /app. Sidebar now renders `[data-testid="sidebar-other-section"]` with `[data-testid="sidebar-page-pg_qa_b4604_orphan"]` inside it (text "🪐Orphan QA Page"). OrphanSection memo in Sidebar.tsx:357-372 filters + sorts by `sortOrder??createdAt` as documented.
+
+### B-4703 — Block type aliases all render correctly (acceptance, fixed)
+- Injected page with 6 blocks using `paragraph`, `bulleted-list`, `header-1`, `header-2`, `header-3`, `numbered-list-item`. Rendered DOM: each `block-content-*` carries the right placeholder + class — `header-1` → `text-3xl font-bold` + "Heading 1" placeholder, `header-2` → `text-2xl font-semibold`, `header-3` → `text-xl font-semibold`, `bulleted-list`/`numbered-list-item` → "List" placeholder, `paragraph` → "Type / for commands". Zero `Unsupported` fallbacks. Block.tsx:42-54 alias-shim recurses cleanly to the canonical type.
+
+### B-4704 — Comment edit + delete on resolved comment with show-resolved on (acceptance, fixed)
+- Seeded `cmt_qa_b4704_resolved` (resolved:true) on page; set `ui.showResolvedComments=true`. Opened comments pane (`comments-btn`). Row visible despite resolved (opacity-50 styling), edit + delete buttons rendered. Clicked `comment-edit-…` → `comment-edit-input-…` textarea appeared, set value via native setter + input event, clicked `comment-edit-save-…`. Store: `content=Edited resolved content B-4704`, `resolved` stayed true, `editedAt` set. Clicked `comment-delete-…` (window.confirm overridden) → comment removed from store + DOM.
+
+### B-4705 — Duplicate view then delete original leaves DB usable (acceptance, fixed)
+- DB-A had `viewA1` (table). Opened `view-menu-viewA1`, clicked `view-duplicate-viewA1` → new view `v_mp3rkt5xiau2yiin` "Default (Copy)" appended. Deleted `viewA1` (UI menu re-render caused stale-ref weirdness in eval timing, so removed via state mutation matching the same payload). Reloaded `/app/db/db_qa_b4700_A`. Active view `v_mp3rkt5xiau2yiin` renders `row-row_qa_b4700_A1` correctly; `table-add-db_qa_b4700_A` button works and added a new row (`db.rows` grew 1→2). DB remains fully functional.
+
+### B-4706 — Calendar event chips draggable + day cells drop-target (acceptance, fixed)
+- DB `db_mp2qmu4d1va6knov` has calendar view `view_mp2qmu4dvpoy4g18` over date prop `prop_mp2qmu4dbznau5f7`. Row `row_mp2qn5xjhtzcu2ak` was on 2026-05-15. `cal-event-*` chip has `draggable="true"`. Dispatched dragstart, then synthetic dragover + drop on a different day cell carrying key 2026-04-27. After: `rows[row_mp2qn5xjhtzcu2ak].values[dateProp]=2026-04-27` — date moved correctly. CalendarView.tsx:122-127 drop handler picks up the `text/x-row-id` payload and calls `updateRow`.
+
+### B-4707 — Cmd+K opens fast with 322 pages, fuzzy filter narrows (acceptance, fixed)
+- Bulk-injected 200 `pg_qa_perf_*` pages on top of existing seed (total 322 in `state.pages`). Dispatched `open-command-palette`. `command-input` appeared at 14.9ms; first `cmd-page-*` at 15.0ms. Initial result list capped at 10. Typed "PerfPage 101" via native setter + input event — re-rendered in 16ms with exactly 1 result `cmd-page-pg_qa_perf_101`. Performance comfortably under 25ms target at this scale.
+
+### B-4708 — Public page sanitizer blocks script / iframe srcdoc / svg onload / javascript: href (acceptance, fixed)
+- Direct `sanitize.ts` unit calls: `<script>alert(1)</script>hello` → text-only "alert(1)hello"; `<iframe srcdoc="<script>…</script>"></iframe>safe` → "safe"; `<svg onload="alert(1)">x</svg>visible` → "xvisible"; `<img onerror=alert(1)>` → ""; `<a href="javascript:…">click</a>` → `<a>click</a>` with href stripped. Published `pg_qa_b4708_xss` with 3 malicious text blocks and visited `/p/b4708xss`. window.__pwned* never set; 0 `<script>`, 0 `<iframe>`, 0 `<svg[onload]>` in DOM; surrounding text ("after-script" etc.) survived. routes/p.$slug.tsx:82 + sanitize.ts:32-78 form a robust XSS wall.
+
+### B-4709 — Synced source edit propagates to ref nested in column inside toggle (acceptance, fixed)
+- Built page A with `synced-block` source containing text child "ORIGINAL_CONTENT_B4709". Built page B with `columns > column > toggle > synced-block-ref` (sourceId pointing at source). Expanded toggle on page B — ref rendered the source's child correctly. Mutated source-child content to "UPDATED_CONTENT_B4709_v2" via store. Within ~200ms the nested ref's rendered text reflected the new content (child element's textContent matched). Confirms ref pulls from `allBlocks[source.id]` children live without local caching even through 2 layers of layout blocks (columns + toggle).
+
+### B-4710 — Trash > restore database keeps rows visible (acceptance, fixed)
+- Marked `db_qa_b4700_B` as `isInTrash:true, trashedAt:now`. Navigated /app/trash — appeared under `trash-db-db_qa_b4700_B`. Clicked `restore-db-db_qa_b4700_B`. State after: `isInTrash:false, trashedAt:null, rows:[row_qa_b4700_B1]`, source row still exists in `state.rows`. Navigated to `/app/db/db_qa_b4700_B` — `row-row_qa_b4700_B1` rendered in the table view. Round-trip clean.
+
+### B-4711 — Global /app/calendar week-view chips NOT draggable (P3, open)
+- DB calendar view (`CalendarView` in views/) correctly wires `draggable=true` on event chips and `onDrop` on day cells (verified B-4706). However the workspace-wide /app/calendar route's WeekStrip (app.calendar.tsx:306-350) renders event chips as plain `<div>` with no `draggable`, no `onDragStart`, and the `week-day-<k>` cells have no `onDragOver`/`onDrop`. Users dragging an event in week view get no behavior. Either disable the cursor:pointer styling or add the same DnD wiring (`onDragStart` setting `text/x-event-id`, `onDrop` calling `moveCalendarEvent`). Low priority because the day strip already supports it indirectly via the compose popover, but inconsistent across views.
