@@ -11,7 +11,8 @@ import {
   Type as TypeIcon, X,
 } from "lucide-react";
 import type { Block, BlockType } from "@/lib/types";
-import { useStore, createBlock, updateBlock, deleteBlock, reorderBlocks, createPage, createDatabase, insertBlock } from "@/lib/store";
+import { useStore, createBlock, updateBlock, deleteBlock, reorderBlocks, createPage, createDatabase, insertBlock, consumeAICredits } from "@/lib/store";
+import { askAI } from "@/lib/ai-server";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { SlashMenu } from "./SlashMenu";
 import { filterSlash, type SlashCommand } from "@/lib/slash-commands";
@@ -1473,13 +1474,33 @@ function AIBlockEl({ block, pageId }: { block: Block; pageId: string }) {
   const ai = block as Extract<Block, { type: "ai-block" }>;
   const [prompt, setPrompt] = useState(ai.prompt ?? "");
   const [generating, setGenerating] = useState(false);
-  function generate() {
+  // Synchronous in-flight gate so rapid Enter / button mashing can't
+  // queue parallel Gemini calls (mirrors the AIChat busyRef pattern).
+  const busyRef = useRef(false);
+  // Read the host page title once so Gemini gets some context for the
+  // generation (mirrors the AIChat behaviour).
+  const pageTitle = useStore((s) => s.pages[pageId]?.title);
+  async function generate() {
+    const text = prompt.trim();
+    if (!text) return;
+    if (busyRef.current) return;
+    busyRef.current = true;
     setGenerating(true);
-    setTimeout(() => {
-      const result = `🤖 (Demo) Here is a response for "${prompt}".\n\n1. Key insight\n2. Supporting evidence\n3. Action item\n\nNote: connect a real LLM API to make this functional.`;
-      updateBlock(block.id, { prompt, result } as Partial<Block>);
+    try {
+      const res = await askAI({ data: { prompt: text, pageTitle } });
+      const answer = res.answer || "(empty response)";
+      updateBlock(block.id, { prompt: text, result: answer } as Partial<Block>);
+      if (!res.error) consumeAICredits(5);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      updateBlock(
+        block.id,
+        { prompt: text, result: `⚠️ Couldn't reach Gemini (${msg}).` } as Partial<Block>,
+      );
+    } finally {
+      busyRef.current = false;
       setGenerating(false);
-    }, 800);
+    }
   }
   return (
     <BlockShell block={block} pageId={pageId}>
@@ -1489,13 +1510,19 @@ function AIBlockEl({ block, pageId }: { block: Block; pageId: string }) {
           <input
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                generate();
+              }
+            }}
             placeholder="Ask AI to do anything…"
             className="flex-1 bg-background rounded px-2 py-1 text-sm border border-input"
             data-testid={`ai-prompt-${block.id}`}
           />
           <button
             onClick={generate}
-            disabled={generating}
+            disabled={generating || !prompt.trim()}
             className="bg-violet-600 text-white text-sm px-3 py-1 rounded disabled:opacity-50"
             data-testid={`ai-generate-${block.id}`}
           >
@@ -1503,7 +1530,7 @@ function AIBlockEl({ block, pageId }: { block: Block; pageId: string }) {
           </button>
         </div>
         {ai.result && (
-          <div className="mt-2 text-sm whitespace-pre-wrap text-foreground">{ai.result}</div>
+          <div className="mt-2 text-sm whitespace-pre-wrap text-foreground" data-testid={`ai-result-${block.id}`}>{ai.result}</div>
         )}
       </div>
     </BlockShell>
