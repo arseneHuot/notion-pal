@@ -2397,3 +2397,45 @@ Priority: high / medium / low.
 ### I-8007 — Hidden affordance: Workspace switcher and "create new workspace" don't exist in the UI — P2 — open
 - Focus-list item ("Multi-workspace switching"). `state.workspaces` is keyed by id and the store has `currentWorkspaceId`, but there is no UI to switch workspaces or create another. The header chip in Sidebar.tsx shows the current workspace name but no dropdown.
 - Suggestion: clicking the header chip opens a popover listing all workspaces the user belongs to + a "Create workspace" affordance. `setCurrentWorkspaceId(id)` action already exists implicitly via setState; expose it as a `switchWorkspace(id)` helper and bind to the menu items.
+
+
+## 2026-05-13 — I-8100 mail/calendar/AI/contrast sweep
+
+### I-8100 — Mail toolbar is bare — no archive, delete, mark-read, search, filter — P2 — open
+- Repro: `/app/mail`. DOM probe surfaces only `mail-compose` + the per-message `mail-mail_<id>` rows. There is no `archive`, `delete`, `mark-read`, `search`, `filter`, `select-all`, `bulk-action`, `inbox/sent/drafts/trash` tab affordance.
+- Companion to B-7804 / B-7805 (still open per focus list). Confirmed by DOM enumeration: out of 8 `mail-*` testids, zero are toolbar actions.
+- Suggestion (minimum viable): a header strip above the list with `Search` (input), `Mark all read`, and per-row `Archive` / `Delete` affordances on hover. Threading already supported by the data model; the UI is the gap.
+
+### I-8101 — Calendar event interaction surface is read-only — clicking does nothing, no quick-edit popover, no drag-to-resize — P2 — open
+- Repro: `/app/calendar`. Click any rendered event. No popover opens, no inline editor appears, no navigation occurs. Drag-to-resize / drag-to-move also absent. Calendar acts as a read-only grid.
+- Companion to B-8101 / B-7806. Suggestion: at minimum implement click-to-edit (small popover with title / start / end / all-day / color). Stretch: drag the bottom edge of an event to resize, drag the body to a different day to reschedule. Both are already core expectations in any calendar surface in 2026.
+
+### I-8102 — AI Chat panel lacks baseline keyboard shortcuts — P3 — open
+- Focus-list item ("AI panel keyboard shortcuts"). AIChat (`src/components/ai/AIChat.tsx`) handles only `Enter` (submit) and `Shift+Enter` (newline). No `Esc` to close panel, no `Cmd+K` to focus input from anywhere, no `ArrowUp` to recall the previous prompt, no `Cmd+/` to insert a slash command.
+- Suggestion: wire `Esc` (close panel) and `ArrowUp` from an empty input (recall prev user prompt — same convention as terminals + ChatGPT) at a minimum. Bonus: `Cmd+L` to clear conversation, `Cmd+Enter` as a secondary submit binding for muscle-memory across surfaces (matches comments + mail).
+
+### I-8103 — Comment pane fixed at 320px width — too narrow once threads nest 4+ levels — P3 — open
+- Companion to B-8102. `PageComments.tsx:55` hard-codes `w-80` (320px). At depth 6 the inner row width is 191px, which is too narrow for the avatar / name / timestamp row to lay out on a single line. The same fixed width is wrong on a 5K display (way too small) and on a 1366×768 laptop (eats meaningful page-content width when open).
+- Suggestion: make the pane resizable (drag the left edge), persist the chosen width per-user in `state.ui.commentPaneWidth`. Default to 360-400px instead of 320 to accommodate deeper threads. Mirror the right-pane pattern from Notion / Linear.
+
+### I-8104 — Long-title pages: editor `<h1>` allows the title to grow to 1000+ vertical pixels — P3 — open
+- Repro: page with a title of 800-1000 characters. The `<h1 class="text-4xl font-bold outline-none w-full">` (`PageView.tsx`) has `overflow-wrap: break-word` (good — no horizontal scroll), but the title can grow to 1000+ pixels of vertical space, pushing the page content far below the fold.
+- Verified live: 920-char Lorem-ipsum title -> `h1` height = 1280px. 800-char unbroken string -> 1040px. No horizontal scroll either way.
+- Suggestion: clamp the editor title height (e.g. `max-h-48 overflow-y-auto`) once it crosses a threshold, OR truncate visually with a "(more)" expander, OR enforce a soft character cap (e.g. 200 chars) with a counter chip. Sidebar + topbar both already truncate the title with ellipsis; the editor is the one surface that just keeps growing.
+
+### I-8105 — `normalizeState` should also detect cyclic chains in `blocks.parentId`, not just `pages.parentId` — P2 — open
+- Companion to B-8106. The page-cycle detector is in place; the block-cycle detector is not. No current consumer hangs on a block-cycle (because the only existing block-parent walker, `PageComments.BlockAnchorChip.ownerPageId`, already has a local `seen` guard), but the assumption "block parentId chain is a DAG" leaks elsewhere in code that will be written later (any future "find owning page", "find owning column", "find owning synced-block" walker).
+- Suggestion: mirror the page-cycle detector in `normalizeState` over `parsed.blocks`. Per-block DFS with a `seen` set; sever `parentId = null` on the offending block when a loop is detected. Cheap O(blocks) pass at hydration.
+
+### I-8106 — Read-only Settings sections ("Notifications", "Connections") need a "Coming soon" cue OR removal — P3 — open
+- `/app/settings` shows `Notifications` + `Connections` sections that are essentially placeholders (no inputs, no toggles, no content beyond a title). The user has no way to know whether the workspace SUPPORTS notifications / integrations or whether the UI just isn't built yet.
+- Suggestion: grey out the section with a "Coming soon" pill, OR remove the section entirely until functionality lands. Same treatment for any other future-stub sections so the settings page doesn't masquerade as more capable than it is.
+
+### I-8107 — Dark-mode contrast audit (informational, all pass WCAG AA) — P3 — closed-as-info
+- Sampled key text/background pairs in dark mode using `rgb(from oklch r g b)` decomposition + sRGB-linear luminance. Results all pass WCAG AA (4.5:1 for normal text):
+  - muted-foreground text on card bg: 6.79:1 (AAA for body)
+  - muted-foreground text on background (breadcrumb): 7.68:1 (AAA)
+  - sidebar page label (foreground) on sidebar bg: 17.05:1
+  - destructive-color "Delete" link on card bg: 6.22:1
+  - textarea placeholder (at 50% alpha) composited on input bg: 5.11:1 (AA)
+- Light mode marginally lower (4.77:1 for muted, 4.62:1 for destructive) — still passes AA for normal text but does NOT clear AAA (7:1). No P-rated issue; logging as informational so the next theme tweak doesn't drop below AA accidentally.

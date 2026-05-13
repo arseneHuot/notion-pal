@@ -6941,3 +6941,77 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-8002 — Sanitizer unwraps `<a>` tags after href is stripped — fixed — P3
 - `src/lib/sanitize.ts`: after per-attribute sanitization, if an `<a>` ends up without an `href`, unwrap it (replace the element with its text children). Same strategy as the "strip-tag-keep-text" branch for disallowed tags. Verified: `<a href="javascript:alert(1)">bad</a>` → `bad`. Safe links untouched (still gain `rel="noopener noreferrer" target="_blank"`).
+
+
+## 2026-05-13 — B-8100 cycle/render/UX sweep
+
+### B-8100 — Published-page `synced-block` / `synced-block-ref` renderer has NO cycle guard — stack overflow / hang — P1 — open
+- Repro: in the workspace, set up a synced-block S1 with a child block, then a synced-block-ref R1 whose `sourceId = S1.id`. Put R1 as a child of S1 (so S1's children include the ref pointing back to S1). Publish the host page.
+- Visit `/p/<slug>`. The `ReadonlyBlock` switch in `src/routes/p.$slug.tsx:279-300` renders `synced-block` by enumerating `blocks` with `parentId === block.id` and recursing via `<ReadonlyBlock>`. There is no `seenIds` set / ancestors context. `synced-block-ref` resolves `sourceId`, fetches the source's children, and recurses — also unguarded.
+- The editor side (`src/components/editor/Block.tsx:1268-1413`) has `SyncedAncestorsContext` exactly to prevent this loop. That guard is NOT mirrored on the public read-only render path.
+- Expected: render an "Synced cycle detected" placeholder (same copy as the editor) and stop recursing.
+- Actual: unbounded recursion -> stack overflow / tab hang on the public URL. I did NOT actually trigger it on the live preview (would have hung the session per the task guidance), but the absence of a guard is plain in the code; the cycle hazard is also already a real-world thing in this app (see B-8001).
+- Severity P1: a malicious / corrupted published workspace can hang every visitor of the public link. Editor users are already protected.
+- Fix sketch: lift `SyncedAncestorsContext` into a shared module and use it in `ReadonlyBlock` as well. Simpler alternative: thread an optional `seen?: Set<string>` argument through `ReadonlyBlock`, defaulting to an empty set, and at each synced-block / synced-block-ref branch return early if `seen.has(block.id)` (or `seen.has(source.id)`).
+
+### B-8101 — Calendar event click does nothing — no edit dialog opens — P2 — open
+- Repro: `/app/calendar`. Several events render (`cal-event-evt_<id>`, `cal-event-row-r_<id>`). Click any of them.
+- Result: zero observable side-effect — no `role="dialog"` appears, no inline editor pops up, no navigation occurs. The event remains read-only at the surface level; the only way to "edit" is to find the database backing the events and edit there.
+- Companion to B-7806 (still open per focus list). Confirmed via DOM probe: after clicking `cal-event-evt_mp48b925zgx8xr7t`, the open-dialog count remains 0 and no `event-edit-*` testids appear anywhere in the tree.
+- Severity P2: calendar event editing is a baseline expectation; this is a discoverability + power-user gap. Right now the calendar surface is essentially a read-only grid.
+- Fix sketch: clicking the event opens a small popover anchored to the cell (title, start, end, all-day, color, link-to-row). Mirror the new-event dialog shape already used by the "+" affordance.
+
+### B-8102 — Comment thread at depth-6 cap: header wraps to two lines + no visual cue that nesting was flattened — P3 — open
+- Repro: inject a chain of 12 nested replies on a page; open the Comments pane. Depth 6 is the visual cap (`MAX_VISIBLE_DEPTH = 6` in `PageComments.tsx:173`); everything from depth 6 onwards renders at the same left position.
+- Result: at depth 6 the row's effective width is ~191px in a 320px pane. The header (avatar / name / timestamp) doesn't fit on one line — the timestamp wraps to a second line ("13/05/2026" + "18:24:06" stacked). Depth 7+ replies render flat under depth 6 with NO visual indicator (no "Replying to ..." chip, no return-arrow glyph, no thread-context line). The user can't tell where the cap kicked in.
+- Verified live: 12-comment chain on `pg_v8000_history_test`. DOM probe shows depth-6 width 191px and the date-stamp on two lines; depth-7..d11 share the same `left` position.
+- Severity P3: only matters on deep threads (5+ levels) but the lost context is real — a Reply at "depth 9" reads like a top-level-ish reply with no signal of which earlier comment it answers.
+- Fix sketch:
+  1) At depth >= MAX_VISIBLE_DEPTH, prepend a small "Replying to <truncated parent text>" badge so the parent context is preserved despite flat indent.
+  2) When depth >= MAX_VISIBLE_DEPTH - 1, drop the timestamp into a separate block-level `<div>` so the header always fits on one line even at narrow widths.
+  3) Optionally raise the pane width to 360-400px (current 320 is too narrow once nesting kicks in).
+
+### B-8103 — Command palette: bracket / punctuation characters wipe out matches even when the underlying word is exact — P3 — open
+- Repro: open palette (Cmd+K). Type `[settings]` (single token, length 10). "Open Settings" exists.
+- Result: 0 results. The query is treated as a single 10-char token; the haystack `"open settings"` doesn't contain the literal substring `[settings]` (because of the brackets). Same hazard for `(settings)`, `settings.`, `settings,` and similar.
+- The `stripQuotes` helper in `src/components/command/CommandPalette.tsx:110` only strips `'`, `"`, and backtick. Square / round / curly brackets, periods, commas — all pass through and break the substring match.
+- Severity P3: power-users routinely paste copy from logs / chat ("[ERROR] settings page broken") and expect the palette to surface the relevant page. The substring-only matcher is too strict.
+- Fix sketch: extend `stripQuotes(t)` to also strip leading / trailing `[](){}<>!?.,:;`. Better: normalize the haystack + query through a single `\W` -> space pass before tokenizing so any non-word character becomes a token separator. (E.g. `[settings]` -> tokens `["settings"]`.)
+
+### B-8104 — Command palette: Home / End / PageUp / PageDown have no effect — P3 — open
+- Repro: open Cmd+K with the default workspace seed (23+ items). Press End. Press Home. Press PageDown.
+- Result: active-index stays on the first item ("Create new page") regardless. Only ArrowUp / ArrowDown advance the highlight one item at a time. Verified live: `data-active=true` stays on `cmd-new-page` across all four key probes.
+- The `onKeyDown` handler in `src/components/command/CommandPalette.tsx:345-356` only listens for ArrowDown / ArrowUp / Enter. Companion to I-8005; promoting to a B-row because it is also a baseline keyboard-a11y gap (screen-reader / keyboard-only users can't reach the last item in O(1) presses).
+- Severity P3: only matters once the items list grows beyond ~20, but that's already true in this seed.
+- Fix sketch: extend the keydown switch to handle `Home` (-> index 0), `End` (-> items.length - 1), `PageDown` (-> +10 capped), `PageUp` (-> -10 floored). Three more `else if` branches.
+
+### B-8105 — Settings page Workspace section is read-only — no inline edit affordance, no workspace switcher — P2 — open
+- Repro: `/app/settings`. Inspect the Workspace section.
+- Result: three lines, all `<span>`-only: "Name: <ws name>", "Plan: free", "AI credits remaining: 935". No edit button, no inline contenteditable, no rename affordance. No "Create workspace" affordance. No workspace switcher exists anywhere in the app (the sidebar header chip is a static label, not a dropdown).
+- The store already has `workspaces` keyed by id, `currentWorkspaceId`, and the page-creation path threads `workspaceId` through. The plumbing is there; the UI is the gap.
+- Companion to I-7905 (read-only settings) + I-8007 (workspace switcher missing). Promoting to a B-row because the read-only state misleads the user — the layout looks editable (Notion / Linear-style label-prefix lines), and there is no "(read-only)" cue.
+- Severity P2: power-users in multi-workspace setups will hit this wall fast; the workspace name lock alone is a baseline expectation gap.
+- Fix sketch: convert each metadata line to a `<button>`-driven inline edit (click row -> swap to `<input>` -> blur or Enter saves). For the workspace switcher, replace the sidebar header chip with a popover listing all workspaces the user is a member of plus a "Create new workspace" affordance.
+
+### B-8106 — `normalizeState` cycle guard does NOT cover `blocks.parentId` chains — runtime hazard for synced / nested blocks — P2 — open
+- Repro (data injection only, not exercised live to avoid hang): construct three blocks B1, B2, B3 where `B1.parentId = B3`, `B2.parentId = B1`, `B3.parentId = B2`. Persist into `state.blocks`, fire a StorageEvent.
+- normalizeState (`src/lib/store.ts:122-159`) only walks `parsed.pages` for cycles. There is no equivalent pass over `parsed.blocks`. Any consumer that walks `block.parentId` up the tree (e.g. `PageComments.BlockAnchorChip.ownerPageId` at `PageComments.tsx:307-315`, which DOES have a `seen` guard) is fine — but several other walkers (the future "find ancestor synced-block" logic, any `parentId`-chasing in export / templating) are not formally guarded.
+- The hazard already manifested for pages (B-8001 P1); on blocks it would silently corrupt parent-chain walks in any future feature that relies on the chain being a DAG.
+- Companion to I-8002 (still open). The page-side fix is in; the block-side is not.
+- Severity P2: latent. No current code path that I could trigger hangs on a block cycle (PageComments has its own `seen` guard), but the assumption "parentId chain is a DAG" is implicit elsewhere and will bite the next developer.
+- Fix sketch: mirror the page-cycle detector in normalizeState over `parsed.blocks` — per-block DFS with a `seen` set, sever `parentId = null` on the offending block when a loop is detected.
+
+
+## 2026-05-13 — B-8100 batch fixes
+
+### B-8100 — Public synced-block cycle guard — fixed — P1
+- `ReadonlyBlock` (src/routes/p.$slug.tsx) takes an optional `syncedAncestors: Set<string>` and threads it through every recursive call (alias-redirect, toggle children, synced-block children, synced-block-ref children). On entry to `synced-block` and `synced-block-ref`, if the block's id (or the ref's `sourceId`) is already in the set, render `(Synced cycle detected)` and stop recursing. Same defense-in-depth pattern as the editor's `SyncedAncestorsContext`. Closes the last public-surface hang vector in the B-8001 class.
+
+### B-8106 — normalizeState detects block.parentId cycles — fixed — P2
+- One-pass per-block DFS with a `seen` set; sever `parentId = null` on the page that closes any loop. Mirrors the page-cycle pass (commit ce89dce). Verified live: poisoned chain blk_A→blk_C→blk_B→blk_A → after StorageEvent, A.parentId === null, chain becomes a DAG. Future walkers that assume `block.parentId` is acyclic (export traversal, ancestor synced-block resolution) now have an on-disk guarantee.
+
+### B-8103 — Palette tolerates surrounding punctuation — fixed — P3
+- `CommandPalette` tokenizer splits on any of `[]{}()<>!?.,:;` plus whitespace, and the stripQuotes pass also strips those chars from edges. Action filter now routes through the same `allMatch(tokens)` instead of substring on raw `q`. Verified visually: query `[settings]` → "Open Settings" surfaces under Navigate group.
+
+### B-8104 — Palette Home/End/PageUp/PageDown — fixed — P3
+- Input `onKeyDown` adds branches: `Home` → index 0, `End` → items.length-1, `PageDown` → +10, `PageUp` → −10 (each clamped to valid range). Keyboard-only and screen-reader users can now reach the ends of the list in O(1).

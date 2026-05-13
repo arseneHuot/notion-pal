@@ -157,6 +157,29 @@ function normalizeState(parsed: AppState): AppState {
       }
     }
   }
+  // B-8106 — block-side cycle detection. Mirrors the page-cycle pass
+  // above. Several future-facing walkers (export traversal, synced-block
+  // ancestor logic, comment-anchor ownerPageId resolution) chase
+  // `block.parentId` up the tree and rely on it being a DAG. A loop
+  // (corrupt import, future movePage bug) would either hang or yield
+  // wrong answers. One pass; per-node walk bounded by `seen`.
+  if (parsed.blocks) {
+    for (const [bid, b] of Object.entries(parsed.blocks)) {
+      if (!b || !b.parentId) continue;
+      // page IDs are valid parentIds too (column → page, root blocks),
+      // so a parent that resolves in `pages` rather than `blocks` is
+      // fine — no cycle to detect because the chain stops at a page.
+      let cur = parsed.blocks[b.parentId];
+      const seen = new Set<string>([bid]);
+      while (cur && cur.parentId && !seen.has(cur.id)) {
+        seen.add(cur.id);
+        cur = parsed.blocks[cur.parentId];
+      }
+      if (cur && seen.has(cur.id)) {
+        parsed.blocks[bid] = { ...b, parentId: null };
+      }
+    }
+  }
   if (parsed.comments) {
     const comments = parsed.comments;
     for (const [cid, c] of Object.entries(comments)) {

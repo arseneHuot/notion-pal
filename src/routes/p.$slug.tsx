@@ -90,10 +90,17 @@ function ReadonlyBlock({
   block,
   blocks = {},
   pages = {},
+  syncedAncestors,
 }: {
   block: Block;
   blocks?: Record<string, Block>;
   pages?: Record<string, Page>;
+  /** Set of synced-block / synced-block-ref source IDs already on the
+   *  current render path. Threaded through recursion to detect cycles in
+   *  the synced graph and break out with a placeholder instead of
+   *  recursing forever (B-8100 — same hazard class as B-8001). The
+   *  editor side has the equivalent `SyncedAncestorsContext`. */
+  syncedAncestors?: Set<string>;
 }) {
   // B-7901 — alias foreign / legacy block types to their canonical form so
   // imports from Notion's API and Markdown sources don't silently disappear
@@ -118,6 +125,7 @@ function ReadonlyBlock({
         block={{ ...(block as object), type: ALIASES[rawType] } as Block}
         blocks={blocks}
         pages={pages}
+        syncedAncestors={syncedAncestors}
       />
     );
   }
@@ -207,7 +215,7 @@ function ReadonlyBlock({
         </summary>
         <div className="pl-5 mt-1">
           {children.map((c) => (
-            <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} />
+            <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} syncedAncestors={syncedAncestors} />
           ))}
         </div>
       </details>
@@ -277,11 +285,20 @@ function ReadonlyBlock({
     );
   }
   if (block.type === "synced-block") {
+    // B-8100 — cycle guard: if a descendant block points back at this
+    // synced-block (via a ref), we'd recurse forever and hang every
+    // visitor of the public link. The editor uses SyncedAncestorsContext;
+    // this thread-an-arg approach is the public-render analogue.
+    if (syncedAncestors && syncedAncestors.has(block.id)) {
+      return <div className="text-xs text-muted-foreground italic my-2">(Synced cycle detected)</div>;
+    }
+    const nextAncestors = new Set(syncedAncestors ?? []);
+    nextAncestors.add(block.id);
     const children = Object.values(blocks).filter((b) => b.parentId === block.id).sort((a, b) => a.order - b.order);
     return (
       <div className="border-l-4 border-pink-400 pl-3 py-2 my-2">
         {children.map((c) => (
-          <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} />
+          <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} syncedAncestors={nextAncestors} />
         ))}
       </div>
     );
@@ -290,11 +307,19 @@ function ReadonlyBlock({
     const sourceId = (block as { sourceId?: string }).sourceId;
     const source = sourceId ? blocks[sourceId] : undefined;
     if (!source) return <div className="text-xs text-muted-foreground italic my-2">(Synced content — source unavailable)</div>;
+    // B-8100 — same cycle guard: a ref whose source is already in the
+    // ancestor chain would loop. Track the SOURCE id (not the ref id) so
+    // multiple refs pointing at the same source still trigger the guard.
+    if (syncedAncestors && syncedAncestors.has(source.id)) {
+      return <div className="text-xs text-muted-foreground italic my-2">(Synced cycle detected)</div>;
+    }
+    const nextAncestors = new Set(syncedAncestors ?? []);
+    nextAncestors.add(source.id);
     const children = Object.values(blocks).filter((b) => b.parentId === source.id).sort((a, b) => a.order - b.order);
     return (
       <div className="border-l-4 border-pink-400 pl-3 py-2 my-2">
         {children.map((c) => (
-          <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} />
+          <ReadonlyBlock key={c.id} block={c} blocks={blocks} pages={pages} syncedAncestors={nextAncestors} />
         ))}
       </div>
     );

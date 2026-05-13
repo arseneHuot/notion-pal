@@ -107,9 +107,12 @@ export function CommandPalette() {
     // pages containing "test" (B-6507 / I-6501). The user's quoting intent
     // is treated as "this is a literal phrase", but since our matcher is
     // already substring-based on lowercase, the quote chars are noise.
-    const stripQuotes = (t: string) => t.replace(/^['"`]+|['"`]+$/g, "");
+    // Also strip surrounding punctuation `[]()<>{}!?.,:;'"` and treat any
+    // run of non-word chars as a token separator (B-8103) — pasting copy
+    // like `[settings]`, `(home)`, or `Page!` should still match.
+    const stripQuotes = (t: string) => t.replace(/^[\s'"`[\](){}<>!?.,:;]+|[\s'"`[\](){}<>!?.,:;]+$/g, "");
     const rawTokens = q
-      ? q.split(/\s+/).map(stripQuotes).filter((t) => t.length > 0)
+      ? q.split(/[\s[\](){}<>!?.,:;]+/).map(stripQuotes).filter((t) => t.length > 0)
       : [];
     const tokens = rawTokens.length > 1
       ? rawTokens.filter((t) => t.length >= 2)
@@ -312,7 +315,9 @@ export function CommandPalette() {
       }
     }
 
-    const matchedActions = actions.filter((a) => !q || a.label.toLowerCase().includes(q));
+    // B-8103 — actions also go through the same tokenizer so punctuation
+    // (`[settings]`, `(home)`) doesn't wipe out otherwise-exact matches.
+    const matchedActions = actions.filter((a) => !q || allMatch(a.label.toLowerCase()));
 
     return [...matchedActions, ...pageItems, ...dbItems, ...blockMatches];
   }, [pages, databases, blocks, query, darkMode, navigate]);
@@ -343,12 +348,27 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
+              // B-8104 — Home / End / PageUp / PageDown keyboard nav so
+              // keyboard-only and screen-reader users can reach the ends
+              // of the list in O(1). Page step is fixed at 10 items.
               if (e.key === "ArrowDown") {
                 e.preventDefault();
                 setActiveIndex((i) => Math.min(items.length - 1, i + 1));
               } else if (e.key === "ArrowUp") {
                 e.preventDefault();
                 setActiveIndex((i) => Math.max(0, i - 1));
+              } else if (e.key === "Home") {
+                e.preventDefault();
+                setActiveIndex(0);
+              } else if (e.key === "End") {
+                e.preventDefault();
+                setActiveIndex(Math.max(0, items.length - 1));
+              } else if (e.key === "PageDown") {
+                e.preventDefault();
+                setActiveIndex((i) => Math.min(items.length - 1, i + 10));
+              } else if (e.key === "PageUp") {
+                e.preventDefault();
+                setActiveIndex((i) => Math.max(0, i - 10));
               } else if (e.key === "Enter") {
                 e.preventDefault();
                 items[activeIndex]?.action();
