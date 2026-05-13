@@ -1624,3 +1624,22 @@ Priority: high / medium / low.
 
 ### I-4404 — Calendar same-day drop should short-circuit before calling moveCalendarEvent (low, open)
 - See B-4409. Same-day drag is a no-op but still goes through the store mutation in `moveCalendarEvent` (rebuilds the calendarEvents map). Skipping when `keyForDate(new Date(e.start)) === dayKey` avoids the React rerender churn and any animations. Tiny but free.
+
+## 2026-05-13 — QA agent iteration I-4600
+
+### I-4600 — Orphan pages need a sidebar home (medium, open)
+- See B-4604. A page with `teamspaceId: null` (and no parent) is unreachable through the sidebar — it shows up only via Cmd+K or direct URL. Two acceptable fixes: (a) add an "Other" / "Orphaned" section at the bottom of the sidebar that lists pages whose `teamspaceId` doesn't match any known teamspace; (b) tighten write paths so every page gets a teamspaceId at creation time (default to Private), and log/repair any orphans on hydration. Without one of these, programmatic page creation can silently produce unfindable pages.
+
+### I-4601 — Public form should honour view.hiddenProperties (medium, open)
+- See B-4607. The in-app view's `hiddenProperties` are respected in TableView but ignored in `routes/form.$dbId.$viewId.tsx`. Form builders set `hiddenProperties` via the view menu (the same UI surface as table-column hiding) and reasonably expect it to apply publicly too. Update `visibleFields` to also filter `view.hiddenProperties` (the conditionalLogic pass can keep running on top). Alternative: introduce a dedicated `view.formFields` allowlist on form-typed views, but that's a bigger schema change.
+
+### I-4602 — `reorderDatabaseRows` should validate source.databaseId === databaseId (high, open)
+- See B-4611. Today `reorderDatabaseRows(target, sourceId, _)` blindly splices `sourceId` into `databases[target].rows`. There is no check that `state.rows[sourceId].databaseId === target`. Two-line fix:
+  ```ts
+  const src = s.rows[sourceRowId];
+  if (!src || src.databaseId !== databaseId) return s;
+  ```
+  And mirror on the `TableView.onDrop` side as a defensive check. Without this, a stray cross-DB drag (which is super easy when two inline DBs sit on the same page) duplicates the row id into two `databases.<id>.rows` arrays — the affected row then appears in both grids, edits in one propagate to the other, and trashing in either leaves the dangling reference. P1 because the UI happily produces it with one drag.
+
+### I-4603 — Cross-DB row drops should at least be a no-op (low, open)
+- Follow-up to I-4602. Even after guarding `reorderDatabaseRows`, the TableView `onDrop` swallows the event. Notion's behaviour is to either (a) silently no-op (current acceptable target) or (b) prompt "Move row to <DB-B>?" with explicit property remapping. Pick one; today it appears to "work" but corrupts state. The smallest robust fix is to early-return in `onDrop` when `state.rows[sourceId].databaseId !== databaseId` and clear the drop indicator.

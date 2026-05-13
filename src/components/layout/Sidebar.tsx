@@ -90,6 +90,7 @@ export function Sidebar() {
             onNewPage={() => handleNewPage(ts.id)}
           />
         ))}
+        <OrphanSection />
         <AddTeamspaceForm />
       </div>
 
@@ -345,6 +346,28 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function OrphanSection() {
+  // Pages with no teamspaceId AND no parent are otherwise invisible in the
+  // sidebar (B-4604). Render them under a small "Other" header so users can
+  // navigate to them without falling back to Cmd+K.
+  const pages = useStore((s) => s.pages);
+  const orphans = useMemo(
+    () => Object.values(pages)
+      .filter((p) => !p.teamspaceId && !p.parentId && !p.isInTrash)
+      .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt)),
+    [pages],
+  );
+  if (orphans.length === 0) return null;
+  return (
+    <div className="px-2 mt-2" data-testid="sidebar-other-section">
+      <div className="px-2 py-1 text-[11px] uppercase tracking-wider text-muted-foreground">Other</div>
+      {orphans.map((p) => (
+        <PageItem key={p.id} page={p} depth={0} />
+      ))}
     </div>
   );
 }

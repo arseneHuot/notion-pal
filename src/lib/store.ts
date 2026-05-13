@@ -1228,6 +1228,15 @@ export function reorderDatabaseRows(databaseId: string, sourceRowId: string, tar
     const db = s.databases[databaseId];
     if (!db) return s;
     if (!Array.isArray(db.rows)) return s;
+    // Refuse cross-DB drops (B-4611). The reorder API only moves a row WITHIN
+    // its own database. If the source row belongs to a different DB, do
+    // nothing — the table-view drop handler should never trigger this, but
+    // a misconfigured DnD payload would otherwise insert the same row id
+    // into two databases' `rows` arrays simultaneously and corrupt the
+    // store. To move a row between databases, delete + recreate (or add a
+    // dedicated moveRowToDatabase action later).
+    const sourceRow = s.rows[sourceRowId];
+    if (sourceRow && sourceRow.databaseId !== databaseId) return s;
     const rows = db.rows.filter((r) => r !== sourceRowId);
     if (!targetRowId) {
       rows.push(sourceRowId);

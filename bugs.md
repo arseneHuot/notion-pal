@@ -5153,3 +5153,41 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4412 / I-4402 — Block-jump highlight is transient — fixed (commit 1494bc4)
 - Fix: Cmd+K block-result click now appends `#block-<id>` to the URL. PageView reads `window.location.hash` on mount + hashchange, scrolls into view, adds persistent `ring-2 ring-blue-400` (single block; prior highlight cleared). Back/forward restores the highlight.
+
+## 2026-05-13 — QA agent iteration B-4600
+
+### B-4600 — paragraph / bulleted-list / header-1 / numbered-list-item aliases render (acceptance, fixed)
+- Seeded four blocks with the aliased type names on `pg_mp2pz5zw6oflgc0j` and reloaded. `[data-block-id="blk_b4600_para"]` → "B-4600 PARA test"; `blk_b4600_bul` → "•\nB-4600 BUL test"; `blk_b4600_h1` → heading text; `blk_b4600_num` → "1.\nB-4600 NUM test". None render the "Unsupported block: …" sentinel. Block.tsx alias map at lines 42–54 routes through `BlockComponent` recursively.
+
+### B-4601 — `export-page-markdown` honours `{ noDownload: true }` (acceptance, fixed)
+- Pre-zeroed `window.__lastAnchorClick` and `window.__lastExportedMarkdown`. Dispatched `new CustomEvent('export-page-markdown', { detail: { noDownload: true } })`. After 250ms: `__lastExportedMarkdown` is a 704-char string starting with "# Getting Started"; `__lastAnchorClick` stays `null` — no Save-As dialog, no programmatic `a.click()`. Safe for automation.
+
+### B-4602 — `#block-<id>` hash-driven highlight persists past 1.5s (acceptance for B-4412, fixed)
+- Navigated to `/app/p/pg_mp2pz5zw6oflgc0j#block-blk_b4600_para`. After 600ms the target div has `className` containing `ring-2 ring-blue-400`. Persists (not the 1500ms transient flash). Closes the B-4412 follow-up; PageView now hangs the ring off the URL hash so back/forward and reload all restore it.
+
+### B-4603 — Calendar view falls back to first date prop when `dateProperty` is undefined (acceptance for B-4010, fixed)
+- View `view_qa_b4500_cal_undef` on `db_mp3jj2jnavmaxi0e` has no `dateProperty` field. Selected it on `pg_qa_db_uhgak1`; `[data-testid="cal-grid-db_mp3jj2jnavmaxi0e"]` rendered with 30+ `cal-add-2026-MM-DD` cells and the existing event `cal-event-row_qa_b4500_today` placed correctly. No `cal-needs-date-*` empty-state shown. CalendarView correctly falls back to the first `type === "date"` property.
+
+### B-4604 — Orphan page (no teamspace, no parent) is invisible in the sidebar (P2, open)
+- Seeded `pg_b4600_orphan` with `teamspaceId: null, parentId: null` and reloaded. Direct nav `/app/p/pg_b4600_orphan` renders title + breadcrumb fine. Cmd+K "Orphan" lists it under `cmd-page-pg_b4600_orphan`. But sidebar shows zero entries for it across FAVORITES / Private / Engineering / Shared / Test Teamspace sections — there's no "Other" / "Orphan" bucket. A user who creates a page programmatically (or via a future feature that nulls teamspaceId) loses sidebar discoverability and depends on search or browser history. Either render an "Other" section for `teamspaceId == null`, or guard write paths so a page always lands in *some* teamspace.
+
+### B-4605 — AI textarea auto-grows for 4-line input (acceptance, fixed)
+- Empty `[data-testid="ai-input"]` height=30px. Set value to "L1\nL2\nL3\nL4" via the native setter + dispatched `input`. After 200ms: clientHeight=86px, scrollHeight=88px (so all 4 lines visible, no internal scrollbar yet), `max-height: 160px`. Confirms auto-resize fires on input and grows linearly until 160px cap kicks in — matches B-4414 spec.
+
+### B-4606 — View duplicate copies hiddenProperties + filters + sorts (acceptance, fixed)
+- Source view `view_mp3jj2jnrvx2tfui` configured with `hiddenProperties=[3 ids]`, 2 filters, 1 sort. Clicked `[data-testid="view-duplicate-view_mp3jj2jnrvx2tfui"]`. New view minted ("All (Copy)"): `hiddenProperties` matches all 3 source ids verbatim, both filters preserved (operator + propertyId + value), sort preserved, `propertyOrder` preserved. View duplication is faithful.
+
+### B-4607 — Public form ignores `view.hiddenProperties` (P2, open)
+- DB `db_mp3lhvrxwl40mnbf` with form view `view_b4600_form_select`; set `hiddenProperties` to 5 of 6 props (only Status select left). Navigated to `/form/db_mp3lhvrxwl40mnbf/view_b4600_form_select`. Form renders ALL 5 non-title props (Status, Tags, Date, Score, TestNote) — `hiddenProperties` is ignored. `routes/form.$dbId.$viewId.tsx:55-89` only consults `conditionalLogic`. If a form-builder user hides cols in the in-app view, they reasonably expect those hidden cols to disappear publicly. Either honour `hiddenProperties`, or use a dedicated `formHidden` field per property and hide in both spots.
+
+### B-4608 — Public form select-only submit passes validation when title hidden (acceptance, fixed)
+- On `view_b4600_form_select`, the existing rule shows title only when Status=Not-started. Picked Status=Done (title stays hidden). Clicked `[data-testid="public-form-submit"]` with no other field filled. Row count went 7→8, success screen rendered ("Thanks for submitting!"). New row has `values.<status>="opt_…Done"` and `values.<title>=""` — matches the intent described in I-4300 (form passes validation when title is rule-hidden, leaving title empty).
+
+### B-4609 — Cmd+K first paint under 25ms with 120 pages (acceptance, fixed)
+- `pageCount=120`. Clicked `[data-testid="sidebar-search"]`; measured time-to-`[data-testid="command-input"]` and time-to-first `cmd-page-*` via `requestAnimationFrame` polling. Both landed at ~19.5ms. Initial result list capped at 10 entries (windowed). No perceivable lag at this scale — fuzzy filter is cheap.
+
+### B-4610 — Comment edit + delete via testids works end-to-end (acceptance, fixed)
+- On `pg_mp2pz5zwikifg7r3` opened comments pane (`comments-btn`). Comment `cmt_mp2rjstpw9beq7dl` exposes `comment-edit-<id>` → click reveals `comment-edit-input-<id>` (textarea) + `comment-edit-save-<id>` + `comment-edit-cancel-<id>`. Edited content to "B-4600 edited content", saved → store updated. Then clicked `comment-delete-<id>` (window.confirm overridden true) → comment removed from store + DOM. Both flows expose distinct testids; automation-ready.
+
+### B-4611 — Cross-DB row drop duplicates rowId into target DB (P1, open)
+- Two inline DB blocks on same page: `db_mp3jj2jnavmaxi0e` (row `row_mp3jk8zuxoypboda`, DB-A) and `db_mp3lhvrxwl40mnbf` (DB-B). Dispatched HTML5 dragstart on `row-handle-row_mp3jk8zuxoypboda` then drop on `row-row_mp3lkcn7xf38` (a DB-B row). After: DB-B's `rows` array gained `row_mp3jk8zuxoypboda` at position 0 (count 8→9), DB-A's `rows` unchanged (still references the same id), and `rows[row_mp3jk8zuxoypboda].databaseId` still points to DB-A. Result: same row id is referenced by two databases — DB-B now displays a "phantom" row whose values belong to a row owned by DB-A; deleting from one DB leaves the orphan in the other. `TableView.tsx:63-67` calls `reorderDatabaseRows(databaseId=TARGET_DB, sourceId, row.id)` without checking that the source row's `databaseId` matches the target. `store.ts:1226-1247` `reorderDatabaseRows` happily splices into any DB's rows array. Should be a no-op when `s.rows[sourceRowId].databaseId !== databaseId`.

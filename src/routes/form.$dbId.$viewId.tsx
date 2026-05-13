@@ -54,8 +54,21 @@ function PublicFormPage() {
 
   const fields = useMemo<Property[]>(() => {
     if (!data) return [];
+    // Drop system-managed types AND any property the form view explicitly
+    // marked hidden via `hiddenProperties` (B-4607). Without this, columns
+    // the form-builder hid still showed up on the public submission page.
+    const hidden = new Set<string>(data.view.hiddenProperties ?? []);
     return data.db.properties.filter(
-      (p) => p.type !== "created-time" && p.type !== "created-by" && p.type !== "last-edited-time" && p.type !== "last-edited-by" && p.type !== "unique-id" && p.type !== "formula" && p.type !== "rollup" && p.type !== "button",
+      (p) =>
+        !hidden.has(p.id) &&
+        p.type !== "created-time" &&
+        p.type !== "created-by" &&
+        p.type !== "last-edited-time" &&
+        p.type !== "last-edited-by" &&
+        p.type !== "unique-id" &&
+        p.type !== "formula" &&
+        p.type !== "rollup" &&
+        p.type !== "button",
     );
   }, [data]);
 
