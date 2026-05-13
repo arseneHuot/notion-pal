@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useStore, upsertCalendarEvent, deleteCalendarEvent } from "@/lib/store";
+import { useStore, upsertCalendarEvent, deleteCalendarEvent, moveCalendarEvent } from "@/lib/store";
 import { useMemo, useState } from "react";
 import { uid } from "@/lib/id";
 import { Plus, ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
@@ -167,6 +167,21 @@ function CalendarPage() {
                   onClick={() => setSelectedDay(k)}
                   className={`border-r border-b border-border min-h-[100px] p-1 cursor-pointer ${isCurrentMonth ? "bg-card" : "bg-muted/20"} ${selectedDay === k ? "ring-1 ring-blue-400" : ""}`}
                   data-testid={`day-${k}`}
+                  onDragOver={(e) => {
+                    if (e.dataTransfer.types.includes("application/x-cal-event-id")) {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                    }
+                  }}
+                  onDrop={(e) => {
+                    const id = e.dataTransfer.getData("application/x-cal-event-id");
+                    if (!id) return;
+                    e.preventDefault();
+                    // Only reschedule when the event came from a `calendar` source
+                    // — DB-row-derived events don't have a calendarEvents entry.
+                    if (id.startsWith("row-")) return;
+                    moveCalendarEvent(id, k);
+                  }}
                 >
                   <div className={`flex items-center justify-between text-xs ${isToday ? "font-bold text-blue-600" : ""}`}>
                     <span>{date.getDate()}</span>
@@ -186,8 +201,17 @@ function CalendarPage() {
                   {list.slice(0, 3).map((e) => (
                     <div
                       key={e.id}
-                      className="text-xs mt-0.5 px-1 py-0.5 rounded truncate"
+                      className="text-xs mt-0.5 px-1 py-0.5 rounded truncate cursor-grab"
                       style={{ background: e.color ?? "#3b82f6", color: "white" }}
+                      draggable={e.source === "calendar"}
+                      data-testid={`cal-event-${e.id}`}
+                      title={e.source === "calendar" ? "Drag to reschedule" : `From ${e.source}`}
+                      onDragStart={(ev) => {
+                        if (e.source !== "calendar") { ev.preventDefault(); return; }
+                        ev.stopPropagation();
+                        ev.dataTransfer.setData("application/x-cal-event-id", e.id);
+                        ev.dataTransfer.effectAllowed = "move";
+                      }}
                     >
                       {e.title}
                     </div>

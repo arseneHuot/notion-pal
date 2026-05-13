@@ -1497,3 +1497,23 @@ Priority: high / medium / low.
 ### I-3904 — Comments: when resolved, the resolve button needs to flip to "Re-open" and actually unresolve (medium, open — dup of I-204 but with a concrete bug behind it)
 - See B-3906. The fix is twofold: (1) read `resolved` and render the alternate label/icon when true; (2) the click handler must call the unresolve mutation (toggle, not set). Right now the click on a resolved comment is a no-op.
 
+
+## 2026-05-13 — QA agent iteration I-4000
+
+### I-4000 — Calendar day cells need `data-day` + drop handlers (medium, open)
+- See B-4010 / B-4011. Calendar event chips already have `draggable=true` and `cal-event-<rowId>` testid. The receiving day cells are a 7-col grid of unlabeled `<div>`s. Add `data-day="YYYY-MM-DD"` and `data-testid="cal-day-<date>"` to each cell, then wire `onDragOver` (preventDefault) + `onDrop` to extract row id and call `setRowValue(rowId, dateProp, dropDate)`. Closes B-2907.
+
+### I-4001 — Mobile drawer / hamburger toggle (high, open)
+- See B-4014. Below md breakpoint the sidebar is `max-md:absolute` left:0 z-30, overlaying main content with no way to dismiss it from outside (`close-sidebar` only visible inside the sidebar). Add a `mobile-sidebar-toggle` button in the page header that sets a `sidebarOpen` state, slide-in/out the aside via translate-x, plus a backdrop click-to-close. Critical for mobile usability.
+
+### I-4002 — View duplicate action (medium, open)
+- See B-4016. View menu only has Rename / Delete / Add property. Add a `view-duplicate-<id>` item that calls `duplicateView(databaseId, sourceViewId)` to deep-clone name (with " copy" suffix), type, sorts, filters, visibility, group, calendar/board config, etc. Notion uses this constantly for branching off "All – starred" from "All".
+
+### I-4003 — Sidebar page drag-and-drop (high, open)
+- See B-4017. None of the sidebar tree nodes is draggable. Add `draggable=true` on the page row, an `onDragStart` that sets `application/x-page-id`, and on each candidate parent (page row + teamspace header) an `onDragOver`/`onDrop` handler that calls `movePage(sourcePageId, newParentId)`. Add visual indicators: drop-above line, drop-into highlight. Closes B-2908 / B-3712 / B-3616.
+
+### I-4004 — Comment action buttons aria-label fallback (low, open)
+- See B-4020. `resolve-/reply-/comment-edit-/comment-delete-` are text buttons today. Add `aria-label` so the buttons remain accessible if/when reduced to icons on narrow viewports. Cheap defensive improvement.
+
+### I-4005 — Public form rendered required marker (low, open — dup of I-3900)
+- Confirmed again on QA Form DB: title input is required (server-side validated, "Name is required." error fires) but the `<label>` text is just "Name". Add a red `*` or "(required)" suffix when `prop.required` is true so users see it before submitting.

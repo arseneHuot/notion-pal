@@ -4866,3 +4866,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Fix: PageItem in Sidebar.tsx is now `draggable` with `dragstart`/`dragover`/`drop` handlers. New store action `reorderSiblingPages(sourceId, targetId)` sets the source's `sortOrder` to the midpoint of (target.order, predecessor.order). Page type gains optional `sortOrder?: number` (no migration — falls back to `createdAt`). Sidebar root + child lists now sort by `sortOrder ?? createdAt`.
 - Same parent + teamspace only (cross-teamspace moves go through movePage). Each row exposes `sidebar-page-<id>` testid + `data-page-id`.
 - Verified live: synthetic drag of sib[2] onto sib[0] sets `sortOrder` so source lands before target.
+
+### B-4022 — Live publish-toggle XSS sanitization (acceptance, stronger than B-4021)
+- Published `pg_mp2pz5zwikifg7r3` (slug "welcome") via `share-btn` → `publish-toggle`. Injected paragraph block with content `<img src=x onerror="window._XSS=1">XSS-CANARY-4021`. Visited `/p/welcome` via top-level navigation (not pushState). DOM: `<div data-page-blocks="true"><p>XSS-CANARY-4021</p></div>`. Zero `<img>` elements rendered, `window._XSS` never assigned. Sanitizer strips the entire `<img>` tag (and the onerror attribute with it) on the public route. Re-toggled publish off to clean up.

@@ -1622,6 +1622,33 @@ export function deleteCalendarEvent(id: string) {
   });
 }
 
+/**
+ * Move a calendar event to a new day (drag-reschedule, B-2907 / B-3513).
+ * `dayKey` is the local-time YYYY-MM-DD key produced by `keyForDate`.
+ * Preserves the event's time-of-day from its existing `start`; if no
+ * start was set, defaults to noon local time so the chip stays visible
+ * in week / day views.
+ */
+export function moveCalendarEvent(id: string, dayKey: string) {
+  setState((s) => {
+    const e = s.calendarEvents[id];
+    if (!e) return s;
+    const [y, m, d] = dayKey.split("-").map(Number);
+    if (!y || !m || !d) return s;
+    let hours = 12;
+    let minutes = 0;
+    if (e.start) {
+      const prev = new Date(e.start);
+      if (!Number.isNaN(prev.getTime())) {
+        hours = prev.getHours();
+        minutes = prev.getMinutes();
+      }
+    }
+    const next = new Date(y, m - 1, d, hours, minutes).getTime();
+    return { ...s, calendarEvents: { ...s.calendarEvents, [id]: { ...e, start: next } } };
+  });
+}
+
 export function upsertMail(mail: Mail) {
   setState((s) => ({ ...s, mails: { ...s.mails, [mail.id]: mail } }));
 }
