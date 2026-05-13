@@ -5345,3 +5345,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4913 — Public /p/<slug> hides comments entirely (acceptance, ok)
 - Published pg_mp2pz5zw6oflgc0j as slug `getting-started-4900` (2 existing comments on the page). Navigated /p/getting-started-4900: `comments-btn`, `comment-input`, `comment-row-*` all absent. p.$slug.tsx does not import PageComments, so the public renderer has zero comment surface. Read-only requirement satisfied — anonymous readers can't see threads or post.
+
+### B-4907 / I-4903 — /sub-page leaves stale content — fixed (commit a30f2bd)
+- Fix: slash convert to sub-page (and /page) sets `content: ""` on the block so the user-typed query string ("/sub-page") doesn't persist.
+
+### I-4901 — Board / Gallery empty states — done (commit a30f2bd)
+- Fix: both views render a dashed-border placeholder with testids `board-empty-<dbId>` / `gallery-empty-<dbId>` when the sorted rows list is empty.
+
+### I-4905 — Public page comments hint — done (commit a30f2bd)
+- Fix: `/p/<slug>` route footer "Read-only · Comments are disabled on public pages." with `public-page-footer` testid + "Make your own ↗" link.
