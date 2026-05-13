@@ -5597,3 +5597,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-5410 — Cmd+/ opens slash menu inside a callout's contenteditable (acceptance, ok)
 - Steps: on `/app/p/pg_mp2r871w150jzjkn` (Project brief), focused the contenteditable inside callout `blk_mp2r871xz978yenr`. Dispatched a `keydown` for `/` with `metaKey:true`.
 - Observed: `[data-testid="slash-menu"]` mounts. The slash menu is wired at the contenteditable level so callout children get the same affordance as ordinary paragraph blocks. Cmd+/ chord (in addition to plain `/`) works because the handler doesn't gate on absence of modifiers.
+
+### B-5408 — Orphan comments after permanent page delete — fixed (commit d83c6da)
+- Fix: `permanentlyDeletePage` rebuilds `state.comments` and drops any comment pointing at a deleted page OR a deleted block. Verified end-to-end with 2 comments on a synthetic trashed page.
