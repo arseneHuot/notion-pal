@@ -6397,3 +6397,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6712 — AI Cmd+J during route transition (passes)
 - Cleanly opens AI panel after `pushState` + `popstate` + Cmd+J fired in the same microtask. The keydown listener is bound at the document root so route change doesn't unmount it. Tested 3 separate page targets, all opened on the new URL.
+
+### B-6700 — applyFilters missing equals operator — fixed (commit 3b251fc)
+- Fix: `applyFilters` accepts `equals`/`not-equals` as aliases for `is`/`is-not`. Default branch warns once per session for unknown operators (I-6702).
+
+### B-6702 — Trashed page kept isFavorite — fixed (commit 3b251fc)
+- Fix: `deletePage` BFS sets `isFavorite: false` alongside `isInTrash: true` so restore doesn't re-add the page to Favorites unsolicited. Verified live.
