@@ -5989,3 +5989,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: navigated to `/form/db_mp2qmu4d1va6knov/view_mp2ry265swv12c04`, typed "B6016-marker" into the title input, submitted via form.requestSubmit().
 - Observed: row count grew 7 → 8, last row values `{prop_*: "B6016-marker"}`, success message shown. StorageEvent fired and `attachCrossTabSync` picked it up. B-3815/3704 fix confirmed.
 - Status: works as designed.
+
+### B-6103 — Cmd+K block-only match navigated to page-top — fixed (commit 51a8cbb)
+- Fix: pageItems action checks if the page matched via TITLE; if not, finds the first block whose content matches the query and appends `#block-<bid>` to the navigation. Title-hit rows keep bare navigation.
+
+### B-6104 — Block-anchor missing check used DOM-only — fixed (commit 51a8cbb)
+- Fix: PageComments reads `useStore(s => s.blocks)[blockId]` to determine whether the target block exists. Cross-page block references (block on page A, comment surfaced on page B) no longer false-positive as "missing".
