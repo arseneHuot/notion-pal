@@ -131,6 +131,11 @@ const listeners = new Set<() => void>();
 
 function setState(next: AppState | ((prev: AppState) => AppState)) {
   const updated = typeof next === "function" ? (next as (p: AppState) => AppState)(_state) : next;
+  // Stamp a monotonic write timestamp so the cross-tab listener can reject
+  // stale storage events that would otherwise clobber a newer local write
+  // (B-7000). `Date.now()` is sufficient for same-browser tabs; if two
+  // writes land in the same millisecond we keep both (still last-write-wins).
+  (updated as unknown as { _lastWriteAt?: number })._lastWriteAt = Date.now();
   _state = updated;
   persist(updated);
   for (const l of listeners) l();
@@ -157,6 +162,14 @@ function attachCrossTabSync() {
     try {
       const next = e.newValue ? (JSON.parse(e.newValue) as AppState) : null;
       if (!next) return;
+      // Reject stale storage events that would clobber a newer local write
+      // (B-7000). The local `_state._lastWriteAt` stamp is updated on
+      // every setState; if the incoming snapshot is strictly older, skip.
+      const localTs = (_state as unknown as { _lastWriteAt?: number })._lastWriteAt ?? 0;
+      const incomingTs = (next as unknown as { _lastWriteAt?: number })._lastWriteAt ?? 0;
+      if (incomingTs > 0 && localTs > 0 && incomingTs < localTs) {
+        return;
+      }
       // Normalize rows so a malformed cross-tab payload doesn't crash
       // downstream `row.values[…]` accesses (B-7004).
       if (next.rows) {
@@ -181,6 +194,16 @@ function attachCrossTabSync() {
           const raw = window.localStorage.getItem(userKey(uid));
           if (!raw) return;
           const next = JSON.parse(raw) as AppState;
+          // Skip rehydrate if our local snapshot is newer (B-7000).
+          const localTs = (_state as unknown as { _lastWriteAt?: number })._lastWriteAt ?? 0;
+          const incomingTs = (next as unknown as { _lastWriteAt?: number })._lastWriteAt ?? 0;
+          if (incomingTs > 0 && localTs > 0 && incomingTs < localTs) return;
+          // Normalize malformed rows.
+          if (next.rows) {
+            for (const [rid, r] of Object.entries(next.rows)) {
+              if (r && !r.values) next.rows[rid] = { ...r, values: {} };
+            }
+          }
           _state = next;
           for (const l of listeners) l();
         } catch {
