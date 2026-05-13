@@ -181,13 +181,45 @@ export function CommandPalette() {
       },
     ];
 
-    const pageItems = matchingPages.map((p) => ({
-      id: `page-${p.id}`,
-      label: p.title || "Untitled",
-      icon: <span className="text-base">{p.icon ?? "📄"}</span>,
-      action: () => { navigate({ to: "/app/p/$pageId", params: { pageId: p.id } }); setOpen(false); },
-      group: "Pages",
-    }));
+    // For each matching page, find the FIRST block whose content matches the
+    // query. When the page itself doesn't match by title, we use that block
+    // id as a hash anchor so clicking the Pages-group row jumps to the right
+    // spot instead of page-top (B-6103).
+    const firstMatchingBlockByPage = new Map<string, string>();
+    if (q) {
+      for (const p of matchingPages) {
+        const titleHit = allMatch((p.title ?? "").toLowerCase());
+        if (titleHit) continue; // navigate to page-top
+        for (const bid of p.blocks ?? []) {
+          const b = blocks[bid];
+          if (b && "content" in b && typeof b.content === "string" && allMatch(stripHtml(b.content).toLowerCase())) {
+            firstMatchingBlockByPage.set(p.id, bid);
+            break;
+          }
+        }
+      }
+    }
+
+    const pageItems = matchingPages.map((p) => {
+      const anchorBlockId = firstMatchingBlockByPage.get(p.id);
+      return {
+        id: `page-${p.id}`,
+        label: p.title || "Untitled",
+        icon: <span className="text-base">{p.icon ?? "📄"}</span>,
+        action: () => {
+          // Jump to the matching block when title didn't match, otherwise to
+          // page-top. Uses the same `#block-<id>` mechanism PageView already
+          // honours for persistent ring-highlight (B-4412 / I-4402).
+          if (anchorBlockId) {
+            navigate({ to: "/app/p/$pageId", params: { pageId: p.id }, hash: `block-${anchorBlockId}` });
+          } else {
+            navigate({ to: "/app/p/$pageId", params: { pageId: p.id } });
+          }
+          setOpen(false);
+        },
+        group: "Pages",
+      };
+    });
 
     const dbItems = matchingDbs.map((d) => ({
       id: `db-${d.id}`,

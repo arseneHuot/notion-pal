@@ -5921,3 +5921,71 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6009 — Cmd+K page dupe (title + block) — fixed (commit c249321)
 - Fix: block-snippet loop skips any page whose id is in `matchingPages`. Title match takes precedence; no duplicate row in the palette.
+
+### B-6100 — B-6005 NewViewButton map fix verified end-to-end (re-verify, fixed)
+- Steps: opened `db-newview-db_mp3jj2jnavmaxi0e`, confirmed the `-map` entry renders with "🗺️ Map" label, clicked it.
+- Observed: `db.views` grew from 6 → 7; the new view `view_mp3yc6lspgasdfue` has `type:"map"`, name "Map view", and immediately gets selected. Dropdown now lists all 9 ViewType values.
+- Status: B-6005 fix in InlineDatabase.tsx (NewViewButton TYPES literal) confirmed working.
+
+### B-6101 — B-6009 Cmd+K dedupe fix verified (re-verify, fixed)
+- Steps: opened palette, typed "ZZQUACKZZ" against page `pg_b6009_dedupetest` (title + block both contain token).
+- Observed: exactly ONE row — `cmd-page-pg_b6009_dedupetest`. No `cmd-block-blk_b6009_p` duplicate. Pages-first wins, block-snippet loop skips ids already in `matchingPages`.
+- Status: B-6009 fix in CommandPalette.tsx confirmed.
+
+### B-6102 — Map view "coming soon" placeholder renders without crash, but dropdown lets users create unusable view (P2, open)
+- Steps: with newly added `map` view selected, inspected the rendered area.
+- Observed: shows "Map view (coming soon — geo properties not yet implemented)." italic placeholder. No crash, no error. But user just spent a click adding a view that does nothing — there's no warning in the dropdown.
+- Expected: either gate the `-map` dropdown item behind a "beta" tag/disabled state, or actually wire up a basic map render. Today the dropdown silently lets users add a deadweight view.
+
+### B-6103 — Cmd+K block-only match: page lands at top, lost block anchor (P2, open)
+- Steps: page `pg_b6012_blkmatch` titled "Innocent Title" with block "Block contains UNIQUETOKENZZ here". Opened palette, typed "UNIQUETOKENZZ". Clicked the only result.
+- Observed: result rendered as a Pages row (`cmd-page-pg_b6012_blkmatch` — the page matched via block content, see `matchingPages` filter in CommandPalette.tsx:108-114). Clicking navigates to the page but `location.hash` stays empty. User loses the block anchor that the block-snippet branch would have provided.
+- Cause: `matchingPages` already covers title+block hits, so the block-snippet branch never fires (skip via `pagesAlreadyListed`). But page-row action doesn't compute a hash for block-only matches.
+- Expected: when the page matched via block content, the page-row action should still anchor to the first matching block. Currently the user gets dropped at page-top with no indication of which block matched.
+
+### B-6104 — Block-anchor "missing" check is DOM-scoped: false-negatives for blocks on other pages (P2, open)
+- Steps: injected `cmt_b6011_crosspage` on `pg_b6001_parent_P` pointing to `blockId:"blk_qa_txt_p0ck"` (exists in store, lives on `pg_qa_exp_0db0kp`). Opened comments panel on parent P.
+- Observed: anchor renders disabled, `line-through`, text "↑ on block (missing)", tooltip "The referenced block no longer exists". But the block isn't missing — it's just not currently rendered.
+- Cause: PageComments.tsx:267-269 uses `document.querySelector([data-block-id=...])` which is DOM-scoped to current page. A cross-page block ref is indistinguishable from a truly orphan block.
+- Expected: check the store (`useStore(s => s.blocks[blockId])`) instead of the DOM. Treat "exists in store but not rendered" as a valid jump target — click could navigate to that block's parent page + hash.
+
+### B-6105 — Restore DB from trash does NOT cascade-restore its row pages (P1, open)
+- Steps: trashed `db_b6014_test` AND its rows `pg_b6014_row1/row2` (rows have `databaseId:"db_b6014_test"`). On `/app/trash`, clicked `restore-db-db_b6014_test`.
+- Observed: `db.isInTrash=false`, but `row1.isInTrash=true`, `row2.isInTrash=true`. DB now shows 0 rows in its views (filter excludes trashed) while the rows still sit in Trash with no way to bulk-restore.
+- Cause: app.trash.tsx:83 calls `updateDatabase(d.id, {isInTrash:false})` — no row cascade. Compare with `restorePageCascade` which does the inverse for pages.
+- Expected: restoring a DB should restore all pages whose `databaseId === db.id` that were trashed in the same cascade (or, at minimum, expose a `restoreDatabaseCascade` action mirroring `restorePageCascade`).
+
+### B-6106 — Cmd+K input testid mismatch with documented test plan (P3, fixed)
+- Note: the palette input has `data-testid="command-input"`, not `command-palette-input` as one might expect from the component name. Earlier QA scripts using `command-palette-input` would silently bind to whatever generic input first matches and produce false negatives. The testid IS stable, just unintuitive.
+- Status: no code change needed; documenting for QA scripts.
+
+### B-6107 — Markdown export: sub-page heading not separated from preceding body by blank line (P3, open)
+- Steps: 5-level chain export `pg_b6013_L0`.
+- Observed: `L1 body content\n### 2️⃣ Level 2\n\n...` — heading line immediately follows the body text with only one `\n`. Most markdown renderers accept it, but strict parsers (CommonMark spec is ambiguous; pandoc requires blank line) won't promote it to a heading.
+- Cause: export-markdown.ts:181 returns `${hashes} ${icon} ${title}\n\n${childMd}` but the previous sibling block doesn't add a trailing blank line.
+- Expected: ensure a blank line before the `#` heading or wrap the sub-page output with `\n\n${...}\n` so it's separator-safe.
+
+### B-6108 — 5-level sub-page export: 4th level becomes a link (passes, fixed)
+- Steps: chain `pg_b6013_L0 → L1 → L2 → L3 → L4`, all sub-page blocks. Exported L0.
+- Observed: `# Level 0` → `## 1️⃣ Level 1` → `### 2️⃣ Level 2` → `#### 3️⃣ Level 3` → `4️⃣ [Level 4](/app/p/pg_b6013_L4)`. Depth cap at `depth < 3` (4 inlined sections including root) holds; L4 emits a bare link.
+- Status: works as designed.
+
+### B-6109 — Move-to-teamspace updates breadcrumb chip immediately (passes, fixed)
+- Steps: on `pg_b6012_blkmatch` (teamspaceId=null, no chip), opened page-options, clicked `page-opt-move-ts_mp2pz5zwvod19q0j` (Engineering).
+- Observed: chip `breadcrumb-teamspace-ts_mp2pz5zwvod19q0j` ("⚙️ Engineering") appears immediately; `teamspaceId` updates in store.
+- Status: B-5903 behavior re-confirmed on a fresh page.
+
+### B-6110 — AI history slice(-50) cap holds on both load and save (passes, fixed)
+- Steps: wrote 100-message array to `notion-clone:ai-chat:<uid>`, simulated AIChat persist (slice(-50)). Confirmed slice(-50) also gates `loadStoredMessages` at AIChat.tsx:118.
+- Observed: stored length = 50, first id = "m50", last id = "m99". Older messages permanently dropped on next save.
+- Status: works as designed. Note: spec/test plan asked for "last N", N=50 here; should be a named constant (see I-6102).
+
+### B-6111 — Sidebar drag from position 0 to last position works (passes, fixed)
+- Steps: created 5 sibling pages A/B/C/D/E in Shared teamspace. Simulated drag-start on A, drag-over E, drop on E.
+- Observed: A's sortOrder set to midpoint of D and E. New order: B, C, D, A, E. `reorderSiblingPages` correctly handles non-adjacent moves.
+- Status: works as designed.
+
+### B-6112 — Public form submit + StorageEvent rehydrate persists row (passes, fixed)
+- Steps: navigated to `/form/db_mp2qmu4d1va6knov/view_mp2ry265swv12c04`, typed "B6016-marker" into the title input, submitted via form.requestSubmit().
+- Observed: row count grew 7 → 8, last row values `{prop_*: "B6016-marker"}`, success message shown. StorageEvent fired and `attachCrossTabSync` picked it up. B-3815/3704 fix confirmed.
+- Status: works as designed.

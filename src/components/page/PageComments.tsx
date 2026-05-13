@@ -261,12 +261,13 @@ function CommentRow({ comment, user }: { comment: Comment; user: ReturnType<type
   // understand the context (B-5010 / B-5304). Clicking it scrolls the
   // target block into view via the existing #block-<id> hash mechanism.
   const blockId = (comment as { blockId?: string | null }).blockId;
-  // Detect whether the target block still exists in the DOM. If not, we
-  // render the chip in a "stale" state with a tooltip explaining the
-  // jump won't work (B-5909 / I-5901).
-  const blockMissing = blockId
-    ? typeof document !== "undefined" && !document.querySelector(`[data-block-id="${blockId}"]`)
-    : false;
+  // Determine whether the block STILL EXISTS in the store. The DOM-only
+  // check (`document.querySelector`) was too strict — it false-positived
+  // for any block that lived on a different page than the one currently
+  // rendered, e.g. when comments are surfaced from a row drawer (B-6104
+  // / I-6106). The store check works regardless of which page is open.
+  const blocks = useStore((s) => s.blocks);
+  const blockMissing = blockId ? !blocks[blockId] : false;
   return (
     <div>
       <div className="flex items-center gap-2 mb-1">

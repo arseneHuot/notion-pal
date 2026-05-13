@@ -1915,3 +1915,27 @@ Priority: high / medium / low.
 
 ### I-6006 — Block-scoped comment count not surfaced on the trashed-page banner (P3, open)
 - See B-6006. When a page enters trash with N block-scoped comments, the banner is silent. Consider "This page has 2 comments that will be hidden until restore." so users have a hint before permanent-delete.
+
+### I-6100 — Gate the map view dropdown entry or render a real map (P2, open)
+- See B-6102. InlineDatabase.tsx:269 lists "map" but renderView returns a placeholder. Either tag the dropdown item as "beta / coming soon" (disabled + tooltip), or wire a minimal Leaflet/maplibre render driven by a configurable lat/lng property. Today users add an unusable view with no warning.
+
+### I-6101 — Cmd+K page-row should carry block anchor when matched via block content (P2, open)
+- See B-6103. In CommandPalette.tsx:101-114, when `matchingPages` accepts a page via block content, capture the matching block id and attach `hash: block-<bid>` to the page-row's `action`. This restores the snippet-row UX after the dedupe (B-6009 / I-6005) ate the snippet branch. Alternative: render BOTH a page row AND a snippet row, but mark them as "title match" vs "block match" — dedupe just on dest, not on UI.
+
+### I-6102 — AI history magic number 50 should be a constant (P3, open)
+- See B-6110. AIChat.tsx:118 and :180 both hard-code `slice(-50)`. Extract `const AI_HISTORY_LIMIT = 50` at module top. Also consider a "Clear history" button so users can drop old context without manually clearing localStorage.
+
+### I-6103 — Block-anchor "missing" check should consult the store, not the DOM (P2, open)
+- See B-6104. PageComments.tsx:267 should read from `useStore` to determine whether the block exists anywhere. If it exists but on another page, the chip should be enabled and the click should navigate to that page + hash. Today the chip is disabled with a misleading "no longer exists" tooltip.
+
+### I-6104 — Add `restoreDatabaseCascade` mirroring `restorePageCascade` (P1, open)
+- See B-6105. app.trash.tsx:83 today only flips `db.isInTrash`. Introduce `restoreDatabaseCascade(dbId)` that ALSO restores any pages with `databaseId === dbId && isInTrash && trashedAt >= db.trashedAt - epsilon`. Alternative low-effort fix: restore all rows referenced by `db.pageIds` whose `isInTrash` is true. Today restoring a DB shows 0 rows even though they exist in trash.
+
+### I-6105 — Markdown export: separate sub-page heading from preceding body (P3, open)
+- See B-6107. export-markdown.ts:181 returns `${hashes} ${title}\n\n${childMd}` but the previous block doesn't end with `\n\n`. Prepend `\n` to the heading return value, or change the join in :89/:175 to use `\n\n`. Strict markdown parsers benefit; loose ones unchanged.
+
+### I-6106 — Document the testid `command-input` vs the natural `command-palette-input` (P3, open)
+- See B-6106. Either rename the testid to `command-palette-input` (matches the component name) and add a deprecation alias, or document in CONTRIBUTING / testing docs. QA scripts and codebase greps look natural with the longer name.
+
+### I-6107 — Map view: surface a "no location property" empty state with CTA to add one (P2, open)
+- See B-6102. Today's placeholder is plain text. Improve to: detect the database has no geo / lat-lng property; show a CTA "Add a Location property to display rows on the map." Provides a clear next step instead of "coming soon — geo properties not yet implemented".
