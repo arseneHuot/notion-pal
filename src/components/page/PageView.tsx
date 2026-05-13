@@ -122,22 +122,58 @@ export function PageView({ pageId }: { pageId: string }) {
   }
 
   if (page.isInTrash || ancestorInTrash) {
+    // I-7605 / B-7604 — when the *current* page is fine but an ancestor is
+    // trashed, the old copy ("This page is in Trash") was a lie, and the
+    // "Delete permanently" button would have nuked the wrong target. Split
+    // the two cases: ancestor-only renders a different message and only
+    // exposes Restore (which already cascades up to flip trashed ancestors).
+    const ancestorOnly = !page.isInTrash && ancestorInTrash;
+    // Walk up to find the nearest trashed ancestor so we can name it in the
+    // copy and offer "Open parent" as an escape hatch.
+    let trashedAncestor: typeof page | null = null;
+    {
+      let cur = page.parentId ? allPages[page.parentId] : null;
+      while (cur) {
+        if (cur.isInTrash) {
+          trashedAncestor = cur;
+          break;
+        }
+        cur = cur.parentId ? allPages[cur.parentId] : null;
+      }
+    }
+    const ancestorTitle = trashedAncestor?.title?.trim() || "an ancestor page";
     return (
       <div className="max-w-3xl mx-auto px-8 py-12">
         <div className="bg-yellow-50 dark:bg-yellow-900/40 border border-yellow-200 dark:border-yellow-800 rounded-md p-3 mb-6 text-sm flex items-center justify-between">
-          <span>This page is in Trash.</span>
+          <span data-testid="banner-message">
+            {ancestorOnly
+              ? `A parent page (“${ancestorTitle}”) is in Trash.`
+              : "This page is in Trash."}
+          </span>
           <div className="flex gap-2">
-            <button onClick={() => restorePageCascade(page.id)} className="text-xs bg-primary text-primary-foreground rounded px-2 py-1" data-testid="banner-restore">Restore</button>
-            <button
-              onClick={() => {
-                permanentlyDeletePage(page.id);
-                window.history.back();
-              }}
-              className="text-xs bg-destructive text-white rounded px-2 py-1"
-              data-testid="banner-delete-forever"
-            >
-              Delete permanently
+            <button onClick={() => restorePageCascade(page.id)} className="text-xs bg-primary text-primary-foreground rounded px-2 py-1" data-testid="banner-restore">
+              {ancestorOnly ? "Restore parent" : "Restore"}
             </button>
+            {ancestorOnly && trashedAncestor ? (
+              <button
+                onClick={() => { window.location.href = `/app/p/${trashedAncestor!.id}`; }}
+                className="text-xs bg-secondary text-secondary-foreground rounded px-2 py-1"
+                data-testid="banner-open-parent"
+              >
+                Open parent
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  permanentlyDeletePage(page.id);
+                  window.history.back();
+                }}
+                className="text-xs bg-destructive text-white rounded px-2 py-1"
+                data-testid="banner-delete-forever"
+              >
+                Delete permanently
+              </button>
+            )}
           </div>
         </div>
         <PageContent page={page} blocks={blocks} readonly />

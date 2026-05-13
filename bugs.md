@@ -6744,3 +6744,18 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - **B-7601** — `blockToMarkdown` accepts the same alias map as the renderer (paragraph→text, etc.).
 - **B-7602** — Cmd+K palette normalises all whitespace (newlines/tabs) to spaces before tokenising. Multi-line paste matches.
 - **B-7603** — Public form date input min/max clamps year to 4 digits; 5+-digit input is discarded.
+
+
+## 2026-05-13 — B-7700 verification + AI-LLM wiring + ancestor-trash UX
+
+### Wired Gemini Flash for the AI panel — done (commit 376efb3)
+- Replaced the pseudo-answer placeholder with a real `gemini-flash-latest` call via TanStack server function (`src/lib/ai-server.ts`). Keyword pre-filter still runs client-side so only top-5 candidate pages reach the server; API key stays in `.env.local` (gitignored). Verified live: prompt → Gemini answer with citation chips, no runtime errors after switching to TanStack's `inputValidator` builder.
+
+### B-7401 / B-7501 / I-7401 / I-7503 — dangling `parentId` self-heals on disk — fixed — P3
+- `normalizeState` now rebinds `page.parentId` and `comment.parentId` to `null` when the target ID isn't in the same map (`src/lib/store.ts:122-150`). Verified live: injected `pg_v7700_orphan` (parentId pointing nowhere) + `c_v7700_dangle` (parentId pointing nowhere), fired StorageEvent → both fields landed as `null` on disk after re-persist. Closes the orphan-page / orphan-comment ghost-data class durably.
+
+### B-7604 / I-7605 — ancestor-in-trash banner copy + actions — fixed — P2
+- Split the trash banner in `PageView.tsx`: when the *current* page is fine but an ancestor is trashed, copy now reads `A parent page (“<title>”) is in Trash.` with `Restore parent` + `Open parent` buttons (no more misleading `Delete permanently` which targeted the wrong row). Verified: `pg_v7701_child` under trashed `pg_v7701_trashed_anc` → banner-restore click flipped the ancestor to `isInTrash:false` and the banner disappeared on the same tick.
+
+### B-7603 / I-7603 — public form date sanity at submit + title required marker — fixed — P2
+- `submit()` rejects any date field that doesn't match `^\d{4}-\d{2}-\d{2}$` (or that `new Date()` can't parse) before writing to storage. Title field labels now carry a red asterisk (`aria-label="required"`). Verified live: `/form/db_form_test/v_form` shows `Title*` with the red marker.

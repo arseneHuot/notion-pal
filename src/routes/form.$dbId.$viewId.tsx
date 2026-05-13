@@ -149,6 +149,22 @@ function PublicFormPage() {
       setError("Please fill in at least one field before submitting.");
       return;
     }
+    // I-7603 — last-line defence against malformed date values that
+    // slipped past the input-level guard (e.g. JS-set value, paste race).
+    // Reject anything that doesn't parse to a sane 4-digit-year ISO date
+    // before it lands in storage. The host renders these via
+    // `Date.toLocaleDateString` which silently turns "Invalid Date" into
+    // an empty cell — better to fail loudly here.
+    for (const p of visibleFields) {
+      if (p.type !== "date") continue;
+      const v = values[p.id];
+      if (!v) continue;
+      const s = String(v);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(s) || Number.isNaN(new Date(s).getTime())) {
+        setError(`${p.name || "Date"} must be a valid date (YYYY-MM-DD).`);
+        return;
+      }
+    }
     setError("");
     // Persist the row directly to the host user's storage bucket.
     try {
@@ -229,7 +245,14 @@ function PublicFormPage() {
           >
             {visibleFields.map((p) => (
               <div key={p.id} data-testid={`public-form-field-${p.id}`}>
-                <label className="block text-xs font-medium mb-1">{p.name}</label>
+                <label className="block text-xs font-medium mb-1">
+                  {p.name}
+                  {/* I-7603 — title is the de-facto required field
+                      (enforced in submit()). Surface the red asterisk so
+                      respondents see the required marker before they hit
+                      submit. */}
+                  {p.type === "title" && <span className="text-destructive ml-0.5" aria-label="required">*</span>}
+                </label>
                 <PublicFormField
                   property={p}
                   value={values[p.id]}

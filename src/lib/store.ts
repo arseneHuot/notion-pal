@@ -120,8 +120,32 @@ function normalizeState(parsed: AppState): AppState {
     }
   }
   if (parsed.pages) {
-    for (const [pid, p] of Object.entries(parsed.pages)) {
-      if (p && !Array.isArray(p.blocks)) parsed.pages[pid] = { ...p, blocks: [] };
+    const pages = parsed.pages;
+    for (const [pid, p] of Object.entries(pages)) {
+      if (!p) continue;
+      const patch: Partial<typeof p> = {};
+      if (!Array.isArray(p.blocks)) patch.blocks = [];
+      // Rebind dangling parentId → null so the page falls back to the
+      // workspace top level instead of becoming a ghost visible only by
+      // URL (B-7401 / B-7501 / I-7503). Self-heals migrations, partial
+      // imports, race conditions across tabs. Sidebar surfacing patches
+      // already tolerate this defensively (commit 2e32202); this is the
+      // durable on-disk cleanup so exports & shared snapshots agree.
+      if (p.parentId && !pages[p.parentId]) patch.parentId = null;
+      if (Object.keys(patch).length) parsed.pages[pid] = { ...p, ...patch };
+    }
+  }
+  if (parsed.comments) {
+    const comments = parsed.comments;
+    for (const [cid, c] of Object.entries(comments)) {
+      if (!c) continue;
+      // Rebind dangling comment.parentId → null so the orphan surfaces
+      // as a top-level comment instead of vanishing (B-7402 / B-7502 /
+      // I-7503). PageComments already treats missing-parent as top-level
+      // since commit 2e32202; this is the durable cleanup.
+      if (c.parentId && !comments[c.parentId]) {
+        parsed.comments[cid] = { ...c, parentId: null };
+      }
     }
   }
   return parsed;

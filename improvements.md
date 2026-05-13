@@ -2263,3 +2263,21 @@ Priority: high / medium / low.
 - Companion to B-7604. When the current page is `isInTrash:false` but an ancestor is trashed, the existing banner copy "This page is in Trash" is wrong. Replace with: "A parent page is in Trash. [Restore parent] [Open parent]" — actionable, explicit. Wire Restore to flip the trashed ancestor (cascading further up if needed) and re-evaluate.
 - Avoid showing the Delete-permanently button in this case — the current page itself isn't trashed and shouldn't be perma-deletable from here.
 
+
+
+## 2026-05-13 — I-7700 wrap-up
+
+### I-7503 — `normalizeState` rebinds dangling `parentId` for pages + comments — done (commit pending)
+- Implemented in `normalizeState` (store.ts:122-150). On every read (loadFromStorage, cross-tab StorageEvent, BroadcastChannel), pages whose `parentId` doesn't resolve in the same `pages` map get `parentId = null`; same for comments against the `comments` map. Re-persisted to disk after cross-tab rehydrate (commit b517dbf already covers re-persist), so dangling refs self-heal durably. Closes B-7401, B-7402, B-7501, B-7502 from the data side; sidebar / PageComments tolerance fixes (2e32202) remain as defense in depth.
+
+### I-7605 — ancestor-in-trash banner UX — done (commit pending)
+- `PageView.tsx` now differentiates `page.isInTrash` (own page trashed → existing Restore + Delete-permanently) from ancestor-only trash (parent or grandparent trashed, current page fine → "A parent page (X) is in Trash. [Restore parent] [Open parent]"). Avoids the foot-gun where Delete-permanently targeted the wrong row. Verified live: child under trashed ancestor → click Restore parent → ancestor.isInTrash flips false, banner vanishes.
+
+### I-7603 — form date validation + required marker — done (commit pending)
+- `submit()` rejects any date that doesn't match `^\d{4}-\d{2}-\d{2}$` or fails `new Date()` parsing, surfacing `"<Field> must be a valid date (YYYY-MM-DD)."`. Title labels gain a red asterisk (`<span aria-label="required">*</span>`) to communicate the de-facto required-field contract before submit. Companion to B-7603 (input-level clamp) and gives the form a uniform last-line-of-defence at submit time.
+
+### I-7700 — AI panel is now wired to real Gemini Flash — done (commit 376efb3)
+- Closes the long-standing "this is a stub" gap on the AI panel. `askAI` server function (TanStack `createServerFn`) calls `gemini-flash-latest` with `thinkingLevel: "HIGH"`, streams chunks, and returns the trimmed answer plus the same source page IDs the client pre-filtered with keyword overlap. The credit charge stays gated on success (transport errors fall back to the local pseudo-answer + don't burn credits). Key lives in `.env.local`; never sent to the client. Verified: real prompt → real Gemini text.
+
+### I-7505 — DB virtualization at >1k rows — still open — P2
+- Deferred (real users don't hit this yet). When they do: react-window or tanstack-virtual on TableView's row mapper. Cost cliff was measured at ~1.5 s for 1000 rows.
