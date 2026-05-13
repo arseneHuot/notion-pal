@@ -83,9 +83,19 @@ export function PageView({ pageId }: { pageId: string }) {
       toast(`${words} words · ${chars} characters`, "info");
     }
     window.addEventListener("show-word-count", showCount);
-    function exportMd() {
+    function exportMd(ev?: Event) {
       if (!page) return;
       const md = pageToMarkdown(page, blocks, allPages);
+      // Test mode: when the event detail asks for the raw text, expose it on
+      // window and skip the native save dialog so headless E2E doesn't pop a
+      // file picker in the developer's Chrome (user-requested 2026-05-13).
+      // Users still get the normal download when they click the page-options
+      // export menu (no detail object on that path).
+      const detail = (ev as CustomEvent<{ noDownload?: boolean }> | undefined)?.detail;
+      if (detail?.noDownload) {
+        (window as unknown as { __lastExportedMarkdown?: string }).__lastExportedMarkdown = md;
+        return;
+      }
       const blob = new Blob([md], { type: "text/markdown" });
       const url = URL.createObjectURL(blob);
       const slug = (page.title || page.id).replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase();

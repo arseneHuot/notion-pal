@@ -27,12 +27,30 @@ interface Props {
 }
 
 export function BlockComponent({ block, pageId }: Props) {
-  // Backwards-compat shim: older seeds or hand-constructed blocks may use the
-  // bare `database` type before the inline/linked split (B-3606). Treat that
-  // as `database-inline` so the renderer doesn't fall through to "Unsupported".
+  // Backwards-compat shims for type names produced by older seeds, hand-
+  // constructed blocks, or imports from other tools:
+  //   - `database` → `database-inline` (B-3606)
+  //   - `paragraph` → `text`           (Notion/Slate alias)
+  //   - `bulleted-list`/`bullet` → `bullet-list`
+  //   - `numbered-list-item` → `numbered-list`
+  //   - `header-1/2/3` → `heading-1/2/3`
+  // Without these, hand-injected or migrated blocks render "Unsupported".
   const rawType: string = (block as { type: string }).type;
   if (rawType === "database") {
     return <DatabaseBlockEl block={{ ...(block as object), type: "database-inline" } as Block & { type: "database-inline" }} pageId={pageId} />;
+  }
+  const aliases: Record<string, string> = {
+    paragraph: "text",
+    "bulleted-list": "bullet-list",
+    bullet: "bullet-list",
+    "numbered-list-item": "numbered-list",
+    "header-1": "heading-1",
+    "header-2": "heading-2",
+    "header-3": "heading-3",
+  };
+  if (rawType in aliases) {
+    const aliased = { ...(block as object), type: aliases[rawType] } as Block;
+    return <BlockComponent block={aliased} pageId={pageId} />;
   }
   switch (block.type) {
     case "text":
