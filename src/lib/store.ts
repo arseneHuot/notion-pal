@@ -1481,6 +1481,35 @@ export function updateView(databaseId: string, viewId: string, patch: Partial<Vi
   });
 }
 
+/**
+ * Duplicate a view: clones name + type + filters + sorts + hidden columns +
+ * any view-specific config so the user gets a working copy immediately.
+ * Returns the new view id, or null if the source view wasn't found
+ * (B-4016 / I-4002).
+ */
+export function duplicateView(databaseId: string, viewId: string): string | null {
+  const db = _state.databases[databaseId];
+  if (!db) return null;
+  const src = db.views.find((v) => v.id === viewId);
+  if (!src) return null;
+  const newId = uid("v");
+  // Deep-clone via JSON so nested arrays/objects (filters, sorts, options)
+  // are independent. The View union is JSON-safe.
+  const cloned: View = { ...JSON.parse(JSON.stringify(src)), id: newId, name: `${src.name} (Copy)` };
+  setState((s) => {
+    const cur = s.databases[databaseId];
+    if (!cur) return s;
+    return {
+      ...s,
+      databases: {
+        ...s.databases,
+        [databaseId]: { ...cur, views: [...cur.views, cloned], updatedAt: Date.now() },
+      },
+    };
+  });
+  return newId;
+}
+
 export function removeView(databaseId: string, viewId: string) {
   setState((s) => {
     const db = s.databases[databaseId];

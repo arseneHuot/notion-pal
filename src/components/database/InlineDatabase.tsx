@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useStore, updateDatabase, addDatabaseRow, updateRow, addDatabaseProperty, removeDatabaseProperty, updateDatabaseProperty, addView, removeView, updateView, deleteRow, deleteDatabase } from "@/lib/store";
+import { useStore, updateDatabase, addDatabaseRow, updateRow, addDatabaseProperty, removeDatabaseProperty, updateDatabaseProperty, addView, removeView, updateView, duplicateView, deleteRow, deleteDatabase } from "@/lib/store";
 import { toast } from "@/components/ui/Toast";
 import type { NotionDatabase, Property, View, DatabaseRow, BlockColor, SelectOption } from "@/lib/types";
 import { TableView } from "./views/TableView";
@@ -336,6 +336,19 @@ function ViewMenu({ databaseId, viewId }: { databaseId: string; viewId: string }
       {open && (
         <div className="absolute right-0 top-full mt-1 bg-popover border border-border rounded-md shadow-lg z-30 w-56">
           <RenameViewItem databaseId={databaseId} viewId={viewId} viewName={view.name} close={() => setOpen(false)} />
+          <button
+            onClick={() => {
+              const newId = duplicateView(databaseId, viewId);
+              if (newId) {
+                window.dispatchEvent(new CustomEvent("toast", { detail: "View duplicated" }));
+              }
+              setOpen(false);
+            }}
+            className="w-full text-left px-3 py-1.5 text-xs hover:bg-accent"
+            data-testid={`view-duplicate-${viewId}`}
+          >
+            Duplicate view
+          </button>
           <button
             onClick={() => {
               if (db.views.length <= 1) {
