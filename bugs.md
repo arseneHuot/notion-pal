@@ -5245,3 +5245,50 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### I-4702 — Cross-DB drop toast — fixed (commit 44ce947)
 - TableView checks `getStoreState().rows[sourceId].databaseId` before calling `reorderDatabaseRows`. On mismatch it dispatches a "Cannot move rows between databases" toast.
+
+## 2026-05-13 — QA agent iteration B-4800
+
+### B-4800 — I-4700 sanitize hard-drop verified (acceptance, fixed)
+- Injected block `blk_sanit_4800_*` with content `Visible<script>alert(1)</script>OK<iframe srcdoc="evil"></iframe>END` via localStorage + StorageEvent rehydrate. Rendered DOM: `block-content-*` innerHTML === `VisibleOKEND` exactly. No `<script>`, no `<iframe>`, no leaked `alert(1)` text in textContent. sanitize.ts now hard-drops dangerous tags WITH their children, restoring the previously-leaked text-content path.
+
+### B-4801 — I-4701 trashed inline DB placeholder verified (acceptance, fixed)
+- Injected `db_4800_trashed_*` with `isInTrash:true, trashedAt:now`. Created inline-database block referencing it on a new page. Navigated to that page: DOM rendered `[data-testid="db-trashed-placeholder-<id>"]` with text "🗄️Database \"Trashed Inline DB\" is in the Trash. Restore", and `[data-testid="db-restore-<id>"]` button. Click on Restore unset `isInTrash`/`trashedAt` in state and the placeholder vanished from DOM.
+
+### B-4802 — Restoring trashed inline DB crashes route with hooks-count error (P1, open)
+- Repro: I-4701 acceptance flow (above). After Restore button click, the placeholder is correctly removed and `databases[<id>].isInTrash` flips to false. However the page then re-renders with React error boundary text "Rendered more hooks than during the previous render." and the entire page contents are replaced by "This page didn't load". Suggests `InlineDatabase` (or a child of TableView) hits a conditional hook path when transitioning from the trashed-placeholder render branch back to the full UI. Likely fix: move all `useStore(...)`, `useState(...)`, `useMemo(...)` calls above the `if (db.isInTrash) return <Placeholder />` early-return in `InlineDatabase.tsx`. P1 — restoring an inline DB from trash should not crash the host page.
+
+### B-4803 — I-4702 cross-DB drop toast verified (acceptance, fixed)
+- Created `db_4802_a_*` (rows [rowA1, rowA2]) + `db_4802_b_*` (rows [rowB1]). Built a page with both inline DB blocks; navigated to it. Attached `toast` event listener, then dispatched synthetic `dragstart`/`dragover`/`drop` with payload `application/x-row-id=row_4802_a1_*` on the row-B1 row. Result: toast detail === "Cannot move rows between databases". `db_4802_b_*.rows` unchanged (`[row_4802_b1_*]` only), no duplication into DB-A. Guard in TableView.tsx:69-72 firing as designed.
+
+### B-4804 — Sanitize <style> tag and its CSS body fully stripped (acceptance, fixed)
+- Injected text block with content `Before<style>body{display:none;color:hotpink}</style>After`. Rendered innerHTML === `BeforeAfter` exactly. `document.body` computed display === "block" (the malicious display:none did NOT take effect). Same fix as I-4700 — hard-drop covers `<style>` siblings of `<script>`/`<iframe>`. Defence-in-depth complete for the four "raw CDATA" elements.
+
+### B-4805 — AI panel: Cmd+J opens, multi-line prompt accepted, stub reply renders (acceptance, fixed)
+- Dispatched `keydown Cmd+J` → AI panel mounted with `ai-input` (textarea, placeholder "Ask anything... (Shift+Enter for newline)") + `ai-send`. Set value `"Hello AI\nThis is line two\nAnd a third line"` via native setter + input event. Clicked `ai-send`. After 2200ms: `ai-msg-4` carries the user prompt verbatim (newlines preserved), `ai-msg-5` carries a stubbed reply that lists workspace pages by relevance. Minor cosmetic: the reply echoes the prompt as a single line ("Hello AIThis is line two…") — newlines lost in the echo string.
+
+### B-4806 — Slash menu `/page` creates sub-page block AND sub-page in store (acceptance, fixed)
+- Focused an empty contenteditable block, set textContent to `/page`, dispatched `input` event. Slash menu opened with `[data-testid="slash-menu"]`, `[slash-page]`, `[slash-synced]`. Clicked `slash-page`. After: 1 new entry in `state.pages` (`pg_mp3s6kpy0qtyt9rx`, title "Untitled", `parentId=pg_mp2pz5zw6oflgc0j` — current page), no new entries in `state.blocks` because the originating text block was *converted in-place* (type became `sub-page`, pageId rewired to the new page, content still "/page"). Sidebar grew to include `sidebar-page-<newId>`. Note: leaving `content:"/page"` on the converted block is harmless but slightly leaky — consider clearing it on conversion.
+
+### B-4807 — Trash > delete-forever removes page from state.pages (acceptance, fixed)
+- Trashed `pg_mp3s6kpy0qtyt9rx` (isInTrash=true). Trash UI rendered `[delete-forever-<id>]` + `[restore-<id>]`. Clicked `delete-forever-…` (window.confirm overridden) → page removed from `state.pages` (count 122→121), DOM control gone, route stayed on /app/trash. Caveat: 1 orphan block (the converted sub-page block) still has `pageId` set to the deleted page id, lingering in `state.blocks`. Doesn't render anywhere but pollutes the store.
+
+### B-4808 — Sub-page conversion leaves orphan block after parent page hard-delete (P2, open)
+- Repro: /page slash conversion in B-4806 created sub-page `pg_mp3s6kpy0qtyt9rx`. The originating block (`blk_4800_style_*`) was rewired to `pageId=pg_mp3s6kpy0qtyt9rx`. Hard-deleting the sub-page from trash (B-4807) removes the page but the block stays in `state.blocks` with a now-dangling `pageId`. Recommended fix: on `deletePageForever`, also delete every block whose `pageId === id` (cascade) plus drop the parent-side `sub-page` block whose linked page no longer exists. Without this the store accumulates dead blocks across delete cycles.
+
+### B-4809 — Page favorite toggle + Favorites sidebar section (acceptance, fixed)
+- Opened `page-menu-pg_mp2pz5zw6oflgc0j`, clicked `pmenu-favorite-…`. State: `pages.<id>.isFavorite=true`. Sidebar now renders the page twice: once under the Favorites group at top (visible "Favorites" header in body innerText) and once under Private. Both entries share the `sidebar-page-<id>` testid (duplicated 2x for the same page). Cmd+K still finds it. Works; "favoritesExpanded" flag in ui state controls collapse.
+
+### B-4810 — Sidebar duplicate-testid when page is favorited (P3, open)
+- Repro: B-4809 toggle. Both the Favorites-section and Private-section entries for the same page use `data-testid="sidebar-page-<id>"`. Two DOM nodes with identical testids breaks `getByTestId` style queries (Playwright/RTL would throw). Either suffix Favorites copy with `-fav` (e.g. `sidebar-fav-page-<id>`) or render-once-by-id. Same applies to `expand-<id>`, `page-menu-<id>`, `page-new-<id>` — all duplicated. Test-only nit but easy.
+
+### B-4811 — Search OKR/okrs case parity verified (acceptance, fixed)
+- Created `pg_4805_okr_upper` ("Q4 OKR Plan") and `pg_4805_okrs_lower` ("team okrs notes"). Opened Cmd+K palette. Typed "OKR" → both matched; typed "okrs" → only the lowercase title matched (substring); typed "okr" → both matched. Case-folding works in both directions; substring boundaries respected.
+
+### B-4812 — Cmd+P parity with Cmd+K for command palette (acceptance, fixed)
+- Verified `keydown Cmd+K` and `keydown Cmd+P` both mount `[data-testid="command-palette"]`. Escape closes it. Parity matches the long-standing Notion convention where both shortcuts are aliases.
+
+### B-4813 — Public form view: hiddenProperties + conditional logic combine cleanly (acceptance, fixed)
+- DB `db_4807_form` with properties [pname,pemail,phide,pwantsdetails,pextra] and form view setting `hiddenProperties:[phide]` + conditional rule `pwantsdetails equals true → show pextra`. Navigated /form/db/view. Initial fields visible: [pname, pemail, pwantsdetails] — `phide` hidden permanently, `pextra` hidden by unmet conditional. Toggled `pwantsdetails` checkbox → `pextra` appears. `phide` stayed absent throughout. Combined filter logic in form.$dbId.$viewId.tsx:55-102 working as documented.
+
+### B-4814 — AI panel reply collapses newlines in echoed prompt (P3, open)
+- Repro: B-4805. The stub reply uses the prompt as a quoted phrase ("Based on your workspace, here's what I found about \"<prompt>\":…"). The echoed string strips the newlines so `Hello AI\nThis is line two\nAnd a third line` becomes `Hello AIThis is line twoAnd a third line` — no separators, words concatenate. Cosmetic only (the stored user message keeps newlines and the auto-grow textarea works). Either insert a space when collapsing or render the prompt on its own line.

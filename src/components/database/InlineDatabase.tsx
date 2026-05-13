@@ -18,36 +18,20 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
   const rowsMap = useStore((s) => s.rows);
   const [activeViewId, setActiveViewId] = useState<string | null>(initialViewId);
 
-  if (!db) {
-    return <div className="text-sm text-muted-foreground">Database not found.</div>;
-  }
-  // Show a placeholder when the database is in the trash so users don't see
-  // a stale inline UI in the middle of their page (I-4701).
-  if (db.isInTrash) {
-    return (
-      <div
-        className="my-4 border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground flex items-center gap-2"
-        data-testid={`db-trashed-placeholder-${databaseId}`}
-      >
-        <span>🗄️</span>
-        <span className="flex-1">Database "{db.name || "Untitled"}" is in the Trash.</span>
-        <button
-          onClick={() => updateDatabase(databaseId, { isInTrash: false, trashedAt: null } as Partial<typeof db>)}
-          className="text-xs bg-primary text-primary-foreground rounded px-2 py-1"
-          data-testid={`db-restore-${databaseId}`}
-        >
-          Restore
-        </button>
-      </div>
-    );
-  }
+  // ⚠️ All hooks must run unconditionally on every render. The previous
+  // version returned EARLY for `db.isInTrash` between hooks, which caused
+  // "Rendered more hooks than during the previous render" on restore
+  // (B-4802 — P1 regression from I-4701). All useMemo / useEffect below
+  // tolerate a missing db by defaulting to safe values.
   const activeView = useMemo(() => {
-    return db.views.find((v) => v.id === activeViewId) ?? db.views[0];
-  }, [db.views, activeViewId]);
+    if (!db) return undefined;
+    return db.views?.find((v) => v.id === activeViewId) ?? db.views?.[0];
+  }, [db, activeViewId]);
 
   // Per-view filtered row count for badges (B-2410 / B-2417).
   const viewCounts = useMemo(() => {
     const out: Record<string, { visible: number; total: number }> = {};
+    if (!db || !Array.isArray(db.rows) || !Array.isArray(db.views)) return out;
     const allRows = db.rows.map((id) => rowsMap[id]).filter((r) => r && !r.isInTrash);
     for (const v of db.views) {
       const filtered = (v.filters ?? []).length > 0
@@ -75,6 +59,30 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
     return out;
   }, [db, rowsMap]);
 
+  // === Early returns AFTER all hooks have been called (B-4802). ===
+  if (!db) {
+    return <div className="text-sm text-muted-foreground">Database not found.</div>;
+  }
+  // Show a placeholder when the database is in the trash so users don't see
+  // a stale inline UI in the middle of their page (I-4701).
+  if (db.isInTrash) {
+    return (
+      <div
+        className="my-4 border border-dashed border-border rounded-md p-3 text-xs text-muted-foreground flex items-center gap-2"
+        data-testid={`db-trashed-placeholder-${databaseId}`}
+      >
+        <span>🗄️</span>
+        <span className="flex-1">Database "{db.name || "Untitled"}" is in the Trash.</span>
+        <button
+          onClick={() => updateDatabase(databaseId, { isInTrash: false, trashedAt: null } as Partial<typeof db>)}
+          className="text-xs bg-primary text-primary-foreground rounded px-2 py-1"
+          data-testid={`db-restore-${databaseId}`}
+        >
+          Restore
+        </button>
+      </div>
+    );
+  }
   if (!activeView) return null;
 
   return (

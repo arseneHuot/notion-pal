@@ -1655,3 +1655,29 @@ Priority: high / medium / low.
 
 ### I-4703 — View tabs lack keyboard navigation and ARIA roles (low, open)
 - The view tab strip uses plain `<button data-testid="db-view-…">` without `role="tab"`/`role="tablist"`, no `aria-selected`, no arrow-key navigation. Screen readers announce them as a flat button list. Add tablist semantics + Left/Right arrow handling + Home/End. Low impact on power users but a clean a11y win.
+
+## 2026-05-13 — QA agent iteration I-4800
+
+### I-4800 — Move all hooks above the `isInTrash` early-return in InlineDatabase (high, open)
+- See B-4802. Restoring a trashed inline DB throws "Rendered more hooks than during the previous render." Likely cause: InlineDatabase.tsx returns the trashed-placeholder JSX before some `useState`/`useMemo`/`useEffect` hook is reached. When `isInTrash` flips false during the same mount, React notices the hook-count grew. Move every hook to the top of the function before any conditional return; same rule for TableView, BoardView, etc. that may sit inside the same boundary. Until fixed, the restore button is a footgun in production.
+
+### I-4801 — Sub-page slash conversion should clear the `/page` placeholder content (low, open)
+- See B-4806. After picking `/page`, the originating block is converted (type → `sub-page`) but its `content` is left as `"/page"`. The sub-page renders an icon + title so the literal `/page` doesn't surface, but the value loiters in `state.blocks` and would re-appear if the block were ever switched back to type `text`. Trivial fix: in the slash handler, reset `content` (and `format`) when changing type to a structural block. Same applies to other slash commands that promote to non-text blocks.
+
+### I-4802 — Cascade orphan block cleanup on `deletePageForever` (medium, open)
+- See B-4808. Hard-deleting a page leaves any block with `pageId === deletedPageId` orphaned in `state.blocks`. Over time these accumulate. Update `deletePageForever` to (a) collect block ids via `pages[id].blocks` AND `Object.values(blocks).filter(b => b.pageId === id)`, then (b) `delete state.blocks[bid]` for each. Bonus: scrub `sub-page` blocks that reference the deleted page (search parents).
+
+### I-4803 — Favorites sidebar entries should use distinct testids (low, open)
+- See B-4810. When a page is favorited it renders in BOTH the Favorites section and its original teamspace/private section, but both DOM nodes share `data-testid="sidebar-page-<id>"` (plus expand/menu/new triples). This breaks `getByTestId` deterministic queries and is a footgun for downstream test suites. Suggest namespacing Favorites copies: `sidebar-fav-page-<id>`, `expand-fav-<id>`, etc. — same id, different testid prefix.
+
+### I-4804 — AI reply preserve newlines when quoting the prompt (low, open)
+- See B-4814. The stub assistant message constructs `"Based on your workspace, here's what I found about \"${prompt}\":..."` and `${prompt}` carries embedded `\n`s that collapse to nothing in the rendered block (it's inserted as `textContent`, no `white-space: pre-wrap`). Either join with `" "` when echoing (so words stay separated) or wrap the quoted prompt in a styled `<span class="whitespace-pre-wrap">`. Cosmetic but immediately visible in the chat thread.
+
+### I-4805 — Inline DB block could surface "restore" inline (low, open)
+- See B-4801. The placeholder solves the rendering crash but the Restore button is the only affordance. Many users won't immediately notice it. Improvement: show a small "Trashed N days ago — Restore | Delete forever" footer on the placeholder. Helps in long pages where the trashed DB sits between live content. Mirrors the Trash view's row layout.
+
+### I-4806 — Cmd+K palette result groups (low, open)
+- During B-4811/4812 verification: typing "OKR" returns matching pages but they're listed flat without grouping. With 322 pages in the workspace (per B-4707), grouping by type (page / database / mail / template) or section (recent / favorites / by teamspace) would help. Today it's a single ranked list; even a divider between "Pages" and "Commands" would help orientation.
+
+### I-4807 — Public form should mark required fields visually (low, open)
+- See B-4813. The combined-filter form respects hiddenProperties + conditional, but there's no `required` flag on the form schema. The title field is enforced via JS validation (form.$dbId.$viewId.tsx:128-133), yet the UI doesn't render an asterisk or `aria-required` on the label. Either expose `requiredProperties` on the form view (and respect it in submit-guard) or at minimum render an asterisk + aria-required on the inferred title prop.
