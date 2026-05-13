@@ -161,7 +161,7 @@ function PropertyHeader({ property, databaseId, viewId, sticky }: { property: Pr
   function applySort(direction: "asc" | "desc") {
     if (!view) return;
     const existing = (view.sorts ?? []).filter((s) => s.propertyId !== property.id);
-    updateView(databaseId, viewId, { sorts: [...existing, { propertyId: property.id, direction }] });
+    updateView(databaseId, viewId, { sorts: [...existing, { id: property.id, propertyId: property.id, direction }] });
     setOpen(false);
   }
   function clearSort() {
@@ -498,7 +498,7 @@ function PropertyHeaderAdd({ databaseId }: { databaseId: string }) {
       patch.label = "Click";
       patch.actions = [];
     }
-    addDatabaseProperty(databaseId, patch as Property);
+    addDatabaseProperty(databaseId, patch as unknown as Property);
     setName("");
     setType("text");
     setOpen(false);

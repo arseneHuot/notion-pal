@@ -197,7 +197,7 @@ export function PageView({ pageId }: { pageId: string }) {
     <div className="relative">
       <PageCover page={page} />
       <div className="max-w-3xl mx-auto px-8 pb-32">
-        <PageHeader page={page} />
+        <PageHeader page={page as unknown as Record<string, unknown>} />
         <PageContent page={page} blocks={blocks} />
       </div>
       <PageComments pageId={pageId} open={commentsOpen} onClose={() => setCommentsOpen(false)} />

@@ -348,7 +348,9 @@ export function getState() {
 
 function subscribe(cb: () => void) {
   listeners.add(cb);
-  return () => listeners.delete(cb);
+  return () => {
+    listeners.delete(cb);
+  };
 }
 
 function shallowEqual(a: unknown, b: unknown): boolean {
@@ -823,7 +825,7 @@ export function restorePageCascade(id: string) {
     let cur: typeof page | undefined = page;
     const seen = new Set<string>([id]);
     while (cur && cur.parentId) {
-      const parent = s.pages[cur.parentId];
+      const parent: Page | undefined = s.pages[cur.parentId];
       if (!parent || seen.has(parent.id)) break;
       seen.add(parent.id);
       if (parent.isInTrash) idsToRestore.add(parent.id);
