@@ -640,7 +640,9 @@ export function deletePage(id: string) {
     const newPages = { ...s.pages };
     for (const pid of idsToTrash) {
       const p = newPages[pid];
-      if (p) newPages[pid] = { ...p, isInTrash: true, trashedAt: now };
+      // Trash also clears `isFavorite` so a restored page doesn't reappear
+      // in the Favorites section without the user asking (B-6702).
+      if (p) newPages[pid] = { ...p, isInTrash: true, trashedAt: now, isFavorite: false };
     }
     return { ...s, pages: newPages };
   });

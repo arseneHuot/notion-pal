@@ -6342,3 +6342,58 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6105 — Restore-DB didn't cascade to rows — fixed (commit 1ecaf29) — P1
 - Fix: new `restoreDatabaseCascade(databaseId)` walks `state.rows` and clears `isInTrash` on every row whose `databaseId === db.id`. TrashPage's restore-db button calls this. Verified live with two synthetic trashed rows: all three (DB + row1 + row2) end up isInTrash=false.
+
+### B-6700 — Filter operator `equals` silently no-ops (P2, open)
+- Repro: in `applyFilters` at src/components/database/filter.ts:25-94, `evalFilter` switch has cases for `is`, `is-not`, `contains`, etc., but no `equals` case. If a saved view stores `operator: "equals"` (legacy or external import), `default: return true` short-circuits — the filter passes every row.
+- Observed: injected a Status filter `{ operator: "equals", value: opt-id }`; all 11 rows rendered. Changed to `"is"` → 3 rows rendered correctly.
+- Risk: any migration / future API path that uses the colloquial `equals` token leaks all rows past the filter. UI currently emits only `is`, so user-visible blast radius is small, but the silent-pass is a footgun.
+- Fix: either add `case "equals": (fallthrough to "is")` or throw on unknown operators in dev.
+- Status: open.
+
+### B-6701 — AI assistant response: markdown bullet fence eats trailing punctuation (P2, open)
+- Repro: AI panel, sent message body `- Item one\n- Item two\n- Item three`. Response template wraps the query in quotes — `Based on your workspace, here's what I found about "<query>":`.
+- Observed (inner HTML of the assistant bubble): the first bullet line is left in plain text inside the lead-in (`'"- Item one'`), then `Item two` and `Item three":` become `<li>` siblings, with the closing `":` glued onto the final `<li>` content.
+- Root cause: the markdown-to-HTML pass treats `- ` at line-start as a bullet even when the surrounding text is a single sentence containing escaped quotes. Bullet items shouldn't be parsed inside a quoted-string fragment.
+- Status: open. AIPanel renderer / markdown helper.
+
+### B-6702 — Page-favorite ghost on a trashed page (P3, open)
+- Repro: set `pages[trashedPageId].isFavorite = true` directly in store while `isInTrash = true`. Reload.
+- Observed: the page is correctly hidden from sidebar Favorites (filtered out), but the `isFavorite` boolean persists. If the page is later restored, it reappears in Favorites — possibly desired, possibly stale state from a long-ago favorite.
+- No UI exposes a "favorite a trashed page" action, so this is only reachable via store edits or restore-after-trash flows. Worth a design decision: should `trashPage` clear `isFavorite`?
+- Status: open (P3, design call).
+
+### B-6700-stability — AI panel close stuck after rapid open/close loop (P3, open)
+- Repro: open AI (Cmd+J), close (`close-ai`), Cmd+J, close ×3 within ~1s each. After ~2 cycles the close button fires its React onClick handler (verified via reading `__reactProps`) but the panel stays open — subsequent Cmd+J also no-op-toggles.
+- Reload clears the stuck state. Likely a state-batching race where `setOpen(false)` collides with a pending `setOpen(true)` from the toggle keybinding.
+- Status: open (P3 polish; not user-reproducible at normal click cadence).
+
+### B-6703 — Restore-DB cascade (re-verified live) — passes
+- Injected `db_qa_6700` trashed + 2 trashed rows (`row_qa_6700_a`, `row_qa_6700_b`). Clicked `restore-db-db_qa_6700` in /app/trash. After: DB and both rows all `isInTrash:false`. Matches B-6105 fix.
+
+### B-6704 — Restore-DB after permanent-delete of rows (passes)
+- Injected `db_qa_6702_lonely` trashed with `rows: []` (no row entries in store). Restored. DB cleanly restores with no errors and `rows` array stays empty. The cascade loop has no rows to iterate, no exception.
+
+### B-6705 — Sub-page deep export with mixed published/trashed/normal (passes)
+- Built parent `pg_qa_6701_parent` with three sub-page blocks → normal, published, trashed children; normal has a depth-3 grandchild. Fired `export-page-markdown` with `noDownload:true`.
+- Output: normal + published inline with content; trashed renders as `📄 Trashed Child <!-- (deleted) -->`; grand inlined at h3. No leaked `/app/p/` links, no broken refs.
+
+### B-6706 — Public form date field accepts ISO and leap dates (passes)
+- Form `view_mp2ry265swv12c04` on `db_mp2qmu4d1va6knov`. Submitted `2026-12-31` and `2024-02-29`. Both persist verbatim in `rows[…].values[date-prop]`. No timezone shift, no parse fail.
+
+### B-6707 — Cmd+K leading/trailing/both whitespace trims (passes)
+- `'   roadmap'`, `'roadmap   '`, `'  roadmap  '`, `'roadmap'` all yield exactly 1 hit (Roadmap Q3) in the same order. Whitespace-only `'     '` falls back to the default empty-query view (23 cmds including pages). No edge cases.
+
+### B-6708 — Comments cascade after 3-level reply edit-then-delete-root (passes)
+- Injected 4-deep chain (root → r1 → r2 → r3) on `pg_qa_6701_parent`. Edited r3's content via `comment-edit-cmt_qa6703_r3`, saved → r3 stored content updated. Then deleted root via `comment-delete-cmt_qa6703_root` → all 4 ids removed from `state.comments`. B-6500 cascade fix holds.
+
+### B-6709 — Synced-block ref count after deleting source (passes)
+- Injected `synced-block` source + 2 `synced-block-ref` mirroring it. Deleted source block + its child. Refs now render the "Synced reference — no source / Link" empty state with the relink input. No crash, no orphan render.
+
+### B-6710 — View duplicate ×10 progression (passes, live)
+- Clicked `view-duplicate-view_mp2qmu4djdr3pyti` ten times on the All view (already had Copy 2-4 from prior runs). Names produced: Copy 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 — strictly +1 increments. Total views grew 10→20.
+
+### B-6711 — Move-to-teamspace breadcrumb chip (passes, with sync caveat)
+- Mutated `pages[id].teamspaceId` from Engineering → Test Teamspace. Dispatched StorageEvent: chip stayed on Engineering (expected — no cross-tab listener). Reload: chip updated to "🌐 Test Teamspace". So in-tab move ops (via the real store action) will re-render synchronously; the storage-event path is the gap captured in I-6700.
+
+### B-6712 — AI Cmd+J during route transition (passes)
+- Cleanly opens AI panel after `pushState` + `popstate` + Cmd+J fired in the same microtask. The keydown listener is bound at the document root so route change doesn't unmount it. Tested 3 separate page targets, all opened on the new URL.

@@ -44,11 +44,16 @@ function evalFilter(r: DatabaseRow, f: Filter, db: NotionDatabase): boolean {
       }
       return typeof v !== "string" || !v.toLowerCase().includes(needle);
     }
-    case "is": {
+    case "is":
+    case "equals": {
+      // Accept both spellings — older seeds / imports use `equals` instead
+      // of `is` and used to silently leak past the `default: return true`
+      // (B-6700).
       if (Array.isArray(v)) return v.includes(f.value as never);
       return v === f.value;
     }
-    case "is-not": {
+    case "is-not":
+    case "not-equals": {
       if (Array.isArray(v)) return !v.includes(f.value as never);
       return v !== f.value;
     }
@@ -88,8 +93,20 @@ function evalFilter(r: DatabaseRow, f: Filter, db: NotionDatabase): boolean {
       return v === true;
     case "unchecked":
       return v === false || v == null;
-    default:
+    default: {
+      // Unknown operator — warn once per session so authors notice (I-6702).
+      // Returns true so the row is kept rather than dropped, matching the
+      // prior conservative behaviour.
+      if (typeof window !== "undefined") {
+        const seen = (window as { __filterOpsSeen?: Set<string> }).__filterOpsSeen ?? new Set<string>();
+        if (!seen.has(f.operator)) {
+          seen.add(f.operator);
+          (window as { __filterOpsSeen?: Set<string> }).__filterOpsSeen = seen;
+          console.warn(`[filter] unknown operator "${f.operator}" — treated as no-op (row kept).`);
+        }
+      }
       return true;
+    }
   }
 }
 

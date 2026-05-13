@@ -2002,3 +2002,20 @@ Priority: high / medium / low.
 - See B-6610 (verification gap). Injecting a `database-inline` block + a fresh `databases[…]` entry via localStorage + a storage event renders the DB title row but NOT the `view-menu-{viewId}` toggle for the active view. The activeView resolver in InlineDatabase appears to wait for an initial click on `db-view-{viewId}` to set local state, leaving the toggle hidden on first render.
 - Fix: make InlineDatabase default `activeView` to `db.views[0]` synchronously on mount when no `viewId` prop is provided, so injected fixtures (and recovered crash states) immediately surface the full view chrome. Alternative: a `data-testid="db-inline-${dbId}"` wrapper that exposes the activeViewId via attribute, so tests can drive duplicate ×5 without re-clicking.
 
+
+### I-6700 — Cross-tab store sync via storage events (low, open)
+- Repro: edit `notion-clone:user:<id>` in localStorage from another tab (or via eval) and dispatch a `StorageEvent`. The current tab does not re-hydrate its store — breadcrumb chip, sidebar, and page bodies remain stale until full reload.
+- Reasonable to leave single-tab-only for now, but a `window.addEventListener('storage', …)` that triggers a `useStore.setState(JSON.parse(...).state)` would make multi-tab editing safe and also makes QA fixtures cleaner.
+- Files: src/lib/store.ts (persist middleware config).
+
+### I-6701 — Sub-page export depth cap is 3 — make it configurable (low, open)
+- The fix in `export-markdown.ts:172` caps inline sub-page nesting at `depth < 3` (so the root, level 2, level 3 inline; level 4 emits as a bare link). This is the right default to prevent runaway recursion, but users with legitimately deep wiki structures lose content silently on export.
+- Fix: expose a `maxDepth` arg on `pageToMarkdown` and surface it as a checkbox in the export dialog ("Include all sub-pages"). Cycle protection via `visited` already prevents infinite recursion regardless of cap.
+
+### I-6702 — `applyFilters`: throw on unknown operator instead of `return true` (low, open)
+- See B-6700. `evalFilter`'s `default: return true` silently passes every row when an unrecognized operator is stored. In development, this should throw (or warn) so legacy/typo data is caught immediately rather than silently disabling the filter.
+- Fix: `default: { if (import.meta.env.DEV) console.warn('unknown filter operator', f.operator); return true; }` — or stricter, return `false` to fail-safe.
+
+### I-6703 — Mobile sidebar resize behavior not test-coverable (low, open)
+- No `data-testid` on the hamburger/breakpoint trigger, no exposed `isMobileSidebarOpen` flag. Resizing the window past `md` in eval doesn't trigger the React `useMediaQuery` listener (no real `resize` event for synthetic dimensions).
+- Fix: add `data-testid="mobile-sidebar-toggle"` and persist `mobileSidebarOpen` on `ui` slice so QA can verify "open then resize past breakpoint" auto-closes the overlay.
