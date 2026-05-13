@@ -5441,3 +5441,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-5110 — /app/templates lists 8 templates with stable testids and clicking creates a page (acceptance, ok)
 - Navigated to `/app/templates`. Renders 8 cards: `template-meeting-notes`, `-project-brief`, `-daily-journal`, `-reading-list`, `-okrs`, `-runbook`, `-decision-log-adr`, `-1-1-agenda`. Clicked Meeting Notes — `pages` map grew by 1, navigated to new `pg_*` with title "Meeting notes" and 9 seeded blocks. Clean E2E.
+
+### B-5101 — Move-to-teamspace didn't cascade — fixed (commit 4e322d1) — P1
+- Fix: new store action `movePageToTeamspace(id, ts)` does a BFS over descendants via parentId and applies the new teamspaceId to every page in the sub-tree. Root's parentId cleared; children keep their parentId so the tree shape is preserved. TopBar now calls this action instead of bare updatePage.
+
+### B-5103 / I-5101 — Page history discoverability — fixed (commit 4e322d1)
+- Fix: page-options menu now has `page-opt-history` entry. Clicking it dispatches an `open-page-history` window event which TopBar listens for and uses to set `historyOpen = true`, opening the existing PageHistoryDialog.
