@@ -6529,3 +6529,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Origin: `src/components/database/PropertyEditor.tsx:36` and similar `row.values[property.id]` access patterns (no `?.` and no default `{}`). One malformed row poisons the whole view.
 - Severity P1: any storage corruption / version mismatch / partial migration that leaves rows without `values` crashes the entire DB route, not just the bad row.
 - Fix sketch: default to `row.values ?? {}` at the read sites; ideally in the store getter so all callers benefit.
+
+### B-7002 — ColumnsEl Maximum update depth — fixed (commit 1d79834) — P1
+- Fix: useEffect bails when `c.columns <= 0`, runs only when array length truly mismatches, and dependency list reduced to `[block.id, c.columns]`. No more re-fire on unrelated store updates.
+
+### B-7003 — Cascade restore lost isFavorite — fixed (commit 1d79834)
+- Fix: cascade trash only clears `isFavorite` on the root being trashed. Descendants keep their favorite state through the trash/restore round-trip.
+
+### B-7004 — DB route crash on missing row.values — fixed (commit 1d79834) — P1
+- Fix: `loadFromStorage` + cross-tab listener normalize `row.values: {}` for any malformed row. Optional chaining at every `.values[…]` read site as belt-and-suspenders. ErrorBoundary no longer trips on synthetic / imported rows.
