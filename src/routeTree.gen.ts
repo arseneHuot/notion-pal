@@ -21,6 +21,7 @@ import { Route as AppMailRouteImport } from './routes/app.mail'
 import { Route as AppInboxRouteImport } from './routes/app.inbox'
 import { Route as AppCalendarRouteImport } from './routes/app.calendar'
 import { Route as FormDbIdViewIdRouteImport } from './routes/form.$dbId.$viewId'
+import { Route as AppPagePageIdRouteImport } from './routes/app.page.$pageId'
 import { Route as AppPPageIdRouteImport } from './routes/app.p.$pageId'
 import { Route as AppDbDatabaseIdRouteImport } from './routes/app.db.$databaseId'
 
@@ -84,6 +85,11 @@ const FormDbIdViewIdRoute = FormDbIdViewIdRouteImport.update({
   path: '/form/$dbId/$viewId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppPagePageIdRoute = AppPagePageIdRouteImport.update({
+  id: '/page/$pageId',
+  path: '/page/$pageId',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppPPageIdRoute = AppPPageIdRouteImport.update({
   id: '/p/$pageId',
   path: '/p/$pageId',
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/app/': typeof AppIndexRoute
   '/app/db/$databaseId': typeof AppDbDatabaseIdRoute
   '/app/p/$pageId': typeof AppPPageIdRoute
+  '/app/page/$pageId': typeof AppPagePageIdRoute
   '/form/$dbId/$viewId': typeof FormDbIdViewIdRoute
 }
 export interface FileRoutesByTo {
@@ -124,6 +131,7 @@ export interface FileRoutesByTo {
   '/app': typeof AppIndexRoute
   '/app/db/$databaseId': typeof AppDbDatabaseIdRoute
   '/app/p/$pageId': typeof AppPPageIdRoute
+  '/app/page/$pageId': typeof AppPagePageIdRoute
   '/form/$dbId/$viewId': typeof FormDbIdViewIdRoute
 }
 export interface FileRoutesById {
@@ -141,6 +149,7 @@ export interface FileRoutesById {
   '/app/': typeof AppIndexRoute
   '/app/db/$databaseId': typeof AppDbDatabaseIdRoute
   '/app/p/$pageId': typeof AppPPageIdRoute
+  '/app/page/$pageId': typeof AppPagePageIdRoute
   '/form/$dbId/$viewId': typeof FormDbIdViewIdRoute
 }
 export interface FileRouteTypes {
@@ -159,6 +168,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/db/$databaseId'
     | '/app/p/$pageId'
+    | '/app/page/$pageId'
     | '/form/$dbId/$viewId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -174,6 +184,7 @@ export interface FileRouteTypes {
     | '/app'
     | '/app/db/$databaseId'
     | '/app/p/$pageId'
+    | '/app/page/$pageId'
     | '/form/$dbId/$viewId'
   id:
     | '__root__'
@@ -190,6 +201,7 @@ export interface FileRouteTypes {
     | '/app/'
     | '/app/db/$databaseId'
     | '/app/p/$pageId'
+    | '/app/page/$pageId'
     | '/form/$dbId/$viewId'
   fileRoutesById: FileRoutesById
 }
@@ -287,6 +299,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FormDbIdViewIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/page/$pageId': {
+      id: '/app/page/$pageId'
+      path: '/page/$pageId'
+      fullPath: '/app/page/$pageId'
+      preLoaderRoute: typeof AppPagePageIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/p/$pageId': {
       id: '/app/p/$pageId'
       path: '/p/$pageId'
@@ -314,6 +333,7 @@ interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute
   AppDbDatabaseIdRoute: typeof AppDbDatabaseIdRoute
   AppPPageIdRoute: typeof AppPPageIdRoute
+  AppPagePageIdRoute: typeof AppPagePageIdRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -326,6 +346,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppDbDatabaseIdRoute: AppDbDatabaseIdRoute,
   AppPPageIdRoute: AppPPageIdRoute,
+  AppPagePageIdRoute: AppPagePageIdRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

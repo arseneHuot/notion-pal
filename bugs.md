@@ -6576,3 +6576,19 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7100 / I-7101 — Centralized state normalization — fixed (commit 57a4279) — P1
 - Fix: extracted `normalizeState(parsed)` shared by `loadFromStorage` and the cross-tab listeners. Coalesces row.values, db.rows/properties/views, page.blocks to safe defaults. Closes B-7100 + provides the single-source-of-truth fix requested by I-7101. Verified live: DB without `rows` renders without ErrorBoundary.
+
+
+## 2026-05-13 — B-7200 verification batch (centralized normalize + new coverage)
+
+### B-7200 — Color picker popover closes on first synthetic `mousedown` of swatch in some JSDOM-like sequences — P3 — open
+- Repro: open inline toolbar on a text selection, dispatch `mousedown` on `ib-color` to open the popover, then dispatch `mousedown` on a swatch (`ib-color-red`). With a tight scripted loop (apply → reselect → open → default), the popover sometimes hadn't materialised before the swatch query (t=0 just after first `mousedown` returns 0 swatches; t=30ms returns 10).
+- Impact: only a flaky-test risk for headless automation. Real users see the popover instantly. Add a `data-state="open"` or `aria-expanded` we can wait on.
+- Severity P3: cosmetic for users; mild DX hazard for QA scripts.
+- Fix: set `data-state="open"` on the picker root, so tests can `waitFor` it instead of polling DOM presence.
+
+### B-7201 — `/app/page/<id>` route shows `Not Found` even for valid page IDs (canonical URL is `/app/p/<id>`) — P3 — open
+- Repro: navigated to `/app/page/page_e_noblocks` (a real page in state) → `<p>Not Found</p>`. Navigating to `/app/p/page_e_noblocks` renders correctly.
+- The `/app/page/...` path is not a defined route, so technically the 404 is correct — but several internal links and the export markdown helper emit `/app/p/<id>` while some older docs / paste artefacts use `/app/page/<id>`. Either alias the legacy form or document the canonical one.
+- Severity P3: nuisance for users with stale bookmarks; not a regression.
+- Fix sketch: add a redirect route `/app/page/$pageId → /app/p/$pageId`.
+

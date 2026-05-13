@@ -71,7 +71,24 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
       </div>
     );
   }
-  if (!activeView) return null;
+  // Show an actionable empty state instead of rendering nothing when a DB
+  // has no views (legacy / malformed import or freshly created with the
+  // wrong schema). Without this the user sees a bare header and has no
+  // path forward (I-7201).
+  if (!activeView) {
+    return (
+      <div
+        className="my-4 border border-dashed border-border rounded p-4 text-center"
+        data-testid={`db-no-views-${databaseId}`}
+      >
+        <div className="text-sm font-medium">{db.name || "Untitled database"}</div>
+        <div className="text-xs text-muted-foreground mt-1 mb-3">
+          This database has no views yet.
+        </div>
+        <NewViewButton databaseId={databaseId} onCreate={(viewId) => setActiveViewId(viewId)} />
+      </div>
+    );
+  }
 
   return (
     <div className="my-4">

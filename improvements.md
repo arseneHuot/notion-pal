@@ -2101,3 +2101,49 @@ Priority: high / medium / low.
 - NEW#4 multi-select `equals` filter (`tagA`): r1 (tags=[A,B]) and r3 (tags=[A]) shown, r2 (tags=[B]) correctly filtered out via the `Array.isArray(v) ? v.includes(...)` branch in `filter.ts:52`.
 - NEW#6 50 sibling replies under one parent comment: comments panel rendered 50 `Reply #N` entries with 104 `[data-testid^="comment-"]` nodes total, 0 RangeError / call-stack errors. The recursive renderer is width-safe at this size.
 
+
+## 2026-05-13 — B-7200 verification batch (centralized normalize + new coverage)
+
+### I-7200 — Centralized normalize verified on all 5 malformed shapes — fixed/verified
+- (a) DB without `rows`: navigated `/app/db/db_a_norows` → no ErrorBoundary, view renders.
+- (b) DB without `properties`: same surface → renders.
+- (c) DB without `views`: renders an empty DB header, no crash. (Note: zero-view DBs render mostly empty — see I-7201.)
+- (d) Row without `values`: navigated DB containing it → no crash; cells fall through to empty.
+- (e) Page without `blocks`: navigated `/app/p/page_e_noblocks` → renders title/icon UI cleanly.
+- All five came via a single `StorageEvent` dispatch; the shared `normalizeState` from B-7100/I-7101 patched the in-memory snapshot on rehydrate without needing per-component defaults. Closes the verification arm of I-7101.
+
+### I-7201 — DB with `views: []` renders no fallback CTA — low — open
+- Repro: open a DB whose `views` array is empty (e.g. after the (c) scenario above). The route shows only the icon header (~83 bytes of `main` HTML) — no "Add view" button, no "This database has no views" hint.
+- Users who land in this state from a stale import / partial migration have no in-app affordance to recover; they have to know to right-click the sidebar tile or use Cmd+K.
+- Fix sketch: in `InlineDatabase`, when `db.views.length === 0`, render the `+ Add view` row directly with a one-click default-view chip ("Create table view").
+
+### I-7202 — Cmd+K regex-char queries handled gracefully (verified)
+- Tested 7 queries containing `+ ( * [ ? \ .*`. Each produced 1 result item (the "no results" empty-state item) and no ErrorBoundary. cmdk's command-score swallows the regex tokens; no SyntaxError or RangeError.
+- Companion of I-7100: still no positive substring fallback for titles literally containing these chars, but at least the crash path is gone.
+
+### I-7203 — AI panel sidebar toggle stable under 50× rapid toggles (verified)
+- Clicked `[data-testid="sidebar-ai"]` 50 times in a row with 5 ms spacing. Final state: panel closed (even count), no ErrorBoundary, `window.__qaErrs` not bumped. No detached listeners visible in the React tree.
+
+### I-7204 — Sub-page export cycle A→B→C→A: both visited set AND depth cap engage (verified)
+- A→B→C→A cycle: `pageToMarkdown(A)` emits `# A` → `## B` → `### C` → `📄 [A](/app/p/page_cycle_A)` — the cycle-closing reference becomes a link instead of recursing.
+- Depth chain D→E→F→G (4 levels deep): output stops at `#### 📄 G` then inlines G's content directly (`deep content`) because depth==3 falls through to body inlining; no `/app/p/page_g` link emitted (depth cap is `< 3`, hence allowing exactly 3 levels of inlining).
+- Both safety mechanisms confirmed independent and complementary.
+
+### I-7205 — Color picker: 10 sequential apply-then-default cycles produce 0 nested spans (verified)
+- Ran 10 iterations alternating: select first 10 chars → open picker → apply color X → reselect → open picker → default. After each apply: exactly 1 `span[data-color]` in block HTML. After each default: 0. Final text content identical to start. No span nesting accumulation — confirms the B-6400 / B-3111 unwrap logic stays correct under repeated cycling.
+
+### I-7206 — Sidebar `OTHER` section renders all 8 orphan pages (verified)
+- Injected 8 orphan pages (`workspaceId` set, `teamspaceId: null`, `parentPageId: null`). All 8 appear under the `OTHER` heading; sidebar `innerText` contains all 8 titles. No truncation, no virtualization-induced gaps at this size.
+
+### I-7207 — Cmd+K very long query (500 chars) — no perf cliff (verified)
+- Typed 500× `'a'` into the palette input: settling in 404 ms. Typed 500× `'p'`: 305 ms. No frame freeze, no ErrorBoundary. Acceptable; matches the absence of any O(n²) on input length in the cmdk fuzzy scorer.
+
+### I-7208 — View duplicate × 20 keeps naming progression (verified)
+- Repeated `duplicateView` via the `view-duplicate-v_all` button 20 times. Result: 21 views, names "All", "All (Copy)", "All (Copy 2)" … "All (Copy 20)". 100% unique names. Closes the long-tail of B-6208 / I-6205.
+
+### I-7209 — Public form select: 10 rapid changes — final value matches latest (verified)
+- Published form view with a 5-option select. Programmatically `set` `select.value` to each option then fire `change`, 10 times (5 options ×2). Every intermediate `selectEl.value` matched the assignment; final value `opt_e` matched the last set. State did not drift.
+
+### I-7210 — Trash route + restore tolerate malformed entries (verified)
+- Injected `pg_trash_a` (blocks=[]), `pg_trash_b` (no `blocks` field), and `db_trash_c` (missing `rows/properties/views`), all `isInTrash:true`. Trash route rendered all 3 entries with correct PAGES / DATABASES grouping, no ErrorBoundary.
+- Clicked `restore-pg_trash_b` (the page with no `blocks` field) → restore succeeded; navigating to `/app/p/pg_trash_b` rendered the page editor normally. Centralized normalize is robustly covering the restore + render paths.
