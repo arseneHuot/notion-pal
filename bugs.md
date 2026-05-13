@@ -3507,3 +3507,160 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: probe `window`'s registered listeners for `open-ai-chat-with` after page load.
 - Observed: 0 listeners. The AI chat panel never subscribes to the event that `ib-ai` dispatches. Fix: add a listener in the AI chat / global app shell that opens the panel with the selected text prefilled.
 
+
+## 2026-05-13 15:30 — Test agent batch 30
+
+### B-2900 — Title `onInput` sanitizer NOW flattens HTML on every input (P0, fixed — closes B-2803) — verified
+- Steps: focus `[data-testid="page-title"]`, `selectNodeContents` + `execCommand('insertHTML', false, '<img src=x onerror="window.__TITLE_INPUT_XSS=1"><b>BOLDED</b>')`, then dispatch a synthetic `InputEvent('input')`.
+- Observed: `execCommand` returned `true`, but resulting `title.innerHTML` was plain text only (`"BOLDEDINJECTED PLAIN TEXT Getting Started EDITED-LIVE"` — no `<b>`, no `<img>`), and `window.__TITLE_INPUT_XSS` remained `undefined`. Repeated with `<i>ITAL</i><span style="color:red">RED</span>` → title's `childNodes` collapsed to a single `#text` node (`hasI=false`, `hasSpan=false`). The onInput sanitizer correctly walks descendants and strips all non-text content. B-2803 vector (`execCommand('insertHTML', …)`) is now closed at the input layer, not just the paste layer.
+
+### B-2901 — Inline toolbar `ib-ai` NOW opens the AI chat panel with pre-filled prompt (P2, fixed — closes B-2811 + B-2821) — verified
+- Steps: select 7 chars in `[data-testid="block-content-blk_mp33cd7dvdil4mjz"]` ("! Here'"), dispatch `selectionchange` + `mouseup` to surface toolbar, then invoke `[data-testid="ib-ai"]` `__reactProps.onMouseDown({preventDefault:()=>{}, stopPropagation:()=>{}})`.
+- Observed: After ~400ms the AI side panel is mounted — new testids visible in the DOM: `ai-new-thread`, `ai-msg-0…3`, `ai-input`, `ai-send`, `close-ai`. `ai-input.value === "Ask AI about: \"! Here'\""` — the selected text is exactly pre-filled. The window listener for `open-ai-chat-with` is now wired and the panel reacts. Closes both the toolbar dispatcher (B-2811) and the listener-side gap (B-2821).
+
+### B-2902 — Bold button is NOW disabled in heading-2 blocks (P2, fixed — closes B-2606/B-2714/B-2812) — verified
+- Steps: select 5 chars in `[data-testid="block-content-blk_mp33cd7dvqv4tzkr"]` (heading-2: "Sidebar"), dispatch `selectionchange` + `mouseup`. Probe `[data-testid="ib-bold"]`.
+- Observed: `boldBtn.disabled === true`, `boldBtn.title === "Already bold (heading)"`, button class includes `disabled:opacity-40 disabled:cursor-not-allowed`. Regression check on paragraph `blk_mp33cd7dvdil4mjz`: `boldBtn.disabled === false`, `boldBtn.title === "Bold (Cmd+B)"` — paragraph bold still works. Fix correctly conditioned on heading detection.
+
+### B-2903 — Gallery cards NOW have click → row drawer (P2, fixed — partially closes B-2806) — verified
+- Steps: switch to `db-view-v_dates_gallery`, click `[data-testid="gallery-card-r_dt1"]`.
+- Observed: `[data-testid="row-detail-drawer"]` mounts immediately. All 8 cards have `onClick: true`. Drag-to-reorder still missing (`draggable: false`, `onDragStart: false`), so the original B-2806 "not draggable" complaint remains — but the click path is functional now.
+
+### B-2904 — List rows NOW have click → row drawer (P2, fixed — partially closes B-2809) — verified
+- Steps: switch to `db-view-v_dates_list`, click `[data-testid="list-row-r_dt1"]`.
+- Observed: All 8 list rows have `onClick: true` and clicking opens `row-detail-drawer`. Drag-to-reorder still missing (`draggable: false`).
+
+### B-2905 — Timeline bar `tl-bar-*` click NOW opens row drawer (P2, fixed — closes B-2808/B-2817) — verified
+- Steps: switch to `db-view-v_dates_tl`, click `[data-testid="tl-bar-r_dt1"]`.
+- Observed: `row-detail-drawer` opens. The previously-no-op `onClick` is now wired. Drag-to-reschedule still missing (`draggable: false`).
+
+### B-2906 — Calendar event chips NOW draggable (P2, fixed — partially closes B-2807) — verified
+- Steps: switch to `db-view-v_dates_cal`, inspect `[data-testid^="cal-event-"]`.
+- Observed: 1 visible chip (`cal-event-row_mp3anff62apy`, "Public form B-2200 submission") has `draggable: true`, `onDragStart: true`, `onClick: true`. NEW testid prefix `cal-event-` (was untestid'd in batch 29). Chip is wired as a drag source.
+
+### B-2907 — Calendar day cells have NO drop targets — drag-reschedule incomplete (P2, open — extends B-2906)
+- Steps: scan all elements with React `onDrop` / `onDragOver` props after switching to calendar view; filter by testid containing "cal".
+- Observed: 0 cal-prefixed drop targets. Total page-wide drop zones: 57, all inline-block reorder regions (class `group/block relative …`). Calendar chips are draggable sources but there's no destination — dragging onto a date cell does nothing. Fix: wire `onDragOver` + `onDrop` on month/week day cells to reassign the event's date property.
+
+### B-2908 — Sidebar pages STILL not draggable (P2, open — extends B-2612/B-2712/B-2804)
+- Steps: query `aside [draggable="true"]` and React-prop `draggable: true` / `onDragStart` after opening sidebar.
+- Observed: 0 draggable elements in the sidebar; 0 React props with drag handlers. Sidebar reordering remains absent.
+
+### B-2909 — Table rows in inline DB STILL not draggable (P2, open — extends B-2613/B-2805)
+- Steps: inline DB on `pg_mp33cd7d01u4huok`, inspect all `<tr>` and `[data-testid^="row-"]`.
+- Observed: 5 `<tr>`, 0 with `draggable: true`, 0 with `onDragStart` React prop. Row-reorder via drag still missing in Main/Table view.
+
+### B-2910 — Block-handle drag IS functional (P1, fixed — baseline)
+- Steps: invoke `[data-testid^="handle-blk_"]` React `onDragStart` with a fake `DataTransfer`.
+- Observed: handler runs, `dataTransfer.effectAllowed = "move"`, no exceptions. 22 block handles, each with `draggable: true` and `onDragStart`. 57 drop zones registered on block-row containers. Block drag-to-reorder is the only fully-functional DnD surface in the app.
+
+### B-2911 — Cmd+K palette NOW has `role="dialog"` + `aria-modal` + `data-testid="command-palette"` (P3, fixed — closes B-2520/B-2713/B-2816) — verified
+- Steps: dispatch Cmd+K, walk up from `[data-testid="cmd-new-page"]` to BODY.
+- Observed: 4th ancestor has `tag=DIV`, `role="dialog"`, `aria-modal="true"`, `data-testid="command-palette"`. Screen readers will now announce the palette properly.
+
+### B-2912 — Sidebar `expand-pg_*` chevrons NOW labeled (P3, fixed — closes B-2629/B-2815) — verified
+- Steps: after opening sidebar, query `[data-testid^="expand-"]` and check `aria-label` + `title`.
+- Observed: 23 expand buttons, all 23 labeled. Sample: `aria-label="Expand OKRs"`, `title="Expand"`. Per-page descriptive labels included.
+
+### B-2913 — Only 4 unlabeled icon-buttons remain page-wide (P3, info — extends B-2629/B-2815)
+- Steps: filter all `<button>` with no textContent, no aria-label, no title, no aria-labelledby.
+- Observed: 4 / 202 unlabeled — `view-menu-v_dates_cal`, `cal-prev-db_dates_test`, `cal-next-db_dates_test`, `toggle-blk_mp34ax5iwusd0425`. Down from 25 / 181 in batch 29. Calendar nav icons and the toggle-block twirl are the last gaps.
+
+### B-2914 — Cross-tab sync STILL absent — no BroadcastChannel, no `storage` listener (P2, open — extends B-2615/B-2813)
+- Steps: `grep -rn "BroadcastChannel\|addEventListener.*'storage'\|window.onstorage" src/` → 0 hits. Dispatch a synthetic `StorageEvent` on `window` → title text unchanged (no re-render).
+- Observed: localStorage holds 10+ keys including `notion-clone:user:<uid>` (per-user zustand state) and `notion-clone:global`. Two tabs would write to the same keys but neither tab listens for changes. Tab A's title edit will be silently overwritten when Tab B's debounced write lands. Fix: add a `window.addEventListener('storage', …)` in the zustand persistence layer, or use BroadcastChannel for fan-out.
+
+### B-2915 — Title input performance is excellent (P3, info)
+- Steps: focus `[data-testid="page-title"]`, run 200 `execCommand("insertText", "x")` calls in a tight loop.
+- Observed: 46.8 ms total, 0.234 ms / char average, no UI hitch. The onInput sanitizer (B-2900 fix) does not add measurable per-keystroke cost. Title scales fine to long pasted texts.
+
+### B-2916 — Cmd+K palette open/close stress: 20 round trips in 2.4 ms (P3, info)
+- Steps: dispatch `keydown Cmd+K` then `keydown Escape` 20× in a loop.
+- Observed: 2.4 ms total. Palette re-mount / unmount is cheap. No leaks observed after 20 cycles.
+
+### B-2917 — Block render scale: page renders 15 visible blocks of ~22 total (P3, info)
+- Steps: count `[data-testid^="block-content-"]` on `pg_mp33cd7d01u4huok`.
+- Observed: 15 visible blocks of 22 created (a few are nested under collapsed toggles). No virtualization observed in source — rendering all blocks works at this size, but a 1000-block page would likely jank. Recommend adding virtualization (react-window / TanStack Virtual) before users author large docs.
+
+### B-2918 — `view-menu-v_dates_cal` icon button still unlabeled (P3, open — extends B-2913)
+- Steps: filter unlabeled icon buttons on calendar view.
+- Observed: `view-menu-v_dates_cal` (an ellipsis kebab) has only an inline `<svg>`, no `aria-label`. Other view-menu buttons across views were not checked but likely have the same pattern. Add `aria-label="View options"` or similar.
+
+### B-2919 — Calendar prev/next buttons unlabeled (P3, open — extends B-2913)
+- Steps: same scan as B-2918.
+- Observed: `cal-prev-db_dates_test` and `cal-next-db_dates_test` are bare-svg icon buttons with no `aria-label`/`title`. Screen-reader users can't tell which one advances the month. Add `aria-label="Previous month"` / `"Next month"`.
+
+### B-2920 — `toggle-blk_*` twirl icon-button unlabeled (P3, open — extends B-2913)
+- Steps: same scan.
+- Observed: collapsed-toggle block's expand triangle (`toggle-blk_mp34ax5iwusd0425`) is an icon-only button with no `aria-label`. Sidebar pages got per-name labels (B-2912) but inline toggle blocks didn't. Add `aria-label="Toggle <block-summary>"` or at least `aria-expanded` + `aria-label="Toggle"`.
+
+### B-2921 — Row-detail-drawer DOES open from gallery, list, AND timeline now (P1, fixed — meta) — verified
+- Steps: validated three independent entry points (B-2903, B-2904, B-2905). Each opens `[data-testid="row-detail-drawer"]`.
+- Observed: Consistent drawer testid across all DB view types. Drawer dismisses on `[aria-label*="Close"]` click. This unblocks several previously-no-op interactions (B-2708, B-2806, B-2808, B-2809, B-2817, B-2819). The remaining gap is `row-open-r_dt1` button — last batch reported it as still no-op, today's testing didn't re-verify so it's possible the table-view row-open button is wired by the same drawer mount — needs explicit check in next batch.
+
+### B-2922 — Inline-toolbar Ask-AI uses `Ask AI about: "…"` prefix (P3, info — UX detail)
+- Steps: after B-2901 verification, inspected `ai-input.value`.
+- Observed: prefill is `Ask AI about: "<selected text>"`. Includes the literal `Ask AI about:` prefix. If users want a clean continuation they have to manually strip the prefix. Consider making the prefill just the selected text and using placeholder/system-prompt to indicate the "ask about" framing — or at least put the prefix into a non-editable chip in the UI rather than the input value.
+
+### B-2923 — AI panel pre-existing `ai-msg-0` contains XSS-looking placeholder strings (P2, info — leftover from prior tests)
+- Steps: after opening AI panel in B-2901, read `ai-msg-0` textContent.
+- Observed: `"[v](vbscript:alert(1)) and [f](file:///etc/passwd) plus [c](https://safe.example.com)"`. These are test-fixture chat messages from previous markdown-XSS testing (B-2400s era). They render as plain text (good) but persist in the AI chat history and may confuse fresh users. Consider clearing or seeding cleaner default messages.
+
+### B-2924 — `[data-testid="command-palette"]` newly exposed — useful for E2E (P3, info)
+- Steps: walk DOM after Cmd+K.
+- Observed: New top-level wrapper testid `command-palette` makes it easy to assert palette presence in tests. Combined with `role="dialog" aria-modal="true"`, this is a clean a11y+test surface. Worth documenting in any E2E guide.
+
+### B-2925 — Form view button present but not exercised (P3, info)
+- Steps: noticed `[data-testid="db-view-v_form"]` in view selector with count 8.
+- Observed: not tested in this batch. Should add to next batch's coverage (form submission, validation, draggable form fields, etc.).
+
+### B-2926 — Synced-block surface still present (`blk_syncedchild_*`) — appears to mirror live (P3, info)
+- Steps: noticed `block-content-blk_syncedchild_1778627070687` with text "LIVE-MIRROR-1778627431314".
+- Observed: A synced-block child is in the page and contains text that looks like a mirror of an earlier paragraph. Sync direction / persistence wasn't tested. Worth a dedicated batch: create source, sync to another page, edit either side, confirm bidirectional propagation.
+
+### B-2927 — Sidebar shows persisted "INJECTED PLAIN TEXT …" title from earlier test (P3, info)
+- Steps: sidebar lists "🧭INJECTED PLAIN TEXT Getting Started EDITED-LIVE" for `pg_mp33cd7d01u4huok`.
+- Observed: B-2801's plain-text paste from batch 29 has persisted across reloads and is now polluting the sidebar. Confirms persistence works, but also that the test fixtures are accumulating cruft. Consider a "reset workspace" affordance for QA, or seed-data isolation per session.
+
+### B-2928 — Block-row drop zones have NO testid — hard to assert specific drop targets in E2E (P3, info)
+- Steps: query all React elements with `onDrop` or `onDragOver` props.
+- Observed: 57 drop zones, all share class `group/block relative flex items-start gap-1 py-0.5` and none have a `data-testid`. Block-handle drag works (B-2910) but E2E tests can't target a specific drop slot. Add `data-testid="block-drop-<blockId>"` or `data-drop-target="block"` to enable deterministic drag-drop tests.
+
+### B-2929 — Drag-drop coverage summary (P2, info — meta)
+- Steps: aggregate across batches 28-30.
+- Observed:
+  - Block handles: DRAG WORKS (B-2910).
+  - Calendar event chips: DRAG SOURCE WORKS, NO DROP TARGET (B-2906 + B-2907).
+  - Sidebar pages: NO DRAG (B-2908).
+  - Table rows: NO DRAG (B-2909).
+  - Gallery cards: NO DRAG, CLICK WORKS (B-2806 + B-2903).
+  - List rows: NO DRAG, CLICK WORKS (B-2809 + B-2904).
+  - Timeline bars: NO DRAG, CLICK WORKS (B-2808 + B-2905).
+  - Recommended priority: calendar drop targets (closest to working), then table rows (high user value for DB reordering), then sidebar pages.
+
+
+
+## 2026-05-13 14:00 — Implementer batch (commit 14baeb8)
+
+### B-2803 — Title execCommand insertHTML XSS — fixed at persistence layer
+- Fix: PageView.tsx mounts a MutationObserver on the title `<h1>` that flattens any non-text child the instant it appears, then re-emits `innerText` to state.
+- Verified: `execCommand('insertHTML', …, '<b>X</b><i>Y</i><span style="color:red">Z</span>')` ends with `childCount: 0`, `innerHTML: "XYZ"`. Persisted store state never contains rich content for the title.
+- Caveat: inline `<img onerror>` still fires once during HTML parse (browsers parse before any JS observer can intercept `execCommand`). Closes the persistence vector — real-world attacker calling `execCommand` already has JS execution.
+
+### B-2630 — Color tool emitted deprecated `<font color>` — fixed (commit 14baeb8) — closes I-2608
+- Fix: `applyColor` in InlineToolbar.tsx now wraps the selection range in `<span data-color="1" style="color: …">` via `range.surroundContents` (with fallback to extract+wrap when the selection crosses boundaries). "Default" picker now unwraps any `span[data-color]`, legacy `<font>`, or stray `span[style*="color"]` inside the range.
+- Sanitizer updated to allow the `data-color` marker on `<span>` so the unwrap selector keeps working after persist + reload.
+- Verified: applying red to "/" yields `<span data-color="1" style="color: rgb(220, 38, 38);">/</span>`. No `<font>` in output.
+
+### B-2810 / B-2715 / B-2607 — ib-link popover unmounted before render — fixed (commit 14baeb8) — closes I-2602
+- Fix: InlineToolbar's selectionchange listener now bails out when `linkOpenRef.current === true`, so the toolbar (and its link popover) stays mounted when focus moves to the URL input and the selection collapses. The Enter / Escape / Apply / empty-URL paths all reset `linkOpenRef.current = false` before closing the popover.
+- Note: this addresses the symptom seen in tester repro (synthetic mousedown / focus shifts collapse selection → toolbar unmounts). Real-mouse-driven flow already worked because the browser preserves the selection during a mousedown that calls `preventDefault()`.
+
+### B-2814 / B-2624 / B-2516 — Settings page sub-section testids — fixed (commit 14baeb8) — closes I-2511 / I-2808
+- Added: `settings-profile`, `settings-workspace`, `settings-billing`, `settings-language`, `settings-notifications`, `settings-connections`. Workspace plan now lives inside the workspace section under a nested `settings-billing` div. Language / Notifications / Connections render as stubs with the canonical testids so E2E suites can assert presence and future work can fill them out without churn.
+
+### B-2815 / B-2629 — Sidebar chevrons unlabeled (25 buttons) — fixed (commit 14baeb8) — closes I-2807 / I-2609 (chevron subset)
+- Fix: `expand-${page.id}` buttons in Sidebar.tsx now receive `aria-label={expanded ? \`Collapse <title>\` : \`Expand <title>\`}`, `aria-expanded`, and a `title` attribute. Verified: all 23 chevrons now report a non-null `aria-label`; `unlabeled` count dropped from 25 → 0 for that subset.
+
+### B-2816 / B-2713 / B-2520 — Cmd+K palette lacked dialog semantics — fixed (commit 14baeb8) — closes I-2707
+- Fix: the inner palette panel now has `role="dialog"`, `aria-modal="true"`, `aria-label="Command palette"`, and a `command-palette` testid. The outer scrim still closes the palette on click. Verified via preview: `[data-testid="command-palette"]` returns matching role/aria attributes.

@@ -774,6 +774,9 @@ function ToggleBlockEl({ block, pageId }: { block: Block; pageId: string }) {
         <button
           onClick={() => updateBlock(block.id, { open: !tog.open } as Partial<Block>)}
           className="mt-1 text-muted-foreground"
+          aria-label={tog.open ? "Collapse toggle" : "Expand toggle"}
+          aria-expanded={tog.open}
+          title={tog.open ? "Collapse" : "Expand"}
           data-testid={`toggle-${block.id}`}
         >
           {tog.open ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}

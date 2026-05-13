@@ -67,6 +67,8 @@ export function CalendarView({ databaseId, viewId }: { databaseId: string; viewI
         <button
           onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))}
           className="p-1 hover:bg-accent rounded"
+          aria-label="Previous month"
+          title="Previous month"
           data-testid={`cal-prev-${databaseId}`}
         >
           <ChevronLeft className="size-4" />
@@ -85,6 +87,8 @@ export function CalendarView({ databaseId, viewId }: { databaseId: string; viewI
           <button
             onClick={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))}
             className="p-1 hover:bg-accent rounded"
+            aria-label="Next month"
+            title="Next month"
             data-testid={`cal-next-${databaseId}`}
           >
             <ChevronRight className="size-4" />

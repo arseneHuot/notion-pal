@@ -123,6 +123,66 @@ function setState(next: AppState | ((prev: AppState) => AppState)) {
   _state = updated;
   persist(updated);
   for (const l of listeners) l();
+  broadcastRehydrate();
+}
+
+// Cross-tab sync (B-2914 / I-2503 / I-2503 / I-2607 / I-2806).
+// When another tab writes to the same user's storage key, rehydrate our
+// in-memory state and notify subscribers. The `storage` event only fires in
+// OTHER tabs (not the writer), so this can't loop. Also listens to a
+// BroadcastChannel for lower-latency fan-out within the same browser, which
+// localStorage debounces.
+let _crossTabAttached = false;
+let _bc: BroadcastChannel | null = null;
+function attachCrossTabSync() {
+  if (_crossTabAttached) return;
+  if (typeof window === "undefined") return;
+  _crossTabAttached = true;
+  window.addEventListener("storage", (e) => {
+    if (!e.key) return;
+    const uid = _state.currentUser?.id;
+    // Only react to our own user's key — ignore other workspaces and global.
+    if (!uid || e.key !== userKey(uid)) return;
+    try {
+      const next = e.newValue ? (JSON.parse(e.newValue) as AppState) : null;
+      if (!next) return;
+      _state = next;
+      for (const l of listeners) l();
+    } catch {
+      // ignore parse errors
+    }
+  });
+  try {
+    _bc = new BroadcastChannel("notion-clone");
+    _bc.onmessage = (ev) => {
+      const data = ev.data as { type: string; userId?: string } | undefined;
+      if (!data) return;
+      const uid = _state.currentUser?.id;
+      if (data.type === "rehydrate" && uid && data.userId === uid) {
+        try {
+          const raw = window.localStorage.getItem(userKey(uid));
+          if (!raw) return;
+          const next = JSON.parse(raw) as AppState;
+          _state = next;
+          for (const l of listeners) l();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  } catch {
+    // BroadcastChannel not available — `storage` event still covers cross-tab
+    _bc = null;
+  }
+}
+
+// Broadcast a rehydrate notification after every write so other tabs pick up
+// changes sooner than localStorage's debounce.
+function broadcastRehydrate() {
+  if (!_bc) return;
+  const uid = _state.currentUser?.id;
+  if (!uid) return;
+  try { _bc.postMessage({ type: "rehydrate", userId: uid }); } catch { /* ignore */ }
 }
 
 export function getState() {
@@ -189,6 +249,8 @@ export function useStoreGetState(): AppState {
 // =========== Initialization ============
 
 export function initializeForUser(user: UserProfile) {
+  // Hook up cross-tab sync the first time a user is initialized.
+  attachCrossTabSync();
   // Idempotent: if already initialized for this user, do nothing.
   if (_state.currentUser?.id === user.id && _state.currentWorkspaceId) {
     return;

@@ -299,6 +299,8 @@ function ViewMenu({ databaseId, viewId }: { databaseId: string; viewId: string }
       <button
         onClick={() => setOpen((v) => !v)}
         className="p-1 rounded hover:bg-accent"
+        aria-label="View options"
+        title="View options"
         data-testid={`view-menu-${viewId}`}
       >
         <MoreHorizontal className="size-3.5" />
