@@ -5542,3 +5542,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Steps: opened AI panel via `ai-btn`, observed 8 messages (`ai-msg-0`…`ai-msg-7`) in panel. Clicked `[data-testid="ai-new-thread"]`. Re-queried after the click — 0 messages remain.
 - The clear-thread button is correctly wired to `setMessages([])` and the testid is exposed at `src/components/ai/AIChat.tsx:275`. Persistence-across-reload is a separate concern (B-431).
 
+
+### B-5303 — DB property drag-reorder — fixed (commit c8f791b) — closes I-5301
+- Fix: new `reorderDatabaseProperties(databaseId, sourceId, targetId)` store action + draggable `<th>` headers on the table view (`data-property-id` attribute, `application/x-property-id` payload). Title column is not draggable to preserve sticky-left positioning.
+
+### B-5305 — Calendar non-cal-drop silently refused — fixed (commit c8f791b)
+- Fix: /app/calendar's day-cell drop handler now dispatches a "Reschedule database rows from the DB calendar view" toast when a `row-*` event id is dropped, instead of silently no-op'ing.
