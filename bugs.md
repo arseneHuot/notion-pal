@@ -4942,3 +4942,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4119 — Cmd+J does not open AI panel (P3, open)
 - Pressed `Cmd+J` on document — `ai-input` did NOT appear. Pressed `Cmd+K` — palette opened. Only Cmd+K is wired as a global shortcut. The `sidebar-ai` button "Ask AI" has no `title`/`aria-label` advertising a shortcut, and no global keydown listener picks up Cmd+J. Notion's "Ask AI" lives on Cmd+J (Mac) / Ctrl+J — add to taste. P3 because the AI is also reachable via sidebar click.
+
+### B-4108 — DB trash doesn't stamp `trashedAt` — fixed (commit 4ffbb84) — P1
+- Fix: db-trash button now passes `{ isInTrash: true, trashedAt: Date.now() }`. NotionDatabase interface gains optional `trashedAt?: number | null`. TrashPage's existing sort (`b.trashedAt - a.trashedAt`) now surfaces newly-trashed DBs at the top.
+
+### B-4119 — Cmd+J doesn't toggle AI panel — fixed (commit 15b089d) — closes I-4105
+- Fix: AIChat's useEffect adds a global `keydown` listener that opens/closes the panel on `(metaKey || ctrlKey) + j`. Matches Notion's shortcut.
+
+### B-4112 — Sidebar pages lack cursor-grab — fixed (commit 15b089d) — closes part of I-4103
+- Fix: PageItem row gets `cursor-grab active:cursor-grabbing` so the drag affordance is discoverable. The hover-only ⋮⋮ row-handle on DB rows is still hover-only (touch-device gap noted as I-4104).
