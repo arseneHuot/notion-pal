@@ -6130,3 +6130,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6208 — duplicateView produced identical names (re-verify) — fixed (commit 1d6e1b9)
 - Re-confirmed: see B-6308. Sequential duplicates increment to "(Copy 2)"/"(Copy 3)"; rename-then-duplicate refills the lowest free slot.
+
+### I-6301 — Markdown export trashed sub-page link — done (commit 10fc6cc)
+- Fix: trashed sub-page emits `<icon> <title> <!-- (deleted) -->` instead of an `/app/p/<id>` URL that breaks outside the app.
