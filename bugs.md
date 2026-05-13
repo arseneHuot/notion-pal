@@ -4242,3 +4242,138 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3412 — Inline toolbar lacked underline — fixed (commit e878544) — closes I-3211
 - Fix: Added a new ib-underline button between italic and strikethrough, wired to `exec("underline")` and the existing `active.underline` toggle state.
+
+### B-3500 — view-menu hiddenProperties undefined fix VERIFIED (P0 acceptance, fixed)
+- Repro: injected `db_dates_test` with view `v_dates_test` carrying `hiddenProperties: undefined` into localStorage; fired synthetic StorageEvent.
+- Action: clicked `view-menu-v_dates_test`.
+- Observed: menu opens with `view-rename-`, `view-delete-`, `add-sort-`, `add-filter-`, `view-addprop-` testids; no ErrorBoundary trip; `window.onerror` never fired.
+- Conclusion: defensive `view.hiddenProperties ?? []` (commit e878544) holds against undefined. Closes B-3400 / B-3417.
+
+### B-3501 — Inline toolbar Underline button VERIFIED (P3 acceptance, fixed)
+- Repro: focused `[data-testid="block-content-blk_mp39bwborucqkom3"]` ("hello world"), selected first 5 chars, clicked `[data-testid="ib-underline"]`.
+- Observed: innerHTML became `<u>hello</u> world`. Tooltip/aria-label is "Underline". Toolbar order is bold → italic → underline → strike → code → link → color → ai.
+- Conclusion: closes B-3412 / I-3408. Note: only the explicit click path was tested — Cmd+U keybinding was not exercised (still listed as P3 nice-to-have in I-3408).
+
+### B-3502 — Slash menu coverage: math, breadcrumb, toc, callout, embed, synced, synced-ref ALL WORK (acceptance)
+- Repro: for each, create an empty block via plus button, focus, type `/`, click the slash item.
+- Observed (data-block-type after click):
+  - `slash-math` → `equation`
+  - `slash-breadcrumb` → `breadcrumb`
+  - `slash-toc` → `table-of-contents`
+  - `slash-callout` → `callout`
+  - `slash-embed` → `embed`
+  - `slash-synced` → `synced-block`
+  - `slash-synced-ref` → `synced-block-ref`
+- No `slash-sub-page` item exists; nested pages must be created via `slash-page` (which produces a `sub-page`). See B-3503.
+
+### B-3503 — No `slash-sub-page` alias / item (P3, open)
+- The slash menu has `slash-page` (produces a `sub-page` block per state.allTypes earlier). Typing `/sub-page` doesn't surface a separate entry because filter matches `page` only.
+- Expected: either add `slash-sub-page` testid OR ensure the search filter matches the substring "sub" against "Sub-page" (i.e. alias).
+- Severity: P3 — minor discoverability.
+
+### B-3504 — Color over bold span: bold preserved on apply AND on default reset (acceptance)
+- Repro: set block innerHTML to `<b>BOLD</b>NORMAL`, selected chars 2..6 (overlapping the bold boundary).
+- Apply red: `<b>BO</b><span data-color="1" style="color: rgb(220, 38, 38);"><b>LD</b>NO</span>RMAL` — bold preserved inside the new color span.
+- Apply default to the colored span: `<b>BO</b><b>LD</b>NORMAL` — color span removed, bold preserved (split across two `<b>` tags but visually identical).
+- Conclusion: B-3111 regression check passes. The color tool no longer destroys bold formatting on either apply or reset.
+
+### B-3505 — Page-options menu items inventory (info)
+- Clicked `[data-testid="page-options"]` on `/app/p/pg_mp33cd7d01u4huok`. Menu items found:
+  - `page-opt-favorite` (toggles "Remove from favorites" / "Add to favorites")
+  - `page-opt-duplicate`
+  - `page-opt-wiki` ("Turn into wiki")
+  - `page-opt-wordcount` ("Word count")
+  - `page-opt-copylink`
+  - `page-opt-export-md`
+  - `page-opt-print` ("Print / save as PDF")
+  - `page-opt-move-<teamspaceId>` (one per teamspace: Private, Engineering, Shared)
+  - `page-opt-trash`
+- Coverage gaps vs Notion: no "Lock page", no "Customize page", no "Page history", no "Connect to GitHub/Slack". Logged as I-3500.
+
+### B-3506 — DB live filter "contains" works (acceptance)
+- Repro: opened `view-menu-v_dates_test` → `add-filter-v_dates_test`. Filter row defaults to property=Title, operator=contains. Typed `alp` in the value input.
+- Observed: row list updated immediately from 3 rows ("alpha","beta","gamma") to 1 row ("alpha"). No reload needed.
+- Live filter works for text columns.
+
+### B-3507 — `prop-header-*` click does NOT toggle sort (P2, open)
+- Repro: clicked `prop-header-p_dn` (Score column) once, then again. Set values 30/10/20.
+- Observed: row order unchanged after either click. Popup that opens is the property menu (Rename / change type / Delete property), not a sort affordance.
+- Expected (per brief / Notion parity): single click on the header should sort asc; second click should toggle desc. Currently the only path to sort is `view-menu → add-sort`.
+- Severity: P2 — fundamental DB interaction gap. See I-3501.
+
+### B-3508 — AI input still single-line `<input type=text>` and strips `\n` (P2, open — regression of B-3210)
+- Re-verified on `[data-testid="ai-input"]`. Setting `.value = "L1\nL2\nL3\nL4\nL5"` via React property setter results in `value === "L1L2L3L4L5"` and the message renders on a single line in the thread.
+- Shift+Enter keydown does NOT insert a newline (`value` stays `""` after the keystroke).
+- Severity: P2 — confirms B-3210 is still open; closes the multiline retest task.
+
+### B-3509 — Cmd+K block match navigates + scrollIntoView + ring highlight (acceptance)
+- Repro: Cmd+K → typed "Sidebar" → clicked `cmd-block-blk_mp33cd7dvqv4tzkr`.
+- Observed: command palette closed; target block on `/app/p/pg_mp33cd7d01u4huok` received `ring-1 ring-blue-400` classes (visible visual ring). DOM confirmed `class="... ring-1 ring-blue-400"`.
+- Closes the brief's "scrollIntoView with ring highlight" sub-task. Works.
+
+### B-3510 — Markdown export elides inline DB content (P2, open)
+- Repro: opened `page-options` → `page-opt-export-md` on `/app/p/pg_mp33cd7d01u4huok`. Captured the Blob via `URL.createObjectURL` spy.
+- Observed: the inline DB `blk_db_test` (Dates Test) is serialized to a single line: `<!-- (embedded database) -->`. No table, no property headers, no row values.
+- Expected: render the database as a markdown table (or at least a header + row dump) so exported docs aren't lossy. Notion's Markdown export includes a full DB dump.
+- Severity: P2. See I-3502.
+
+### B-3511 — Markdown export comments: synced source labelled as "no source" even when source block exists (P3, open)
+- In the same export, the SYNCED_CHILD_UPDATED_3109_X3400 reference block produces `<!-- synced reference: no source -->` despite the source block existing on the same page (B-3409 confirmed source resolves at runtime).
+- Severity: P3 — minor lying in exported docs.
+
+### B-3512 — Markdown export: empty image/video/file/equation blocks emitted with no informative placeholder (P3, open)
+- Multiple `<!-- (empty image block) -->`, `<!-- (empty video block) -->`, `<!-- (empty file block) -->`, and bare `$$\n\n$$` blocks appear because the source page contains throwaway placeholders. The exporter could omit empty-payload blocks entirely, or at least retain the block ID for traceability.
+- Severity: P3 cosmetic.
+
+### B-3513 — Calendar event chip not draggable (P2, open — regression of B-2907)
+- Repro: `/app/calendar`, created event "DragMe3500" on 2026-05-15 via `day-add-2026-05-15` + `cal-compose-title` + Enter.
+- Observed: rendered chip is `<div class="text-xs mt-0.5 px-1 py-0.5 rounded truncate">DragMe3500</div>` with `draggable=false` and no testid. No drag/drop handlers visible. Cannot move event by dragging onto another day.
+- Expected: chip should be `draggable=true` and accept drop on `day-YYYY-MM-DD`. Event date should update + persist.
+- Severity: P2 — calendar's primary interaction is missing.
+
+### B-3514 — Calendar event chip has no testid (P3, open)
+- Same chip above also has no `data-testid` (e.g. `cal-event-<id>`). Makes the calendar surface essentially untestable from QA scripts.
+- Trivial fix: add `data-testid={\`cal-event-${event.id}\`}` to the chip element.
+
+### B-3515 — Public form accepts fully-empty submission (P2, open — regression of B-3214)
+- Repro: `/form/db_dates_test/v_form`, clicked `public-form-submit` with all fields blank.
+- Observed: form switches to "Thanks for submitting!" view. No client-side validation messaging.
+- Expected: at minimum title should be required; ideally `<input required>` on title field + visible error state.
+- DOM inspection: every form `<input>` has `required=false` and no `name` / `data-testid`. Missing all validation hooks.
+- Severity: P2 — public form is the data-collection entry point. Logged as I-3503 and I-3504.
+
+### B-3516 — Cross-tab StorageEvent does NOT trigger rehydrate / new page render (P1, open)
+- Repro: on `/app/p/pg_mp33cd7d01u4huok`, injected a new page object into `state.pages[...]` (full schema with all 24 fields), wrote back via `localStorage.setItem`, fired synthetic `StorageEvent` matching the same key.
+- Observed: localStorage updated successfully, but the page does NOT appear in the sidebar — neither immediately after the storage event nor after a full `location.reload()`. The previously-existing `CROSS_TAB_PROBE_1778637467940` page (which renders) is NOT even present in localStorage; it appears to be supplied by a separate seed source.
+- Conclusion: client state lives in something other than the persisted snapshot for at least some seed-derived pages, so cross-tab edits to localStorage don't propagate. Either (a) wire a real storage listener that does a `useStore.persist.rehydrate()`, or (b) document that cross-tab is unsupported.
+- Severity: P1 — multi-tab editing is silently broken; users editing in tab B see no updates in tab A.
+
+### B-3517 — Performance: 200 keystrokes flood = 2.47 ms/char (acceptance)
+- Repro: focused an empty block, ran 200 × `document.execCommand('insertText','a')` in a tight loop.
+- Observed: total ~495 ms, ~2.47 ms/char, finalLen=200 (no dropped chars). Acceptable for current scale.
+
+### B-3518 — A11y unlabeled-button sweep: 0 unlabeled across 7 routes (acceptance)
+- Routes swept: `/app/home`, `/app/inbox`, `/app/calendar`, `/app/templates`, `/app/settings`, `/app/p/pg_mp33cd7d01u4huok`, `/app/trash`. Button counts: 135/145/173/143/137/230/135.
+- Unlabeled (no text + no aria-label + no aria-labelledby + no title): 0 on every route.
+- No new regression vs prior sweep. The earlier `close-ai` / `ai-send` items in I-3209 still apply only when the AI panel is open — see B-3217.
+
+### B-3519 — Rapid trash-restore: restores silently drop pages (P1, open)
+- Repro: created 3 new pages via `ts-new-Private` in rapid sequence; for each, opened `page-options` → `page-opt-trash`, then navigated to `/app/trash`, found `restore-<pgId>` button for each, clicked them sequentially with 250 ms between clicks.
+- Observed: after navigating to `/app/home`, only ONE of the three restored pages appears in the sidebar (`pg_mp3ibtcbuop5o9mi`). Returning to `/app/trash`, the other two (`pg_mp3ibutpfmhygojq`, `pg_mp3ibwb0p5onpdlu`) still show as trashed.
+- Expected: clicking all 3 restore buttons should restore all 3; serialization of the store updates should not lose intermediate writes.
+- Severity: P1 — silent data loss on a common operation. Likely a stale-closure bug on the restore click handler reading an older `useStore` snapshot.
+
+### B-3520 — Browser back/forward across /app routes: no stale state observed (acceptance)
+- Repro: navigated `/app/home → /app/inbox → /app/calendar → /app/templates → /app/p/pg_mp33cd7d01u4huok` via `history.pushState` + popstate, then `history.back()` × 2, `history.forward()` × 1.
+- Observed: URL and body content updated correctly each step. No "Page not found" flash. Sidebar consistently rendered. Inbox / page bodies were both reachable on the back path.
+- Conclusion: no regression. Closes the back/forward sub-task.
+
+### B-3521 — Mobile sidebar does NOT auto-close after navigation (P2, open — related to B-3216 / I-3208)
+- Repro: monkey-patched `window.innerWidth/innerHeight` to 375×667 and fired `resize`; the layout did not switch to a mobile drawer. Clicked `close-sidebar` → `open-sidebar` → `sidebar-home`. After navigation to `/app`, the sidebar remained visible (`close-sidebar` still present in DOM).
+- Expected: at viewport < 768 the sidebar should overlay content as a drawer, render a backdrop, and auto-close on (a) navigation, (b) backdrop tap, (c) Escape.
+- Severity: P2 — mobile UX is unusable in its current form. I-3208 still open.
+- Note: this test is constrained because the iframe runner can't truly resize the browser. Confirmed at the JS-API layer (`innerWidth`/`matchMedia`) that no responsive switch occurs.
+
+### B-3522 — Sidebar has no responsive breakpoint hook (P3, open)
+- Searching the DOM for `data-testid="sidebar-backdrop"` / `mobile-menu` / `sidebar-drawer` after simulating 375px width returns nothing. The sidebar component appears to have no responsive variant at all.
+- Combined with B-3521, suggests the mobile layout was deferred entirely. Note for I-3208.

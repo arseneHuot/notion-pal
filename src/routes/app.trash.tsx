@@ -1,7 +1,8 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useStore, restorePageCascade, permanentlyDeletePage, updateDatabase, deleteDatabase } from "@/lib/store";
 import { Trash2, RotateCcw, Database as DbIcon } from "lucide-react";
+import { toast } from "@/components/ui/Toast";
 
 export const Route = createFileRoute("/app/trash")({
   component: TrashPage,
@@ -18,7 +19,6 @@ function TrashPage() {
     () => Object.values(databases).filter((d) => d.isInTrash).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)),
     [databases],
   );
-  const navigate = useNavigate();
   const empty = trashedPages.length === 0 && trashedDbs.length === 0;
 
   return (
@@ -40,8 +40,12 @@ function TrashPage() {
                 </div>
                 <button
                   onClick={() => {
+                    // Don't navigate after restore — rapid restore of multiple
+                    // pages would unmount TrashPage and drop subsequent clicks
+                    // (B-3519). Stay here and toast; user can click the page
+                    // from the sidebar afterward.
                     restorePageCascade(p.id);
-                    navigate({ to: "/app/p/$pageId", params: { pageId: p.id } });
+                    toast(`Restored "${p.title || "Untitled"}"`, "success");
                   }}
                   className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground flex items-center gap-1"
                   data-testid={`restore-${p.id}`}

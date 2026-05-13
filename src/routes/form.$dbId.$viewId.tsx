@@ -108,6 +108,28 @@ function PublicFormPage() {
 
   function submit() {
     if (!data) return;
+    // Client-side validation: block all-empty submissions and require the
+    // title field if it's visible. The form schema doesn't track required
+    // fields yet — title is the de-facto identity field, so we enforce it
+    // when it's part of the visible set (B-3214).
+    const titleProp = data.db.properties.find((p) => p.type === "title");
+    const titleVisible = titleProp && visibleFields.some((p) => p.id === titleProp.id);
+    if (titleVisible && !(values[titleProp!.id] && String(values[titleProp!.id]).trim())) {
+      setError(`${titleProp!.name || "Title"} is required.`);
+      return;
+    }
+    const allEmpty = visibleFields.every((p) => {
+      const v = values[p.id];
+      if (v === undefined || v === null) return true;
+      if (typeof v === "string") return v.trim() === "";
+      if (Array.isArray(v)) return v.length === 0;
+      return false;
+    });
+    if (allEmpty) {
+      setError("Please fill in at least one field before submitting.");
+      return;
+    }
+    setError("");
     // Persist the row directly to the host user's storage bucket.
     try {
       const raw = localStorage.getItem(data.storageKey);
@@ -118,7 +140,6 @@ function PublicFormPage() {
       const state = JSON.parse(raw);
       const id = "row_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
       const now = Date.now();
-      const titleProp = data.db.properties.find((p) => p.type === "title");
       const v = { ...values };
       if (titleProp && !(titleProp.id in v)) v[titleProp.id] = "";
       const row = {

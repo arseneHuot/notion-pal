@@ -1386,3 +1386,36 @@ Priority: high / medium / low.
 
 ### I-3410 — Stress-test Cmd+K at 1k pages (medium, open)
 - Workspaces with many pages need to keep search latency low. Add an automated benchmark that seeds 1k pages and measures filter latency under a target (e.g. ≤80 ms). Without this, we can't catch a regression that only manifests at scale.
+
+### I-3500 — Add Lock page / Customize page / Page history to page-options menu (medium, open)
+- See B-3505. Page-options currently has 11 items; Notion ships Lock, Customize, Page history, Connect-to integrations. Filling these gaps would close the page-actions parity gap.
+
+### I-3501 — Inline-table prop-header click should sort (high, open)
+- See B-3507. Currently `prop-header-*` opens the rename/delete/type menu. Single-click should sort asc, second click desc, third click clear. Move the rename menu behind an explicit overflow icon inside the header cell. Notion's UX baseline.
+
+### I-3502 — Markdown export must render embedded databases as tables (high, open)
+- See B-3510. Replace `<!-- (embedded database) -->` with a header + rows table. Honour the visible view's `propertyOrder` and `hiddenProperties`.
+
+### I-3503 — Public form: enforce required fields (high, open)
+- See B-3515 / B-3214. Title should always be required; other props can be marked required via the form view config. Add `required` attribute + visible error state under each invalid field. Block submission until valid.
+
+### I-3504 — Public form inputs need testids + `name` attrs (low, open)
+- See B-3515. Currently each `<input>` has no `data-testid`, no `name`, and no `placeholder`. Hard to write QA scripts and degrades a11y (screen readers read default placeholder text). Add `data-testid={\`form-field-${propId}\`}` and `name={propId}`.
+
+### I-3505 — Real cross-tab sync via storage event (high, open)
+- See B-3516. Wire a `window.addEventListener('storage', e => useStore.persist.rehydrate())` listener (Zustand-persist supports this out-of-the-box) so that edits made in another tab propagate immediately. Otherwise users see stale state until full reload — and even then some seed-derived pages don't appear.
+
+### I-3506 — Calendar event chip: testid + draggable + drop handlers (high, open)
+- See B-3513 / B-3514. The chip should be `<div draggable="true" data-testid={\`cal-event-${id}\`} onDragStart={...}>...</div>` and `day-YYYY-MM-DD` should handle `onDrop` to update the event date. Notion / Google Calendar baseline.
+
+### I-3507 — Trash restore: queue updates serially to prevent dropped restores (high, open)
+- See B-3519. Likely each restore click reads a stale `useStore` snapshot and writes back, overwriting siblings' restorations. Use the functional setter form (`set(s => ({ pages: { ...s.pages, [id]: { ...s.pages[id], isInTrash: false } } }))`) or batch in a single `set` call within the restore handler.
+
+### I-3508 — `cal-event-*` testids needed for any drag-related QA (low, open)
+- See B-3514. Even before drag works, exposing a stable testid for each rendered event chip unblocks every other calendar test.
+
+### I-3509 — Markdown export: drop empty image/video/file/equation placeholders (low, open)
+- See B-3512. Current export leaks `<!-- (empty image block) -->` etc. Either skip blocks with no payload or include block IDs for traceability.
+
+### I-3510 — Synced-block reference markdown export should resolve source on same page (low, open)
+- See B-3511. The synced reference renders correctly at runtime (B-3409) but the markdown exporter prints `<!-- synced reference: no source -->`. Match the runtime resolution.
