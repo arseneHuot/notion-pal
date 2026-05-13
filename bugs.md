@@ -4869,3 +4869,7 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4022 — Live publish-toggle XSS sanitization (acceptance, stronger than B-4021)
 - Published `pg_mp2pz5zwikifg7r3` (slug "welcome") via `share-btn` → `publish-toggle`. Injected paragraph block with content `<img src=x onerror="window._XSS=1">XSS-CANARY-4021`. Visited `/p/welcome` via top-level navigation (not pushState). DOM: `<div data-page-blocks="true"><p>XSS-CANARY-4021</p></div>`. Zero `<img>` elements rendered, `window._XSS` never assigned. Sanitizer strips the entire `<img>` tag (and the onerror attribute with it) on the public route. Re-toggled publish off to clean up.
+
+### B-2907 / B-3513 / B-3514 / B-4010 / B-4011 — Calendar event drag-reschedule — fixed (commit 527cd89)
+- Fix: month-grid day cells now have `dragover` + `drop` handlers reading `application/x-cal-event-id`. Event chips are `draggable={e.source === "calendar"}` and dispatch the event id on `dragstart`. New store action `moveCalendarEvent(id, dayKey)` updates the event's `start` to the dropped day while preserving its time-of-day. Verified live: dragging a chip onto a cell 5 days forward updates the event so its local-time YYYY-MM-DD key matches the drop target.
+- Each chip exposes `cal-event-<id>` testid + a "Drag to reschedule" tooltip.
