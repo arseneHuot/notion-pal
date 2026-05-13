@@ -5236,3 +5236,12 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4711 — Global /app/calendar week-view chips NOT draggable (P3, open)
 - DB calendar view (`CalendarView` in views/) correctly wires `draggable=true` on event chips and `onDrop` on day cells (verified B-4706). However the workspace-wide /app/calendar route's WeekStrip (app.calendar.tsx:306-350) renders event chips as plain `<div>` with no `draggable`, no `onDragStart`, and the `week-day-<k>` cells have no `onDragOver`/`onDrop`. Users dragging an event in week view get no behavior. Either disable the cursor:pointer styling or add the same DnD wiring (`onDragStart` setting `text/x-event-id`, `onDrop` calling `moveCalendarEvent`). Low priority because the day strip already supports it indirectly via the compose popover, but inconsistent across views.
+
+### I-4700 — Sanitize hard-drops dangerous tags — fixed (commit 44ce947)
+- `<script>`, `<iframe>`, `<style>`, `<noscript>`, `<template>`, `<object>`, `<embed>` are now removed WITH their children. Body no longer leaks as visible text. Verified: `Visible<script>alert('boom')</script>OK` → `VisibleOK`.
+
+### I-4701 — Inline DB shows Trash placeholder — fixed (commit 44ce947)
+- When `db.isInTrash`, InlineDatabase renders a dashed-border placeholder with a Restore button instead of the full UI. Testids `db-trashed-placeholder-<id>` / `db-restore-<id>`.
+
+### I-4702 — Cross-DB drop toast — fixed (commit 44ce947)
+- TableView checks `getStoreState().rows[sourceId].databaseId` before calling `reorderDatabaseRows`. On mismatch it dispatches a "Cannot move rows between databases" toast.
