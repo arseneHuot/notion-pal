@@ -159,7 +159,25 @@ function PublicFormPage() {
       state.rows[id] = row;
       state.databases[dbId].rows = [...(state.databases[dbId].rows ?? []), id];
       state.databases[dbId].nextUniqueId = (state.databases[dbId].nextUniqueId ?? 1) + 1;
-      localStorage.setItem(data.storageKey, JSON.stringify(state));
+      const newValue = JSON.stringify(state);
+      localStorage.setItem(data.storageKey, newValue);
+      // Same-tab writes don't fire `storage` events — the host's in-memory
+      // store would never learn about this row until a full reload. Synthesize
+      // the event so the cross-tab listener (src/lib/store.ts attachCrossTabSync)
+      // rehydrates immediately. Without this, navigating from /form back into
+      // /app silently shows stale data (B-3815, P0 regression).
+      try {
+        window.dispatchEvent(new StorageEvent("storage", {
+          key: data.storageKey,
+          newValue,
+          oldValue: null,
+          storageArea: localStorage,
+          url: location.href,
+        }));
+      } catch {
+        // StorageEvent constructor may be guarded — falling back to a plain
+        // CustomEvent isn't useful since the store listens only on "storage".
+      }
       setSubmitted(true);
       setValues({});
       setTimeout(() => setSubmitted(false), 5000);
@@ -184,7 +202,11 @@ function PublicFormPage() {
             {view.submitMessage || "Thanks for submitting!"}
           </div>
         ) : (
-          <div className="space-y-3">
+          <form
+            className="space-y-3"
+            onSubmit={(e) => { e.preventDefault(); submit(); }}
+            data-testid="public-form"
+          >
             {visibleFields.map((p) => (
               <div key={p.id} data-testid={`public-form-field-${p.id}`}>
                 <label className="block text-xs font-medium mb-1">{p.name}</label>
@@ -192,14 +214,14 @@ function PublicFormPage() {
               </div>
             ))}
             <button
-              onClick={submit}
+              type="submit"
               className="bg-primary text-primary-foreground rounded-md px-4 py-2 text-sm font-medium"
               data-testid="public-form-submit"
             >
               Submit
             </button>
-            {error && <div className="text-xs text-destructive mt-2">{error}</div>}
-          </div>
+            {error && <div className="text-xs text-destructive mt-2" data-testid="public-form-error">{error}</div>}
+          </form>
         )}
       </main>
     </div>

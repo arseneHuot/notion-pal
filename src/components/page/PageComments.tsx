@@ -42,7 +42,12 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
       </div>
       <div className="px-3 py-1 text-xs border-b border-border">
         <label className="flex items-center gap-1 text-muted-foreground">
-          <input type="checkbox" checked={showResolved} onChange={(e) => setShowResolved(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={showResolved}
+            onChange={(e) => setShowResolved(e.target.checked)}
+            data-testid="show-resolved-toggle"
+          />
           Show resolved
         </label>
       </div>

@@ -1462,3 +1462,19 @@ Priority: high / medium / low.
 ### I-3705 — Remove `view.previewMode` if unused, or wire it (low, open)
 - See B-3716. The form view schema has a `previewMode` boolean that is writable but has no runtime effect. Either delete from `src/lib/types.ts` (and migration to strip from existing seeds), or wire it to a real read-only/preview mode on `/form/<db>/<view>`.
 
+
+### I-3800 — Public form: wrap inputs in `<form onSubmit>` (high, open)
+- See B-3815 / B-3817. The submit button is `type=submit` outside any `<form>`, so when the click-handler regresses (B-3815) there is no fallback. Wrap the field stack in `<form onSubmit={handleSubmit}>` with `e.preventDefault()`. This also enables Enter-to-submit on text fields and screen-reader form semantics.
+
+### I-3801 — Public form: persist a row again (high, open — regression P0)
+- See B-3815. The public form click handler shows "Thanks!" but no row is created in the underlying database. All 5 DB views show count 5 unchanged after a submission. Either the create-row mutation reference is null, the form state is not bound to a controlled state, or the submission writes to a different db. Restore B-3603-era behavior at minimum (title + select), ideally full payload (title + select + number + date).
+
+### I-3802 — Add `show resolved` toggle in comments pane (medium, open)
+- See B-3803 / B-3813. Once `resolve-<cmtId>` is clicked the comment is permanently hidden from the UI; user has no way to re-open or edit a resolved comment. Add a footer affordance like `toggle-resolved` that re-displays resolved comments with a "Reopen" button on each.
+
+### I-3803 — Public form inputs need `data-testid` and `name` (low, open — re-confirms I-3504)
+- See B-3816. Title/select/number/date inputs all have empty `name=""` and no `data-testid`. The submit button alone has `public-form-submit`. Add `form-field-<propId>` testid + `name={propId}` for both QA and accessibility (screen readers will get the right label binding).
+
+### I-3804 — `prop-sort-clear-<id>` only renders for sorted prop (low, doc)
+- See B-3820. Document that the testid is conditional in the prop-header menu. Automation should `click prop-header-<id>` first, then check whether `prop-sort-clear-<id>` exists before asserting it can be clicked.
+

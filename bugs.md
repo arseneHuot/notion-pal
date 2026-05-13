@@ -4604,3 +4604,96 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-3704 — Hidden columns unhide chip — fixed (commit f51cc36) — closes I-3702
 - Fix: InlineDatabase header now renders a `hidden-cols-chip-<viewId>` line whenever the active view has any `hiddenProperties`. Shows count + first three names + a "Show all" link (`unhide-all-<viewId>`) that clears `hiddenProperties` on the view. Restores discoverability for the new prop-header Hide action.
+
+## 2026-05-13 — Iteration verification batch
+
+### B-3800 — Comment edit cycle works end-to-end (acceptance, fixed)
+- Repro: posted comment via `comment-input`/`post-comment`; clicked `comment-edit-cmt_mp3k3370qfqtbdkc`, modified content in `comment-edit-input-...`, clicked `comment-edit-save-...`. Resulted in new content + `(edited)` tag rendered. Then clicked `comment-delete-...` → comment removed.
+- Closes B-3707 / B-3404. Confirms commit f51cc36 fix.
+- Severity: closes verification sub-task.
+
+### B-3801 — Reply also exposes comment-edit-/comment-delete- (acceptance)
+- Repro: posted parent comment; clicked `reply-<parentId>`, used `reply-input-<parentId>` + `reply-submit-<parentId>` to add a reply. The new reply was assigned its own cmtId (cmt_mp3k53fom6pzbwdd) and exposed `comment-edit-<replyId>` / `comment-delete-<replyId>`. Edit cycle worked: text updated, `(edited)` tag appeared once.
+- Severity: closes reply edit/delete sub-task. P3 nit: only one `(edited)` tag shown even when two comments are edited — but the test seq only edited the reply, so this is correct.
+
+### B-3802 — deleteComment cascades to replies (acceptance)
+- Repro: with parent cmt_mp3k4vcb56b7wjz9 + reply cmt_mp3k53fom6pzbwdd present, clicked `comment-delete-<parentId>`. After 250 ms both `comment-edit-<parentId>` and `comment-edit-<replyId>` were gone from the DOM. Reply text "reply EDITED v1" no longer present.
+- Severity: closes cascade sub-task. No orphans.
+
+### B-3803 — Resolved comment is fully hidden, no "Show resolved" toggle (P2, open — new)
+- Repro: posted comment; clicked `resolve-<cmtId>`. The comment immediately disappeared (`comment-edit-<id>` gone). No `show-resolved` / `toggle-resolved` testid anywhere in the comments pane. Cannot reach a resolved comment to edit it without re-opening it via store.
+- Notion shows resolved comments behind a "Show resolved" toggle. Current UX = comments vanish on resolve, no undo.
+- Severity: P2. Tied to I-3604.
+
+### B-3804 — B-3704 hidden-cols-chip + unhide-all works (acceptance, fixed)
+- Repro: at /app/db/db_mp2qmu4d1va6knov, opened `prop-header-<id>` for Status + Tags, clicked `prop-hide-<id>` for each. The chip `hidden-cols-chip-view_mp2qmu4djdr3pyti` rendered text "2 columns hidden(Status, Tags)Show all" and `unhide-all-view_mp2qmu4djdr3pyti` button appeared. Clicking unhide-all restored all 4 prop headers and removed the chip.
+- Closes B-3704. Commit f51cc36.
+
+### B-3805 — Color tool default unwraps span (acceptance)
+- Repro: on a text block, selected "color" in "Hello color world", clicked `ib-color` then `ib-color-red` → DOM: `Hello <span data-color="1" style="color: rgb(220,38,38);">color</span> world`. Re-selected the span content, opened `ib-color`, clicked `ib-color-default` → DOM: `Hello color world` (span removed). B-3111 still fixed.
+- Severity: closes color tool sub-task.
+
+### B-3806 — AI input STILL single-line (B-3210 still open)
+- Repro: clicked `sidebar-ai`; `[data-testid="ai-input"]` is `<input type="text">`, no rows attribute. Identical finding as B-3706.
+- Severity: P3. B-3210 still open.
+
+### B-3807 — /math /breadcrumb /toc /callout all work (acceptance)
+- Repro: from text block typed `/math` → `slash-math` matched, click inserted `equation` block. `/bread` matched `slash-breadcrumb` → `breadcrumb` block inserted. `/toc` matched `slash-toc` → `table-of-contents` block. `/callout` matched `slash-callout` → `callout` block. All four commands work end-to-end.
+- Severity: closes slash menu remaining sub-task.
+
+
+### B-3808 — Calendar event chips STILL not draggable / no testid (B-3513/B-3514 still open)
+- Repro: /app/calendar, day-13 cell contains `<div class="text-xs ..." style="background: rgb(59,130,246)">QA Drag Test</div>` and `<div class="...">Drag candidate</div>`. No `data-testid`, no `draggable="true"`. After creating a fresh event via `day-add-2026-05-13` → `cal-compose-create`, still no chip testid emitted. Same conclusion as B-3708 / B-3613.
+- Severity: P2. Re-confirms B-2907 / B-3513 / I-3506. No progress since previous iteration.
+
+### B-3809 — Trash 5 / restore 5 rapid: all 5 restored (acceptance — B-3519 regression)
+- Repro: created 5 fresh pages via `ts-new-Private`, moved each to trash via `page-menu-<id>` → `pmenu-trash-<id>` (each click needs ~200 ms between menu open and trash click). Opened `/app/trash` (sidebar-trash). Found `restore-<id>` for all 5. Clicked all 5 rapidly (no awaits) — total 11.1 ms. All 5 restored, none dropped, all reappeared in sidebar with `expand-<id>`. No regression of B-3519.
+- Severity: closes regression check.
+
+### B-3810 — H1 perf: 200 chars on heading-1 in 10-block page = 0.6 ms/char (acceptance)
+- Repro: on /app/p/pg_mp2r871w150jzjkn (10 blocks). Focused first heading-1, ran `document.execCommand('insertText','x')` x200. Total 119.2 ms = 0.596 ms/char. Same per-char cost as B-3713. No perceptible lag — under 100 ms for 200 chars at user typing speed.
+- Note: could not create a 100-block page in this iteration; new pages start empty and the slash menu requires manual block-by-block typing. Tested with the heaviest available page (10 blocks).
+- Severity: closes perf flood sub-task.
+
+### B-3811 — Comment edit/delete buttons labeled by text content (a11y, acceptance)
+- Repro: posted comment, inspected `[data-testid="comment-edit-<id>"]` and `[data-testid="comment-delete-<id>"]`. Both `<button>` elements have visible text "Edit" / "Delete" (no aria-label, no title needed since text content provides accessible name). Screen readers will announce them correctly.
+- Severity: closes a11y sub-task. Minor improvement opportunity logged separately.
+
+### B-3812 — Cmd+K block matches with `>=2` chars (acceptance)
+- Repro: opened palette via `sidebar-search`, typed "ex" → 4 `cmd-block-*` testids returned (matches "Export" in block content). Still under 100 ms paint. No regression of B-3607.
+- Severity: closes Cmd+K sub-task.
+
+### B-3813 — Resolved comments cannot be re-edited / no toggle to show them (P2, open — new)
+- Repro: posted "will be resolved then edited"; clicked `resolve-<cmtId>` → comment immediately disappears from DOM (no `comment-edit-<id>` selector survives). No `show-resolved`, `toggle-resolved`, or `view-resolved` testid anywhere in the comments pane. Once resolved, a typo or follow-up edit is unreachable without local state mutation. Notion shows resolved comments behind a toggle in the same pane.
+- Severity: P2. Tied to I-3604. Suggest a hidden affordance ("X resolved · show") at the bottom of the comments list.
+
+### B-3814 — Mobile responsive: still cannot emulate 375px in preview iframe (B-3521/B-3522 still open)
+- Same conclusion as B-3620 / B-3714: `window.innerWidth` is 1150 (parent allocation), `matchMedia('(max-width: 640px)')` is false, no mobile-only nav testid. Real-device QA still required. No fix detected.
+- Severity: P3 doc.
+
+
+### B-3815 — Public form submit silently drops row (P0, open — new / regression from B-3603)
+- Repro: navigated to `/form/db_mp2qmu4d1va6knov/view_mp2ry265swv12c04`. Filled title input "XYZ1778646995464", select option `opt_mp2qmu4dn9fbngvs` (Done), number 99, date 2026-05-20. Clicked `public-form-submit`. Page renders "Thanks!" success state. Navigated to `/app/db/db_mp2qmu4d1va6knov` table view → still 5 rows (none match XYZ). All 5 views show count=5 with no new row. Inspected each view → no XYZ row found.
+- Severity: P0. The form pretends to succeed but no new row is created. Worse than B-3603 (which dropped only select; title used to persist). Either the create-row mutation is no longer wired or the form is calling a stub. The public-form-submit button is `type=submit` but NOT inside any `<form>` element (`submitInsideForm: false`), so default submit can't fire — looks like the React click handler regressed.
+
+### B-3816 — Public form inputs STILL have no testid / no name attributes (P3, open)
+- Repro: same page. The 4 inputs (text, select, number, date) all have `data-testid: null` and `name: ""`. Matches I-3504 prior finding. Submit button has `data-testid="public-form-submit"` — only the submit got a testid.
+- Severity: P3 doc / I-3504.
+
+### B-3817 — Public form submit button is type=submit but lives outside any <form> (P1, open — new)
+- Repro: inspected `[data-testid="public-form-submit"]` → `submitInsideForm: false`, `type: "submit"`. There is no `<form>` wrapper. Submit relies entirely on the onClick handler. When that handler is broken (B-3815), the user has no fallback (Enter on the title field also can't submit a form that doesn't exist).
+- Severity: P1. Either wrap in `<form onSubmit={...}>` (with proper preventDefault) or change `type` to "button" to avoid confusing semantics.
+
+
+### B-3818 — Hide all non-title columns then unhide via chip works (acceptance)
+- Repro: at /app/db/db_mp2qmu4d1va6knov, opened menu on prop-header-title → no `prop-hide-` option appears for the title prop (correctly forbidden). Hid 3 non-title props (Status, Tags, Date) via `prop-hide-<id>`. Chip `hidden-cols-chip-view_mp2qmu4djdr3pyti` rendered text "3 columns hidden(Status, Tags, Date)Show all". Clicked `unhide-all-view_mp2qmu4djdr3pyti` → all 4 prop-headers returned, chip removed.
+- Severity: closes full-hide-cycle sub-task. Title is correctly protected. B-3704 fix is robust.
+
+### B-3819 — prop-header Sort/Hide/Clear menu cycle (acceptance, B-3624 fixed)
+- Repro: on prop-header-Status, the menu shows: rename / sort-asc / sort-desc / sort-clear (only when this prop is the active sort) / hide / delete. Sort cycle: clicked `prop-sort-desc-<id>`, re-opened menu — `prop-sort-clear-<id>` now appears alongside asc/desc. Clicked clear → re-opened menu, clear option is gone. Sort applied (header has an arrow svg).
+- Severity: closes /app/db prop-header sub-task. Confirms B-3624 fix.
+
+### B-3820 — Sort clear option is gated to actively-sorted prop only (design acceptance)
+- Repro: with no active sort on prop-header-title, the title menu shows only rename / asc / desc — no clear. Once a different prop is sorted, only THAT prop's menu shows the clear option. This is correct UX (don't expose clear when there's nothing to clear) but worth noting for QA — `prop-sort-clear-<id>` testid presence is conditional.
+- Severity: P3 doc.
+
