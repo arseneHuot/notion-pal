@@ -6657,3 +6657,37 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7400 — Cross-tab rehydrate didn't re-persist normalize result — fixed (commit b517dbf) — P3
 - Fix: storage event listener AND BroadcastChannel rehydrate handler both call `persist(_state)` after `normalizeState(next)`. Cleanup of dangling row IDs / missing arrays is now durable across reloads.
+
+
+## 2026-05-13 — B-7500 verification + new coverage sweep
+
+### B-7403 (re-verified) — Restore walks 3-deep ancestor chain — fixed — P2
+- Repro: injected `pg_v7500_gp` (no parent) + `pg_v7500_p` (parent=gp) + `pg_v7500_c` (parent=p), all `isInTrash:true`. Navigated to `/app/trash`, clicked `restore-pg_v7500_c`.
+- Result: all three flipped `isInTrash:false` (storage verified). Re-ran with a 4-deep chain `pg_v7501_{a,b,c,d}`, clicked `restore-pg_v7501_d` → all four restored. `restorePageCascade` now walks ancestors then descendants. Commit b517dbf solid for arbitrary depth.
+
+### B-7400 (re-verified) — Cross-tab normalize persists dangling-row prune to disk — fixed — P3
+- Repro: injected `db_v7500_persist` with rows `[realId, dangling_x, dangling_y]` via direct localStorage write. Fired StorageEvent. Re-read localStorage after the listener ran.
+- Result: `db.rows === ['row_v7500_real']`. Dangling IDs durably gone from disk, not just memory. Cleanup survives reload / route change / second-tab close. Closes the I-7400 / B-7400 ask.
+
+### B-7500 — Restoring a child whose parent isn't trashed silently leaves parent alone — fixed — P3
+- Repro: injected `pg_v7502_par` (NOT trashed) + `pg_v7502_chld` (parent=par, `isInTrash:true`). Clicked `restore-pg_v7502_chld`.
+- Result: only the child flipped to `isInTrash:false`; parent stayed `isInTrash:false`, `trashedAt` stayed null. The ancestor-walk in `restorePageCascade` correctly stops at first non-trashed ancestor. Working as intended.
+
+### B-7501 — Page with dangling `parentId` is invisible in sidebar (orphan from "Other" too) — P3 — open
+- Repro: injected `pg_v7503_orphan` with `parentId:'pg_DOESNT_EXIST_2026'`. Sidebar OTHER section filters with `!p.parentId` (Sidebar.tsx:360), so any non-null but dangling parent gets dropped from BOTH the parent's tree (parent doesn't exist) AND the Other group.
+- Page is still reachable by direct URL (`/app/p/pg_v7503_orphan`) and renders fine. No crash anywhere.
+- Severity P3: same blast radius as the older B-7401 (rediscovered with fresh test) — a stale parent reference makes a page silently undiscoverable. Confirms `normalizeState` doesn't rebind dangling parentIds.
+- Fix sketch: relax OrphanSection filter to `!p.parentId || !pages[p.parentId]`, OR rebind `parentId = null` in `normalizeState` when the target is missing. The latter is simpler and self-healing.
+
+### B-7502 — Comment with dangling `parentId` is invisible in PageComments — P3 — open
+- Repro: injected `c_v7504_top` (`parentId:null`) and `c_v7504_dangle` (`parentId:'c_DELETED_PARENT'`) on `pg_v7504_comments`. Opened the comments panel.
+- Result: only `comment-row-c_v7504_top` rendered. `c_v7504_dangle` was filtered out (PageComments top-level filter requires `!c.parentId`) and never picked up by the replies map either.
+- Severity P3: silent data loss in the UI. Identical to the older B-7402 — re-verified after the normalize re-persist commit, still present. The comment is on disk but the user can't see it.
+- Fix sketch: PageComments top-level filter `!c.parentId || !comments[c.parentId]`. Cheap, keeps content visible.
+
+### B-7503 — View `propertyOrder` is never read by TableView — P3 — open
+- Repro: injected `db_v7505_porder` with `view.propertyOrder: ['pName','p_DANGLING_xx','pNum','p_DANGLING_yy']`. Rendered `/app/db/db_v7505_porder`.
+- Result: no crash. TableView ignores `propertyOrder` entirely — it uses `db.properties` order directly (TableView.tsx:28 just filters by `hiddenProperties`). Headers came out as `Name`, `Num` only. propertyOrder is stored, mutated by InlineDatabase setup + add/remove flows, but never honoured.
+- Severity P3: real users see no immediate breakage, but column ordering is silently non-functional. Users dragging columns assume changes persist; in fact reordering only works because Inline rewrites `properties[]` (mirrored), not via the documented `propertyOrder`.
+- Fix sketch: in TableView, order `visibleProps` by `view.propertyOrder.filter(id => propsById[id])` first, then append properties not in propertyOrder. (Belt-and-suspenders for dangling IDs.)
+

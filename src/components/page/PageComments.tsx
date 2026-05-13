@@ -24,7 +24,16 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
   // with no UI surface (B-5010 / B-5102 / B-5304). The block context is
   // rendered as a small chip on each block-scoped comment row.
   const pageComments = useMemo(
-    () => Object.values(comments).filter((c) => c.pageId === pageId && !c.parentId && (showResolved || !c.resolved)),
+    () => Object.values(comments).filter((c) => {
+      if (c.pageId !== pageId) return false;
+      if (!showResolved && c.resolved) return false;
+      // A comment with `parentId` pointing at a non-existent comment was
+      // previously invisible — neither rendered at top level (parentId set)
+      // nor under any reply branch (parent not found). Treat dangling
+      // parentId the same as null so the user's content surfaces (B-7502).
+      if (c.parentId && comments[c.parentId]) return false;
+      return true;
+    }),
     [comments, pageId, showResolved],
   );
   const repliesByParent = useMemo(() => {

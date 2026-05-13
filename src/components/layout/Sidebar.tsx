@@ -148,7 +148,14 @@ function TeamspaceSection({ teamspace, expanded, onToggle, onNewPage }: { teamsp
   const databases = useStore((s) => s.databases);
   const rootPages = useMemo(
     () => Object.values(pages)
-      .filter((p) => p.teamspaceId === teamspace.id && !p.parentId && !p.isInTrash)
+      // Include pages whose `parentId` points at a missing/trashed parent as
+      // ALSO roots of the teamspace — they'd otherwise be invisible because
+      // the nonexistent parent doesn't render them as children (B-7501).
+      .filter((p) =>
+        p.teamspaceId === teamspace.id &&
+        !p.isInTrash &&
+        (!p.parentId || !pages[p.parentId] || pages[p.parentId].isInTrash),
+      )
       .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt)),
     [pages, teamspace.id],
   );
@@ -357,7 +364,10 @@ function OrphanSection() {
   const pages = useStore((s) => s.pages);
   const orphans = useMemo(
     () => Object.values(pages)
-      .filter((p) => !p.teamspaceId && !p.parentId && !p.isInTrash)
+      // Treat pages whose `parentId` points at a missing parent as orphans
+      // too — without this they're invisible because the parent's
+      // PageItem doesn't render them (B-7501).
+      .filter((p) => !p.isInTrash && !p.teamspaceId && (!p.parentId || !pages[p.parentId]))
       .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt)),
     [pages],
   );

@@ -2207,3 +2207,34 @@ Priority: high / medium / low.
   (b) replace the banner with: "Parent ‹X› is in Trash — Restore Parent" + a deep link to the parent.
 - Option (b) is safer because it preserves the user's intent (they may not want the whole sub-tree back).
 
+
+
+## 2026-05-13 — I-7500 verification + perf + UX sweep
+
+### I-7500 — `normalizeState` over a 1000-row DB with 50 dangling IDs is ~130 ms — verified — P3
+- Built `db_v7507_perf` with 1000 real rows + 50 dangling IDs (1050 total). Fired `StorageEvent` on the user key; measured the synchronous listener path.
+- Wall-clock delta: ~176 ms including a 50 ms setTimeout — effective normalize cost roughly 120-130 ms. After: `db.rows.length === 1000`, all 50 dangling IDs durably pruned on disk. No GC pause, no jank.
+- Acceptable for the cross-tab path; if we ever bump to 10k rows we should benchmark again. The filter is O(rows * properties) which becomes interesting at scale.
+
+### I-7501 — Trash: bulk parent + 20 children restore in <600 ms via single click — verified — P3
+- Built `pg_v7506_par` (trashed) with 20 trashed children. Single click on `restore-pg_v7506_par` cascade-restored parent + all 20 children in ~537 ms (storage round-trip confirmed `isInTrash:false` across all 21).
+- `restorePageCascade` does ancestors-then-descendants; the descendants pass is correct and fast. No need to click each child individually — good UX for "deleted whole subtree by accident".
+
+### I-7502 — AI panel: `ai-new-thread` correctly resets scroll to 0; auto-scroll on send works — verified — P3
+- Sent 8 messages to fill the AI scroller (scrollHeight=1246, clientHeight=521, scrollTop landed at bottom). Scrolled up to 100, clicked `ai-new-thread`: messages cleared to 0, scrollTop reset to 0, scrollHeight equals clientHeight (200) — empty pristine state.
+- On the new thread: scrolled to top while messages present, sent one more, scroller auto-snapped back to bottom (`afterSendScrollTop=368.5`, `max=371`). UX is correct: new thread is intentionally a fresh-start view, not preserving previous scroll.
+
+### I-7503 — `normalizeState` should rebind dangling `parentId` to null for pages and comments — open — P3
+- Two reproductions on this branch (B-7501 page sidebar, B-7502 comment panel) lose user content visibility because a dead `parentId` shouldn't exist on disk in the first place.
+- Suggestion (durable): in `normalizeState`, after building `pages` and `comments`, iterate once and set `parentId = null` whenever the target ID isn't in the same map. Self-heals migrations, partial imports, race conditions.
+- Companion: the OrphanSection filter (`Sidebar.tsx:360`) should also tolerate `!pages[p.parentId]` as a defensive layer — defense in depth.
+
+### I-7504 — `view.propertyOrder` is dead data — open — P3
+- Stored, mutated on add/remove property, but never read at render time (TableView.tsx:28 ignores it). Either:
+  (a) Wire TableView to honour `propertyOrder` (and fall back to `db.properties` order for IDs not listed), giving the field its documented purpose, or
+  (b) Remove the field from the View type and stop tracking it.
+- (a) is the lower-risk move — it adds a useful capability (per-view column order) instead of removing one users may eventually want.
+
+### I-7505 — DB route render time grows ~1.5 s at 1000 rows (no virtualization) — open — P2
+- After perf injection, `/app/db/db_v7507_perf` took ~1505 ms from `pushState` to first render with all 1000 `row-row_v7507_*` testids present. No crash, but the DOM has 1000 row nodes — every cell mount, scroll handler, and resize observer scales linearly.
+- Suggestion: introduce row virtualization (react-window / tanstack-virtual) in TableView so initial render is ~constant. Defer until product hits real >1k row decks, but the cliff is in place.
