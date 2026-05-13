@@ -5147,3 +5147,9 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4414 — AI textarea max-height + internal scroll (acceptance for new coverage 10)
 - `[data-testid="ai-input"]` is a `<textarea>` with `max-height: 160px`, `overflow-y: auto`. Filled with 8 newline-separated lines: scrollHeight=328, clientHeight=158. Parent panel `parentRect.bottom <= window.innerHeight` (no overflow); content scrolls internally. The textarea does not push the panel off-screen even with many lines.
+
+### B-4010 / B-4011 — DB calendar view auto-picks date prop + friendlier empty state — fixed (commit 1494bc4)
+- Fix: CalendarView falls back to the first `type === "date"` property when `view.dateProperty` is missing/stale. Empty-state copy more actionable + `cal-needs-date-<dbId>` testid.
+
+### B-4412 / I-4402 — Block-jump highlight is transient — fixed (commit 1494bc4)
+- Fix: Cmd+K block-result click now appends `#block-<id>` to the URL. PageView reads `window.location.hash` on mount + hashchange, scrolls into view, adds persistent `ring-2 ring-blue-400` (single block; prior highlight cleared). Back/forward restores the highlight.
