@@ -6058,3 +6058,15 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 - Repro: dispatched dragstart on `sidebar-page-pg_b5800_P` with a wrapped DataTransfer.
 - Observed: no `setDragImage` invoked anywhere in src; browser-default ghost (full-fidelity element snapshot at OS opacity) used. Search confirms no `setDragImage` in worktrees.
 - Expected: this is acceptable but the default ghost can look heavy for deeply-indented sidebar nodes. Notion uses a slim "pill" preview. Marking as P3 nit since DnD itself works.
+
+### B-6201 — Cross-page comment anchor stayed on current page — fixed (commit 1d6e1b9)
+- Fix: extracted BlockAnchorChip walks `parentId` chain via the store to find the block's owning page. Cross-page click `navigate({to, hash})`, same-page click sets `location.hash` only. Chip shows "↗" suffix + cross-page tooltip when nav is needed.
+
+### B-6203 — AI Enter bypasses busy disable — fixed (commit 1d6e1b9)
+- Fix: form onSubmit AND textarea onKeyDown both early-return when `busy`. No more queued sends while streaming.
+
+### B-6205 — Cmd+K single-char tokens match too broadly — fixed (commit 1d6e1b9)
+- Fix: tokenizer drops single-char tokens when the query has ≥2 tokens. Empty-after-filter case returns no matches (noiseQuery flag) instead of vacuously matching every page. Verified: "C O M M" → 0 results, "COMM" → real matches.
+
+### B-6208 — duplicateView produced identical names — fixed (commit 1d6e1b9)
+- Fix: appends "(Copy 2)", "(Copy 3)", … when "(Copy)" is already taken on a sibling view.
