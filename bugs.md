@@ -5035,3 +5035,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4214 — Cmd+K block-match capped at 5 — fixed (commit 2f408a9) — closes I-4205
 - Fix: cap raised to 10 (one snippet per page).
+
+### B-4207 — Columns markdown export lossy — fixed (commit 533cd94) — closes I-4207
+- Fix: columns export falls back to a parentId scan of the blocks map when the explicit `columnIds` / `blockIds` arrays are missing. Truly-empty columns are skipped; a fully-empty layout emits `<!-- (empty multi-column layout) -->` instead of lonely column markers.
