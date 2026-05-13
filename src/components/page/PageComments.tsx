@@ -140,11 +140,25 @@ export function PageComments({ pageId, open, onClose }: { pageId: string; open: 
                   <textarea
                     value={replyText}
                     onChange={(e) => setReplyText(e.target.value)}
-                    placeholder="Reply…"
+                    onKeyDown={(e) => {
+                      // Cmd/Ctrl+Enter posts the reply (parity with the
+                      // top-level composer, B-4216).
+                      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                        e.preventDefault();
+                        if (replyText.trim()) {
+                          addComment({ pageId, content: replyText, parentId: c.id });
+                          setReplyText("");
+                          setReplyTo(null);
+                        }
+                      }
+                      if (e.key === "Escape") setReplyTo(null);
+                    }}
+                    placeholder="Reply… (Cmd+Enter to post)"
                     className="w-full bg-background border border-input rounded px-2 py-1 text-sm min-h-[44px] resize-none"
                     data-testid={`reply-input-${c.id}`}
                   />
                   <button
+                    type="button"
                     onClick={() => {
                       if (!replyText.trim()) return;
                       addComment({ pageId, content: replyText, parentId: c.id });
