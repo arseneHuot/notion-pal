@@ -258,7 +258,11 @@ export function InlineToolbar() {
           const sel = window.getSelection();
           if (sel && !sel.isCollapsed) {
             const txt = sel.toString();
-            window.dispatchEvent(new CustomEvent("open-ai-chat-with", { detail: { selected: txt } }));
+            // Include the parent page title for context so the AI knows where
+            // the snippet came from (I-4304).
+            const pageTitleEl = document.querySelector('[data-testid="page-title"]') as HTMLElement | null;
+            const pageTitle = pageTitleEl?.innerText?.trim() || "";
+            window.dispatchEvent(new CustomEvent("open-ai-chat-with", { detail: { selected: txt, pageTitle } }));
           }
         }}
         className="p-1.5 rounded hover:bg-accent text-violet-500"

@@ -5038,3 +5038,59 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-4207 — Columns markdown export lossy — fixed (commit 533cd94) — closes I-4207
 - Fix: columns export falls back to a parentId scan of the blocks map when the explicit `columnIds` / `blockIds` arrays are missing. Truly-empty columns are skipped; a fully-empty layout emits `<!-- (empty multi-column layout) -->` instead of lonely column markers.
+
+## 2026-05-13 — QA agent iteration I-4300 (verification batch)
+
+### B-4300 — Fix verification: B-4216 / B-4206 / B-4204 / B-4214 all confirmed (acceptance)
+- B-4216 (comment Cmd+Enter): on `pg_mp2pz5zwikifg7r3` clicked `comments-btn`, set value on `[data-testid="comment-input"]` and dispatched `KeyboardEvent('keydown',{key:'Enter',metaKey:true})`. Comments map went 6→7 with `content="B-4300 Cmd+Enter test"`. Plain Enter: `defaultPrevented=false` (newline allowed). Click on `[data-testid="post-comment"]` (type="button") also posts 7→8. Placeholder: "Add a comment... (Cmd+Enter to post)". Closed.
+- B-4206 (show-resolved persist): clicked `show-resolved-toggle` from unchecked→checked → LS `ui.showResolvedComments=true`. `location.reload()`; after re-opening panel, checkbox still `checked=true`. Closed.
+- B-4204 (Cmd+K word-bag): seeded `pg_mp3pbp9evjgq168p` titled "plan the next quarter". Palette queries "next plan", "plan the next", "quarter plan", "quarter the plan", "   plan   QUARTER   " all return the same 2 page hits + 1 block hit. Case + whitespace tolerant. Closed.
+- B-4214 (block-match cap 10): seeded 12 new blocks across 12 distinct pages with content "B4300NEEDLE". Palette query "B4300NEEDLE" returns exactly 10 `cmd-block-*` results (one per page, capped). Closed.
+
+### B-4301 — Reply Cmd+Enter parity (acceptance for I-4208 follow-up)
+- On `pg_mp2pz5zwikifg7r3`, clicked `reply-cmt_mp3panu2xy1cfdlo`. `reply-input-<id>` placeholder is "Reply… (Cmd+Enter to post)". Set value, dispatched Cmd+Enter on the textarea — comments map went 8→9 with `content="B-4301 reply Cmd+Enter"` and `parentId="cmt_mp3panu2xy1cfdlo"`. Plain Enter (no Shift): `defaultPrevented=false`, comments count unchanged (newline allowed). Click on `reply-submit-<id>` also posts (9→10). Same UX as top-level composer — parity confirmed.
+
+### B-4302 — Calendar drop onto a 3-event day chips one off-screen but accepts the drop (P3, open)
+- Repro: seeded 4 events on `2026-05-22` ("Dense 1..4"). Day cell renders 3 chips + "+1" overflow. Dragged `evt_mp3jrjay0hmfabnk` (formerly on 2026-05-25) onto `day-2026-05-22`. Result: drop succeeded, `evt.start` moved to 2026-05-22, the new chip "QA Drag Test" sorted to top of the visible list — but "Dense 3" got pushed below the overflow ("+2 now"). Functional: drop is accepted. UX: the dropped chip's predecessor visibly disappears, which can read as data-loss to a user who's not watching the +N overflow indicator. Consider expanding the visible cap (or animate the overflow growth).
+
+### B-4303 — Public form: conditional rule hiding required Title still allows submit (P3, open — by design)
+- Seeded a `conditionalLogic` rule on `view_qa_form_mp3ljwhb`: "showPropertyIds: [titleProp.id] only if Status equals Not started". Loaded the form fresh → title input absent (status defaults to empty, rule fails). Filled only `Score=42` and `form.requestSubmit()`. Result: row count 19→20, new row `values: { prop_qa_num: 42 }` with title field empty. The titleVisible+required gate in `submit()` is bypassed because `titleVisible===false`. No warning to the user that the row has no title — it shows up in the DB as "Untitled". Either: (a) when title is hidden by a rule, auto-derive title from another field, or (b) at minimum surface a hint in the success message. Current behaviour is HTML-correct but loses the row's identity.
+
+### B-4304 — Cmd+P opens command palette (acceptance — Notion alias)
+- Pressed `KeyboardEvent('keydown',{key:'p',metaKey:true})` at `document` from `/app`. `[role="dialog"]` rendered, `[data-testid="command-input"]` focused. Same path as Cmd+K. Closes any user muscle-memory gap from Notion's "Cmd+P = Find page".
+
+### B-4305 — Reply composer keyboard parity full audit (acceptance)
+- Placeholder "Reply… (Cmd+Enter to post)" on every visible `reply-input-<id>`. textarea + button parity: same handler covers Cmd+Enter, Ctrl+Enter, plain Enter (newline), and `reply-submit-<id>` click. No regression from the top-level composer fix. Closes I-4208 follow-up + B-4301.
+
+### B-4306 — Reply edit cycle (`comment-edit-<replyId>` + save) works (acceptance)
+- Reply `cmt_mp3pf6jotajentsn` (parentId set). Clicked `comment-edit-<replyId>` → rendered `comment-edit-input-<id>`, `comment-edit-save-<id>`, `comment-edit-cancel-<id>`. Replaced value, clicked save → `comments[id].content` updated to "B-4306 reply EDITED via comment-edit-save", `parentId` preserved. Edit on a nested reply works identically to top-level edit.
+
+### B-4307 — `ui.showResolvedComments` persists in both directions (acceptance for B-4206 expansion)
+- Toggled `show-resolved-toggle` from checked→unchecked: LS `ui.showResolvedComments=false`. Toggled back: `ui.showResolvedComments=true`. State survives reload (B-4206) AND both transitions. Persistence whitelist includes the key.
+
+### B-4308 — DB trash restore from `/app/trash` (acceptance for B-4108 + I-4101)
+- Trashed `db_mp3jj2jnavmaxi0e` (isInTrash=true, trashedAt stamped). Navigated to `/app/trash` → row labelled "Untitled database · 3 rows · Restore · Delete" (rendered via the same listing path as pages). Clicked `restore-db-<id>` → `isInTrash=false`, `trashedAt=null`, button removed from the listing. Round-trip works.
+
+### B-4309 — AI assistant message renders markdown bold/italic/code (acceptance)
+- Sent `Explain **bold** and *italic* and ` + "`code`" + ` markdown` on `ai-input`, Enter. Last `ai-msg-<n>` HTML contains `<strong>bold</strong>`, `<em>italic</em>`, `<code class="...">code</code>`, plus an opportunistic `<pre><code>` block from the AI demo response. Markdown serializer is wired and `dangerouslySetInnerHTML` (or equivalent) renders inline marks correctly. Closes the markdown rendering acceptance.
+
+### B-4310 — Sidebar trash empty state (acceptance)
+- Emptied trash (restored all pages, restored db, cleared trashedAt). Clicked `sidebar-trash` → `/app/trash` main area shows "Trash is empty." in plain copy. No restore buttons rendered, no error. Empty state is present though not via a dedicated `trash-empty` testid (automation would need innerText scrape).
+
+### B-4311 — Cmd+K arrow-down + Enter (acceptance for I-4207 follow-up)
+- Opened palette with "Bulk" query — 5 `cmd-page-*` results. Initial active=`cmd-page-pg_qa_bulk_0_4ap` (`data-active="true"`). Pressed ArrowDown twice → active=`cmd-page-pg_qa_bulk_2_2o4`. Pressed Enter → route navigated to `/app/p/pg_qa_bulk_2_2o4`, palette closed. Keyboard navigation honours the highlighted item. (Earlier confusing result with "roadmap" was because both items pointed to the same page id, masking the routing.)
+
+### B-4312 — Multi-select cell editor add + remove (acceptance)
+- On `pg_qa_db_uhgak1`, clicked `cell-select-row_mp3jk8zuxoypboda-prop_mp3jj2jnh8n0aijp` → popover with `select-search-*` input ("Search or create…") and `select-option-<optId>` rows. Sequence: empty → click Important → `["opt_mp3jj2jnd9zrmona"]` → click Idea → `["opt_mp3jj2jnd9zrmona","opt_mp3jj2jnu4z5k8fj"]` → click Important again → `["opt_mp3jj2jnu4z5k8fj"]` (removed). Order is preserved when adding, and removal works mid-list.
+
+### B-4313 — Cmd+J / Cmd+K / Cmd+P are safe on AUTH route (acceptance)
+- Signed out via Settings → page redirected to `/auth`. Dispatched Cmd+J, Cmd+K, Cmd+P keydowns at document. Result: zero JS errors (`window.onerror` captured none), `[data-testid="ai-input"]` and `[data-testid="command-input"]` did not mount (AppShell isn't mounted on /auth), sign-in form still rendered. Global keybindings degrade gracefully on the public route.
+
+### B-4314 — ib-ai with selection pre-fills AI prompt (acceptance)
+- Selected text via `execCommand('selectAll')` inside `[data-block-id="blk_mp2pz5zwsu2wpqe6"]` → inline toolbar rendered with `ib-bold/italic/underline/strike/code/link/color/ai`. Triggered `mousedown` on `[data-testid="ib-ai"]`. Result: AI panel opened (`ai-input` rendered), value pre-filled with `Ask AI about: "Your workspace is organised by teamspaces (Private, Engineering, Shared)."`. The CustomEvent `open-ai-chat-with` handler quotes the first 200 chars of the selection. Closes the "ib-ai opens AI with prompt" acceptance.
+
+### B-4315 — Comment composer Ctrl+Enter parity for Linux/Win users (acceptance)
+- On `[data-testid="comment-input"]` dispatched `KeyboardEvent('keydown',{key:'Enter',ctrlKey:true})`. Comments map went 10→11 with `content="B-4315 Ctrl+Enter test"`. Both `metaKey` (Mac Cmd+Enter, B-4216) and `ctrlKey` (Win/Linux) trigger post. Shift+Enter remains a newline (`defaultPrevented=false`). Three keyboard modes covered: Cmd+Enter, Ctrl+Enter, Shift+Enter (newline).
+
+### B-4316 — Cmd+P preventDefault'd so browser print stays disabled (acceptance)
+- Dispatched `KeyboardEvent('keydown',{key:'p',metaKey:true,cancelable:true})` at document → `ev.defaultPrevented=true`. Browser print dialog therefore suppressed and palette opens. Matches Cmd+K behaviour. Closes the regression risk noted in I-4303.

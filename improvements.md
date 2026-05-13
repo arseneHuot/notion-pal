@@ -1580,3 +1580,27 @@ Priority: high / medium / low.
 
 ### I-4209 — Sub-page route should expose page-actions menu (low, open)
 - See B-4217. `pg_qa_b4002_child_95kg` (and likely other sub-page-routed pages) render a layout without `[data-testid="page-actions"]`, so export / favorite / move / trash are unreachable from inside the sub-page. Either render the same page-actions ⋯ in the sub-page header, or document that sub-pages must be acted on from the parent.
+
+
+## 2026-05-13 — QA agent iteration I-4300
+
+### I-4300 — Public form: hidden-by-rule title should fall back to a derived label (medium, open)
+- See B-4303. When `conditionalLogic` hides the title property, submit() rightly skips the "title required" check — but the resulting row has an empty title. The DB then shows it as "Untitled", which collides with hand-created Untitled rows. Suggestions:
+  - On submit with hidden title, auto-derive a title from the first non-empty short field (number / select / date / first text answer).
+  - Or, on the form-builder side, require that at least one visible property be marked as `titleSubstitute` whenever a rule hides the title.
+- Keeps the row addressable in the DB.
+
+### I-4301 — Calendar day-cell overflow chip handling (low, open)
+- See B-4302. Dropping a new event onto a day with 3 chips visible pushes the dropped event in but bumps the last visible chip behind a `+N` indicator. A user dropping a chip expects to *see* it land. Either:
+  - Auto-expand the dropped chip's day cell to show 4 (one-time effect, collapses on next click).
+  - Surface a brief flash/scroll-into-view on the dropped chip even when it lands behind the cap.
+  - Or raise the visible cap to 4 with sensible vertical density.
+
+### I-4302 — Add `cmd-empty` and `trash-empty` testids (low, open)
+- See B-4117, B-4310. Both empty states render plain text ("No results", "Trash is empty.") without a dedicated `data-testid`. Automation has to scrape innerText. Add `data-testid="cmd-empty"` to the palette empty branch and `data-testid="trash-empty"` to TrashPage's empty branch. Cheap.
+
+### I-4303 — Cmd+P palette alias documented in shortcuts panel (low, open)
+- See B-4304. Cmd+P opens the palette (Notion-compatible), but the sidebar Search button only advertises ⌘K. Either add a small "⌘K / ⌘P" hint, or include Cmd+P in the help panel / shortcuts list. Discoverability win.
+
+### I-4304 — ib-ai prompt should embed the page context (low, open)
+- See B-4314. The pre-filled prompt is `Ask AI about: "<selection>"` — useful for short selections but loses *which page* the selection came from. Optionally include `(Page: <title>)` in the quoted prompt so the AI demo response can cite the source without the user retyping the context.

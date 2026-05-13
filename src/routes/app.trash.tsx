@@ -24,7 +24,11 @@ function TrashPage() {
   return (
     <div className="max-w-3xl mx-auto px-8 py-12">
       <h1 className="text-3xl font-bold mb-6">Trash</h1>
-      {empty && <div className="text-sm text-muted-foreground">Trash is empty.</div>}
+      {empty && (
+        <div className="text-sm text-muted-foreground" data-testid="trash-empty">
+          Trash is empty.
+        </div>
+      )}
       {trashedPages.length > 0 && (
         <div className="mb-6">
           <h2 className="text-xs uppercase text-muted-foreground tracking-wider mb-2">Pages</h2>

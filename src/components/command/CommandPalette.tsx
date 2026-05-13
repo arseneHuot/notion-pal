@@ -239,7 +239,11 @@ export function CommandPalette() {
           <kbd className="text-xs text-muted-foreground">⌘K</kbd>
         </div>
         <div className="flex-1 overflow-y-auto py-1">
-          {items.length === 0 && <div className="px-3 py-4 text-sm text-muted-foreground">No results</div>}
+          {items.length === 0 && (
+            <div className="px-3 py-4 text-sm text-muted-foreground" data-testid="cmd-empty">
+              No results
+            </div>
+          )}
           {(() => {
             const grouped: Record<string, typeof items> = {};
             items.forEach((i) => {

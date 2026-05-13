@@ -144,10 +144,15 @@ export function AIChat() {
       setOpen(true);
     }
     function showWith(e: Event) {
-      const detail = (e as CustomEvent<{ selected: string }>).detail;
+      const detail = (e as CustomEvent<{ selected: string; pageTitle?: string }>).detail;
       setOpen(true);
       if (detail?.selected) {
-        const quoted = `Ask AI about: "${detail.selected.slice(0, 200)}"`;
+        const snippet = detail.selected.slice(0, 200);
+        // Embed parent page title when provided so the model has context
+        // (I-4304). Falls back to the original "Ask AI about" framing.
+        const quoted = detail.pageTitle
+          ? `On page "${detail.pageTitle}", help me with: "${snippet}"`
+          : `Ask AI about: "${snippet}"`;
         setInput(quoted);
       }
     }
