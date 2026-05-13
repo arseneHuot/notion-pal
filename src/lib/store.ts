@@ -1689,6 +1689,35 @@ export function resolveComment(id: string) {
   });
 }
 
+/**
+ * Restore a database AND any of its rows that were individually trashed
+ * (B-6105 / I-6105). Mirrors the inverse of the trash-rows-with-db edge
+ * case: rows can be trashed independently of their DB, and a plain
+ * updateDatabase({isInTrash:false}) used to leave them stuck in /app/trash
+ * even after the parent DB was restored.
+ */
+export function restoreDatabaseCascade(databaseId: string) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db) return s;
+    const now = Date.now();
+    const newRows: typeof s.rows = { ...s.rows };
+    for (const r of Object.values(s.rows)) {
+      if (r.databaseId === databaseId && r.isInTrash) {
+        newRows[r.id] = { ...r, isInTrash: false, updatedAt: now };
+      }
+    }
+    return {
+      ...s,
+      databases: {
+        ...s.databases,
+        [databaseId]: { ...db, isInTrash: false, trashedAt: null, updatedAt: now } as typeof db,
+      },
+      rows: newRows,
+    };
+  });
+}
+
 export function deleteComment(id: string) {
   setState((s) => {
     const newC = { ...s.comments };

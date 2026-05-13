@@ -1989,3 +1989,16 @@ Priority: high / medium / low.
 - See B-6503. A 1000-char (or 100k-char) submission goes through unchanged, including persisting in `rows[id].values`. While there's no functional break, the title is the de-facto identity field; an explicit max (say 500 chars) prevents pathological abuse from a public form and clears one class of accidentally-pasted novel-as-title incidents.
 - Fix: optional `maxLength` field on property schema, defaulted off; PublicFormField input renders `maxLength={prop.maxLength}` when set. UI of submit also shows count near limit.
 
+### I-6600 — Comments: orphans with missing parentId are silently dropped (low, open)
+- See B-6605. If a comment's `parentId` references a non-existent comment id (possible after a partial cascade-delete on an old client, or after injection / restore-from-export), the recursive renderer in PageComments.tsx skips it: it isn't a top-level (`!parentId`) entry and its parent isn't in the children-map. The store still holds it.
+- Risks: storage grows; an "Inbox" or "All comments" view that lists rows by author would surface a row the user can't navigate to.
+- Fix: in the comments effect, after building the `parent→children` map, treat any comment whose `parentId` doesn't resolve to an existing comment as top-level. Alternative: a one-off self-heal pass that re-parents (or hard-deletes) orphans on app boot, similar to the cascade-delete cleanup.
+
+### I-6601 — Color picker: trigger toggles only on `onMouseDown`, not `onClick` (low, open)
+- See B-6608 (verification friction). `ib-color` button uses `onMouseDown` (so the selection doesn't collapse when the popover opens). This is correct for real users but breaks automation that synthesizes `.click()` — the button doesn't open the picker. Could be made E2E-friendly by ALSO listening for `pointerdown`/`click` as a fallback, gated by a feature flag for tests.
+- Fix: add `onPointerDown` mirroring the mousedown handler. Or: expose a `data-testid="ib-color-popover-open"` on the open popover so tests can probe state without clicking the underlying mousedown handler.
+
+### I-6602 — Inline DB block: injected fixtures need an explicit `viewId`/render trigger (low, open)
+- See B-6610 (verification gap). Injecting a `database-inline` block + a fresh `databases[…]` entry via localStorage + a storage event renders the DB title row but NOT the `view-menu-{viewId}` toggle for the active view. The activeView resolver in InlineDatabase appears to wait for an initial click on `db-view-{viewId}` to set local state, leaving the toggle hidden on first render.
+- Fix: make InlineDatabase default `activeView` to `db.views[0]` synchronously on mount when no `viewId` prop is provided, so injected fixtures (and recovered crash states) immediately surface the full view chrome. Alternative: a `data-testid="db-inline-${dbId}"` wrapper that exposes the activeViewId via attribute, so tests can drive duplicate ×5 without re-clicking.
+

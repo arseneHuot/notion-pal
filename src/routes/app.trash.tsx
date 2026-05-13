@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { useStore, restorePageCascade, permanentlyDeletePage, updateDatabase, deleteDatabase } from "@/lib/store";
+import { useStore, restorePageCascade, permanentlyDeletePage, updateDatabase, deleteDatabase, restoreDatabaseCascade } from "@/lib/store";
 import { Trash2, RotateCcw, Database as DbIcon } from "lucide-react";
 import { toast } from "@/components/ui/Toast";
 
@@ -80,7 +80,7 @@ function TrashPage() {
                   <div className="text-xs text-muted-foreground">{d.rows?.length ?? 0} rows</div>
                 </div>
                 <button
-                  onClick={() => updateDatabase(d.id, { isInTrash: false, trashedAt: null } as Partial<typeof d>)}
+                  onClick={() => restoreDatabaseCascade(d.id)}
                   className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground flex items-center gap-1"
                   data-testid={`restore-db-${d.id}`}
                 >

@@ -6279,3 +6279,63 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6507 — Cmd+K query with quote chars — fixed (commit 6e5555b)
 - Fix: tokenizer strips `'`, `"`, and backticks from each token. `"OKRs"` now matches the OKRs page.
+
+
+## 2026-05-13 — Iteration B-6600 testing pass
+
+### B-6600 — deleteComment cascade re-verified on 4-level chain (passes)
+- Repro: injected `cmt6600_root → cmt6600_r1 → cmt6600_r2 → cmt6600_r3` (each parentId points at the previous). Clicked `comment-delete-cmt6600_root`.
+- Observed: `state.comments` has zero of the four IDs; DOM has zero rows. Single click, full closure removed — matches B-6500 fix.
+- Status: works as designed (BFS over parentId at store.ts:1699-1710 holds for depth 4).
+
+### B-6601 — Cmd+K quoted query for `'OKRs'` / `"OKRs"` / `` `OKRs` `` re-verified (passes)
+- Repro: typed each quoted form into `command-input`.
+- Observed: every form returns the same two OKR pages (`pg_mp2sao9lpgex28m4` "OKRs" plus `pg_4805_okrs_lower` "team okrs notes"), identical to the bare `OKRs` query.
+- Status: works as designed — tokenizer strips wrapping quotes per B-6507 fix.
+
+### B-6602 — Delete a leaf comment with siblings (passes)
+- Repro: injected `cmt6601_parent` with three children `cmt6601_leafA/B/C`. Clicked `comment-delete-cmt6601_leafB`.
+- Observed: only `cmt6601_leafB` removed from `state.comments`; parent + leafA + leafC unchanged in DOM and store. BFS bottoms out cleanly when the target has no descendants.
+- Status: works as designed.
+
+### B-6603 — Cmd+K quoted multi-word `"OKR Status"` (passes)
+- Repro: injected `pg_6602_okr_status` titled "OKR Status Dashboard". Typed `"OKR Status"` (with surrounding double quotes) into `command-input`.
+- Observed: exactly one match — `cmd-page-pg_6602_okr_status`. Tokenizer splits on whitespace AFTER stripping quotes, so it becomes two AND-tokens (`okr`, `status`), both substring-match the title.
+- Status: works as designed.
+
+### B-6604 — Edit a parent comment while children exist (passes)
+- Repro: with `cmt6601_parent + leafA + leafC` injected, clicked `comment-edit-cmt6601_parent`, replaced content with "PARENT EDITED CONTENT", saved.
+- Observed: parent content + editedAt updated. Children untouched (`leafA.content === "leaf-test cmt6601_leafA"`, `leafA.editedAt` undefined). Subtree references intact.
+- Status: works as designed.
+
+### B-6605 — Inject orphan + sub-tree comments without crash (passes)
+- Repro: injected `cmt6603_orphan_child` whose `parentId` references a non-existent ghost, plus a 3-level sub-tree (`cmt6603_subroot → sub_r1 → sub_r2`).
+- Observed: sub-tree renders fully (all 3 rows visible). Orphan with ghost parent is silently dropped from the UI (never reaches a renderable position). No console errors, no error boundary trip.
+- Status: works as designed — the renderer keys off `parentId === null` for top-level lookup, then walks the explicit child map.
+
+### B-6606 — AI panel: idle then send leaves textarea clean (passes)
+- Repro: opened AI panel, waited ~15s idle, typed `Hello after long idle`, clicked `ai-send`.
+- Observed: textarea cleared, send button stayed enabled, busy badge cycled cleanly (briefly absent because the mock backend returned instantly). Follow-up message also went through with no stale state.
+- Status: works as designed — idle does not corrupt input state.
+
+### B-6607 — Sub-page export with mix of trashed/active children (passes)
+- Repro: injected `pg_6604_parent` with three sub-page blocks pointing at `pg_6604_active` (active, has 1 text block), `pg_6604_trashed` (trashed), `pg_6604_active2` (active). Dispatched `export-page-markdown` with `noDownload:true`.
+- Observed: output =
+  `# Export Parent\n\n## ✅ Active Child One\n\nHello from active child\n\n🗑️ Trashed Child <!-- (deleted) -->\n\n## 🎯 Active Child Two\n\n`.
+  Trashed sub-page renders as `icon title <!-- (deleted) -->` per B-5910 fix; no broken `/app/p/<id>` link leaked into the export.
+- Status: works as designed.
+
+### B-6608 — Color picker unwrap on injected `data-color` span (passes)
+- Repro: injected `<span data-color="1" style="color:rgb(220,38,38)">COLORED CHUNK</span>` directly into a text block's stored content. Selected the span contents, opened `ib-color` (via mousedown — the picker toggles on `onMouseDown` not `onClick`), clicked `ib-color-default`.
+- Observed: editable `innerHTML` and stored `content` both equal `"before COLORED CHUNK after"`. Zero `span[data-color]` survivors. The default branch unwraps spans that were never created by the toolbar itself.
+- Status: works as designed.
+
+### B-6609 — Cmd+K activeIndex resets to 0 on query refinement (passes)
+- Repro: opened palette, typed `OKR` → first active row was `cmd-page-pg_4805_okrs_lower` (top hit). Pressed ArrowDown ×2 to move focus. Typed one more char to make `OKRs`.
+- Observed: active row resets to `cmd-page-pg_mp2sao9lpgex28m4` (new top hit) — matches `useEffect(() => setActiveIndex(0), [query])` at CommandPalette.tsx:316-318. No stale highlight on a now-out-of-range index.
+- Status: works as designed.
+
+### B-6610 — View duplicate ×5 naming progression (analytical pass, partial)
+- Static check of `duplicateView` (store.ts:1611-1642): given a single source view named "Initial", calling it 5 times yields names "Initial (Copy)", "Initial (Copy 2)", "Initial (Copy 3)", "Initial (Copy 4)", "Initial (Copy 5)" — the `while (existingNames.has(candidate)) candidate = ... (Copy ${n++})` loop is correct.
+- Live verification not completed: the inline-db block I injected (`blk_6606_inlinedb` → fresh `db_6606_dup_test`) did not render its `view-menu-{viewId}` toggle even after reload+scroll, so I couldn't click `view-duplicate-` five times in-DOM. Logic is verified by inspection only.
+- Status: open (verification gap, not a bug). See I-6600 for an injection-friendly fixture.
