@@ -6759,3 +6759,90 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7603 / I-7603 — public form date sanity at submit + title required marker — fixed — P2
 - `submit()` rejects any date field that doesn't match `^\d{4}-\d{2}-\d{2}$` (or that `new Date()` can't parse) before writing to storage. Title field labels now carry a red asterisk (`aria-label="required"`). Verified live: `/form/db_form_test/v_form` shows `Title*` with the red marker.
+
+
+## 2026-05-13 — B-7800 mail/calendar/inbox/AI sweep
+
+### B-7800 — Mail compose: rapid clicks on Send create duplicate emails — P2 — open
+- Repro: open `/app/mail` → Compose. Set `compose-to=spam@test.com`, fill subject + body. Click `compose-send` 5x in rapid succession (e.g. via JS `for(let i=0;i<5;i++) send.click()`).
+- Result: `state.mails` ends with 5 identical entries (`Rapid spam` in screenshot). Each carries a unique id but identical to/subject/body/receivedAt within ~1ms.
+- Root cause: `app.mail.tsx:155` button's `onClick` calls `upsertMail()` then `onClose()` (sets `composing=null`). React batches the state update so the button DOM doesn't unmount until next paint, while click events queued in the same tick all fire. `disabled={!canSend}` doesn't help because nothing inside the click handler invalidates `canSend`.
+- Severity P2: real users won't click 5x but they will double-tap; the underlying class of bug is present on every Send / Create / Submit button in the app (see also B-7801 templates, B-7802 AI).
+- Fix sketch: gate Send with a local `sending` state set true inside the onClick before `upsertMail`, or wrap the action in `useTransition` and disable while pending. Same fix template applies to other rapid-fire buttons.
+
+### B-7801 — Templates: rapid clicks create N orphan duplicate pages — P2 — open
+- Repro: `/app/templates`. Click `template-meeting-notes` 3x in rapid succession. Sidebar Private section gains 3 separate "Meeting notes" pages; URL only lands on the LAST one created, so 2 are orphaned in the sidebar without the user noticing they exist.
+- Severity P2: easy to trigger by accident (the template card is large and easily double-clickable). User has to manually trash the extras.
+- Fix sketch: in the template card onClick, gate the action with a `creating` flag (set + return early if true). Or debounce the create call. The template-runs-page-creator should also unset the flag in a `finally`.
+
+### B-7802 — AI panel: rapid Send creates duplicate user messages + spends N× credits — P2 — open
+- Repro: open AI panel via `sidebar-ai`. Type `hello`. Click `ai-send` 3x rapidly. Result: 3 user messages "hello" + 3 assistant replies. AI credit counter drops by 3 (e.g. 955 → 952). Tested live.
+- Severity P2: directly costs the user money/credits. The disabled state on the send button doesn't pay attention to "request already in flight".
+- Fix sketch: AI panel should mark `sending=true` until the streaming response completes, disabling send + enter-to-submit + new-thread during the in-flight window. Credit charge already gated on success per the I-7700 commit; this just prevents the storm.
+
+### B-7803 — Inbox + PageComments render BLANK content for comments with malformed/legacy field — P2 — open
+- Repro: comment objects with `body` instead of `content` (the legacy / imported-from-Notion field name) — e.g. `c_v7504_top {id:"c_v7504_top", body:"Top-level c", pageId:"pg_v7504_comments", parentId:null, authorId:"u", createdAt:...}`.
+- Result:
+  - Inbox row (`app.inbox.tsx:42`): shows page-title + timestamp + "Mark as read" but the body div renders `{c.content}` → empty string. User sees `Comments host v7504` with NO comment text below it.
+  - PageComments panel (`PageComments.tsx:393` and the editable path at line 205): shows author "Someone" + timestamp + Resolve / Reply / Edit / Delete row, but content area is empty.
+- Severity P2: silent data loss in both surfaces. Inbox in particular is misleading because the user can't tell what notification is asking for action.
+- Fix sketch: defensive read — `c.content ?? c.body ?? ""` — at both sites. OR (better) `normalizeState` should map `comment.body → comment.content` on load (mirrors the existing self-healing pattern for dangling parentIds). The latter heals it durably.
+
+### B-7804 — Mail detail pane has no Reply / Forward / Archive / Delete / Star / To-field display — P2 — open
+- Repro: open any mail in `/app/mail` and inspect the detail pane. Source: `app.mail.tsx:104-110`. Only renders From, Subject, Date, Body. Missing: `to`, `cc`, `bcc`, `labels` (other than the inbox row badge), `starred` toggle, archive, trash, reply, forward. The mail schema has these fields (`archived`, `starred`, `trash`, `labels`, `to`) but UI doesn't surface them.
+- Concrete user pain: 6 spam-duplicate emails in inbox → no way to delete them, archive them, or even see who they were addressed to. Compose creates only `Sent` items but they show in the Inbox folder.
+- Severity P2: mail surface is effectively read-only for actions, which makes it pointless beyond a glorified note-list.
+- Fix sketch: add a toolbar above the detail body with `mail-reply`, `mail-forward`, `mail-archive`, `mail-trash`, `mail-star` buttons wired to `upsertMail({ ...current, archived:true })` etc. Also show "To: …" in the meta block.
+
+### B-7805 — Mail "Inbox" view mixes sent + received; no folder navigation — P2 — open
+- Repro: send any mail. The sent item appears in the LEFT pane below the header literally titled "Inbox" (`app.mail.tsx:62`). It carries a `sent` label badge but is sorted alongside actual inbox items.
+- The list filter is just `!m.trash && !m.archived` (line 34) — no folder concept at all. The user can't switch to Sent / Drafts / Spam.
+- Severity P2: violates basic mail-app mental model. Compose+send is the most common flow and produces an immediately confusing result.
+- Fix sketch: add a left-rail folder list (`Inbox`, `Sent`, `Starred`, `Archived`, `Trash`) and filter `list` by the active folder. Inbox = `!labels.includes("sent") && !archived && !trash`. Sent = `labels.includes("sent")`. Defaults cleanly without schema changes.
+
+### B-7806 — Personal calendar event: no delete / edit / move affordance — P2 — open
+- Repro: `/app/calendar`. Click `day-add-2026-05-15` → create event "Foo" (event saved with `id: evt_*`, allDay:true). Click the resulting `cal-event-evt_*` chip → bottom detail panel shows date + title only. No buttons, no menu.
+- Right-click on the event chip produces NO context menu. There is no way to delete or rename a personal (non-DB-row) calendar event short of editing localStorage by hand.
+- Severity P2: the user can't fix typos or remove mistakenly-created events. Combined with the "title required but no length cap" pattern (next entry), users can pile up garbage events.
+- Fix sketch: the bottom detail card should expose Edit + Delete buttons, calling `updateCalendarEvent` and `deleteCalendarEvent` (the latter already exists in the store for DB-row events; needs an analog for `calendarEvents`). Bonus: add Edit (title + dates) and Move (drag to another day).
+
+### B-7807 — Personal calendar event has no length cap on title — P3 — open
+- Repro: `day-add-2026-05-15` → set `cal-compose-title` value to `"A".repeat(2000) + " 日本語🎉 ‮ reversed"` → click `cal-compose-create`. Event persists with a 2017-char title. UI truncates on the chip (good) but the bottom detail panel renders the full 2000-char string and the title is unbounded in storage.
+- Combined with B-7806 (can't delete), a single misclick can permanently bloat the workspace.
+- Severity P3: minor on its own, but pairs with B-7806 to create a no-recovery scenario.
+- Fix sketch: clamp `title.trim().slice(0, 200)` in `addCalendarEvent` (or at the form-input level via `maxLength="200"`).
+
+### B-7808 — No "Empty trash" affordance; users must delete trashed pages one-by-one — P2 — open
+- Repro: workspace currently has dozens of `BulkC*` trashed pages from prior test runs. `/app/trash` lists each row with individual Restore + Delete buttons. No bulk-select, no "Empty trash" / "Delete all" header button.
+- Severity P2: a real user accumulating trash over months has no scalable way to clear it. UX expectation for any trash bin.
+- Fix sketch: header bar in `app.trash.tsx` with `trash-empty-all` button (asks for confirm), `trash-select-all` checkbox, and a multi-select bulk-action toolbar. Reuses existing `deletePagePermanently` in a loop.
+
+### B-7809 — AI answer cites pages it claims aren't relevant — P3 — open
+- Repro: open AI panel. Ask "What is the capital of France? Answer in one short sentence." Response: "The capital of France is **Paris**, which is **not mentioned in Welcome**." Then lists `Sources: Welcome, Getting Started, Meeting Notes, Roadmap Q3, Child Page`.
+- The model explicitly disclaims that the answer is from workspace pages, yet the UI still attaches all 5 candidate pages as "Sources" chips. Misleading provenance.
+- Severity P3: erodes trust in citations. A user clicking "Welcome" expects to find Paris content; instead the LLM already told them it's NOT there.
+- Fix sketch: only attach sources the model actually cited (e.g. via structured-output citation IDs in the Gemini prompt). Or hide the Sources block entirely when the answer admits "not mentioned". Min fix: when keyword pre-filter returns sources but the model output contains a "not mentioned" / "no relevant" hedge, suppress the chips and append a "(no workspace match)" note.
+
+
+## 2026-05-13 — B-7800 batch fixes
+
+### B-7800 — Mail Send rapid-click duplicates — fixed — P2
+- ComposeMail now uses a synchronous `sendingRef` to gate the click handler so 3+ same-tick clicks all observe the in-flight flag. State-based `disabled` couldn't help because React doesn't commit until next paint. Verified live: 5 rapid clicks on `compose-send` → 1 mail persisted (was 5).
+
+### B-7801 — Templates rapid-click duplicate pages — fixed — P2
+- `applyTemplate` gated by `creatingRef.current`. Critical detail: reset deferred to `setTimeout(…, 1000)` because the synchronous try/finally pattern reset the flag before the next same-tick click could read it. Verified live: 5 rapid clicks on `template-reading-list` → exactly 1 "Reading list" page created (was 5).
+
+### B-7802 — AI rapid-Send burned 3× credits — fixed — P2
+- `AIChat` adds `busyRef` (sync mirror of the existing `busy` state) so the early-return guard in `send()` fires synchronously. Verified live: 5 rapid clicks → 1 user message + 1 assistant reply (was 5 + 5). Credits no longer hemorrhage from a double-tap.
+
+### B-7803 — Comment legacy `body` field rendered blank in Inbox/PageComments — fixed — P2
+- `normalizeState` heals `comment.body` → `comment.content` on every read when `content` is missing. Imports from Notion's API and dev fixtures now display correctly without a manual data migration. Verified: comment with `body:"old field name"` and no `content` → after StorageEvent, on-disk `content === "old field name"` (durable rewrite).
+
+### B-7807 — Calendar event title length cap — fixed — P3
+- `quickCreateEvent` clamps `title.trim().slice(0, 200)` before persist; compose input gains `maxLength={200}` to also block keyboard typing past the cap. Verified: pasted 2000-char title → stored title length 200.
+
+### B-7808 — Empty-trash bulk action — fixed — P2
+- `/app/trash` header now has an `trash-empty-all` button that confirms-then-purges every trashed page + database in one pass (snapshot IDs before the loop so mid-iteration state mutations don't skip entries). Verified: 24 trashed items → 0 in one click, `trash-empty` empty-state shows.
+
+### B-7809 — AI sources chips shown even when model says "not mentioned" — fixed — P3
+- After receiving the Gemini response, the client tests the answer against a hedging regex (`not mentioned in`, `no relevant`, `outside the workspace`, etc.) and zeroes out the sources list before render. Stops the misleading "Sources: Welcome" chip when the model already disclaimed Welcome doesn't mention the answer.

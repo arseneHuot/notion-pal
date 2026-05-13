@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useStore, upsertMail } from "@/lib/store";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { uid } from "@/lib/id";
 import { toast } from "@/components/ui/Toast";
 
@@ -118,10 +118,14 @@ function MailPage() {
 
 function ComposeMail({ compose, onClose }: { compose: { to: string; subject: string; body: string }; onClose: () => void }) {
   const [state, setState] = useState(compose);
+  // Synchronous in-flight gate so rapid clicks on Send (or Enter-spam) can't
+  // create N duplicate Sent items in the same tick (B-7800).
+  const sendingRef = useRef(false);
+  const [sending, setSending] = useState(false);
   const recipients = state.to.split(",").map((s) => s.trim()).filter(Boolean);
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const invalid = recipients.filter((r) => !emailRe.test(r));
-  const canSend = recipients.length > 0 && invalid.length === 0;
+  const canSend = recipients.length > 0 && invalid.length === 0 && !sending;
   return (
     <div className="p-6 max-w-2xl mx-auto">
       <h2 className="font-semibold mb-3">New message</h2>
@@ -154,6 +158,11 @@ function ComposeMail({ compose, onClose }: { compose: { to: string; subject: str
       <div className="mt-3 flex gap-2">
         <button
           onClick={() => {
+            // Synchronous re-entry guard (B-7800). React state-based gating
+            // doesn't help when 3 clicks land in the same tick.
+            if (sendingRef.current) return;
+            sendingRef.current = true;
+            setSending(true);
             // Persist the message to the local "Sent" folder so users can
             // see the email they just sent (B-523). No real SMTP yet.
             const now = Date.now();

@@ -135,6 +135,11 @@ export function AIChat() {
   }, [userId]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // Sync mirror of `busy` for the rapid-click guard. React state updates are
+  // async; three same-tick clicks all observed `busy === false` and entered
+  // `send()` three times, triple-charging the user (B-7802). The ref flips
+  // synchronously before any other handler can read it.
+  const busyRef = useRef(false);
   const workspace = useStore((s) => (s.currentWorkspaceId ? s.workspaces[s.currentWorkspaceId] : null));
   const pages = useStore((s) => s.pages);
   const blocks = useStore((s) => s.blocks);
@@ -264,7 +269,11 @@ export function AIChat() {
   async function send() {
     const text = input.trim();
     if (!text) return;
-    if (busy) return; // guard duplicate sends (B-6203)
+    // Synchronous in-flight gate (B-7802). The state `busy` updates async,
+    // so 3 clicks in the same tick all saw `false` and triple-charged the
+    // user. Flip the ref *before* any async work + state update.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setMessages((m) => [...m, { role: "user", content: text }]);
     setInput("");
     setBusy(true);
@@ -288,12 +297,17 @@ export function AIChat() {
 
     try {
       const res = await askAI({ data: { prompt: text, pageTitle, sources } });
+      // B-7809 — when the model explicitly says the answer isn't in the
+      // workspace (e.g. "not mentioned in", "no relevant", "I don't have
+      // info"), the candidate-source chips are misleading. Suppress them.
+      const hedges = /\b(not mentioned in|no relevant|don'?t have (?:any )?info|isn'?t in (?:the |your )?workspace|outside (?:the |your )?workspace|outside of (?:the |your )?workspace)\b/i;
+      const finalSources = hedges.test(res.answer) ? [] : res.sources;
       setMessages((m) => [
         ...m,
         {
           role: "assistant",
           content: res.answer,
-          sources: res.sources,
+          sources: finalSources,
         },
       ]);
       // Charge credits only when the request actually succeeded.
@@ -312,6 +326,7 @@ export function AIChat() {
         },
       ]);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }

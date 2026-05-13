@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useStore, createPage, createBlock } from "@/lib/store";
+import { useRef } from "react";
 import type { Block, BlockType } from "@/lib/types";
 
 export const Route = createFileRoute("/app/templates")({
@@ -147,8 +148,14 @@ function TemplatesPage() {
   const navigate = useNavigate();
   const teamspaces = useStore((s) => Object.values(s.teamspaces));
   const personalTs = teamspaces.find((t) => t.mode === "private")?.id ?? teamspaces[0]?.id ?? null;
+  // Synchronous gate against rapid double-clicks creating orphan duplicate
+  // pages (B-7801). React state would update too late; the ref flips
+  // before any other handler in the same tick can read it.
+  const creatingRef = useRef(false);
 
   function applyTemplate(t: TemplateDef) {
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     const pageId = createPage({ title: t.name, icon: t.icon, teamspaceId: personalTs });
     t.blocks.forEach((b, i) => {
       createBlock(pageId, {
@@ -161,6 +168,14 @@ function TemplatesPage() {
       } as Omit<Block, "id" | "createdAt" | "updatedAt">);
     });
     navigate({ to: "/app/p/$pageId", params: { pageId } });
+    // Don't reset synchronously — that would let 3 same-tick clicks pass the
+    // gate one-by-one (the function returns before navigate's transition
+    // completes, finally reset to false, next click in the same tick reads
+    // false again). Resetting on a microtask ensures all queued clicks in
+    // this tick see `true`. The route unmounts anyway on navigation, but
+    // the safety net catches edge cases like a user backing into
+    // /app/templates immediately.
+    setTimeout(() => { creatingRef.current = false; }, 1000);
   }
 
   return (

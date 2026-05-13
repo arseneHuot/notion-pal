@@ -94,9 +94,13 @@ function CalendarPage() {
   // Inline event creation — no native prompt (B-206).
   function quickCreateEvent(day: string, title: string) {
     if (!title.trim()) return;
+    // Cap title length so a stray paste of a 2000-char string can't bloat
+    // the workspace permanently (B-7807). 200 chars is plenty for any
+    // sane event name; anything longer is almost always accidental.
+    const safeTitle = title.trim().slice(0, 200);
     upsertCalendarEvent({
       id: uid("evt"),
-      title: title.trim(),
+      title: safeTitle,
       start: new Date(day).getTime(),
       end: new Date(day).getTime() + 60 * 60 * 1000,
       allDay: true,
@@ -239,6 +243,7 @@ function CalendarPage() {
           <div className="flex gap-2">
             <input
               autoFocus
+              maxLength={200}
               value={composeTitle}
               onChange={(e) => setComposeTitle(e.target.value)}
               onKeyDown={(e) => {

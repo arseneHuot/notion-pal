@@ -139,13 +139,19 @@ function normalizeState(parsed: AppState): AppState {
     const comments = parsed.comments;
     for (const [cid, c] of Object.entries(comments)) {
       if (!c) continue;
+      const patch: Partial<typeof c> = {};
       // Rebind dangling comment.parentId → null so the orphan surfaces
       // as a top-level comment instead of vanishing (B-7402 / B-7502 /
       // I-7503). PageComments already treats missing-parent as top-level
       // since commit 2e32202; this is the durable cleanup.
-      if (c.parentId && !comments[c.parentId]) {
-        parsed.comments[cid] = { ...c, parentId: null };
-      }
+      if (c.parentId && !comments[c.parentId]) patch.parentId = null;
+      // Heal legacy comment shape where `body` was the field name before
+      // the schema settled on `content` (B-7803). Imports from Notion's
+      // API and a couple of dev fixtures still carry `body`; without
+      // this the Inbox row and PageComments panel render an empty bubble.
+      const legacy = c as typeof c & { body?: string };
+      if (!c.content && typeof legacy.body === "string") patch.content = legacy.body;
+      if (Object.keys(patch).length) parsed.comments[cid] = { ...c, ...patch };
     }
   }
   return parsed;

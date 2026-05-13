@@ -21,9 +21,38 @@ function TrashPage() {
   );
   const empty = trashedPages.length === 0 && trashedDbs.length === 0;
 
+  function emptyTrash() {
+    // B-7808 — bulk-purge everything in the trash bin at once. Confirm
+    // because this is destructive and irreversible. Loops through both
+    // page and database paths so cascade-deletes stay consistent.
+    const count = trashedPages.length + trashedDbs.length;
+    if (count === 0) return;
+    const ok = window.confirm(`Permanently delete ${count} trashed item${count === 1 ? "" : "s"}? This cannot be undone.`);
+    if (!ok) return;
+    // Snapshot IDs before the loop — the underlying state mutates as we
+    // delete, so reading `trashedPages` mid-loop could skip entries.
+    const pageIds = trashedPages.map((p) => p.id);
+    const dbIds = trashedDbs.map((d) => d.id);
+    for (const id of pageIds) permanentlyDeletePage(id);
+    for (const id of dbIds) deleteDatabase(id);
+    toast(`Deleted ${count} item${count === 1 ? "" : "s"}.`, "success");
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-8 py-12">
-      <h1 className="text-3xl font-bold mb-6">Trash</h1>
+      <div className="flex items-center mb-6 gap-3">
+        <h1 className="text-3xl font-bold">Trash</h1>
+        {!empty && (
+          <button
+            onClick={emptyTrash}
+            className="ml-auto text-xs px-3 py-1.5 rounded bg-destructive text-white flex items-center gap-1"
+            data-testid="trash-empty-all"
+            title={`Delete all ${trashedPages.length + trashedDbs.length} trashed items`}
+          >
+            <Trash2 className="size-3" /> Empty trash ({trashedPages.length + trashedDbs.length})
+          </button>
+        )}
+      </div>
       {empty && (
         <div className="text-sm text-muted-foreground" data-testid="trash-empty">
           Trash is empty.

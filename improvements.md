@@ -2281,3 +2281,42 @@ Priority: high / medium / low.
 
 ### I-7505 — DB virtualization at >1k rows — still open — P2
 - Deferred (real users don't hit this yet). When they do: react-window or tanstack-virtual on TableView's row mapper. Cost cliff was measured at ~1.5 s for 1000 rows.
+
+
+## 2026-05-13 — I-7800 sweep (mail/calendar/AI/trash)
+
+### I-7800 — Mail folders sidebar (Inbox / Sent / Starred / Archived / Trash) — P2 — open
+- Companion to B-7805. The mail surface already stores `archived`, `starred`, `trash`, and a `labels` array including `"sent"`. UI should expose a left-rail folder list that filters the list view by folder. Inbox = `!sent-label && !archived && !trash`. Sent = `labels.includes("sent")`. Starred = `starred`. Archived = `archived`. Trash = `trash`.
+- This unlocks the natural fix path for B-7805 + B-7804 (per-folder bulk actions in the toolbar).
+
+### I-7801 — Mail message toolbar: Reply / Forward / Archive / Trash / Star + show To — P2 — open
+- Companion to B-7804. Add a toolbar at the top of the detail pane in `app.mail.tsx`. Star toggles `starred`. Archive toggles `archived` (and pulls out of inbox). Trash toggles `trash`. Reply opens a Compose with prefilled `to=[current.from]`, `subject="Re: <current.subject>"`, `body="\n\n--- On <date>, <from> wrote: ---\n<quoted>"`. Forward similar but blank `to`.
+- Also fix the meta block to show `To: <recipients>` and any non-`sent` labels alongside the existing From + date.
+
+### I-7802 — Personal calendar event edit / delete actions — P2 — open
+- Companion to B-7806. The bottom detail panel (CalendarView event-click handler) needs: `cal-event-edit` (opens title field + date pickers, calls `updateCalendarEvent`) and `cal-event-delete` (calls `deleteCalendarEvent`). DB-row events already round-trip via the database surface; non-DB events have no surface at all.
+- Stretch: dragging the chip onto another day should call `moveCalendarEvent` (already exists per B-7404 fix); verify that personal events route through the same handler.
+
+### I-7803 — Empty trash + bulk-select toolbar — P2 — open
+- Companion to B-7808. Header bar with `Empty all`, a select-all checkbox, and "Selected N · Restore N · Delete N" actions. Add `trash-empty-all`, `trash-select-{id}`, `trash-bulk-restore`, `trash-bulk-delete` testids for E2E.
+- Confirm-modal copy: "Permanently delete N pages? This cannot be undone." Wire to existing `deletePagePermanently` in a `for` loop.
+
+### I-7804 — Defensive comment-body field normalisation — P3 — open
+- Companion to B-7803. The Comment schema field is `content` but imports / legacy data may use `body`. Either:
+  - (a) `normalizeState` rebinds `body → content` on load (self-healing on disk, like the dangling-parentId fix in I-7503), or
+  - (b) Inbox + PageComments render `c.content ?? c.body ?? ""`.
+- (a) is the more durable move — fixes every future surface for free.
+
+### I-7805 — Mail compose: show "Sending…" + disable Send while in-flight — P3 — open
+- Companion to B-7800 / B-7801 / B-7802. The whole app needs a `useTransition`-style "submitting" gate on every primary CTA: Send mail, Create event, Create from template, AI send, Form submit, etc. A small `useSubmitting()` hook in `src/lib/use-submitting.ts` that returns `[pending, run]` would centralize this. Each Send button uses `<button disabled={pending} onClick={() => run(fn)}>{pending ? "Sending…" : "Send"}</button>`.
+
+### I-7806 — AI panel: show "Sources" only when answer actually used them — P3 — open
+- Companion to B-7809. The AI panel currently attaches the keyword-prefilter top-N pages as "Sources" regardless of whether the LLM used them. Either:
+  - Switch Gemini call to a structured-output schema with `{ answer, sourceIds: string[] }` and only show the chips the model returned, or
+  - Run a quick post-filter: if `answer` contains hedges like "not mentioned", "no relevant pages", "I don't have", suppress the chips and append `"(no workspace context used)"`.
+
+### I-7807 — Mail "Load sample emails" hint should remain even after mails exist — P3 — open
+- Observation: `mail-seed` button only renders when `list.length === 0` (line 67-72). Once any mail exists — including a single sent message — the affordance disappears, even though "load demo data" is useful for showcase / fresh QA. Move it into a "Help" menu in the toolbar or surface it under Settings → Mail demo.
+
+### I-7808 — Calendar: keyboard navigation (←/→ days, ↑/↓ weeks, Enter to add) — P3 — open
+- Calendar grid currently has `cal-prev` / `cal-next` for month and `day-add-*` for new events, but no keyboard shortcuts. Adding focus + arrow keys would meaningfully help power users and a11y compliance.
