@@ -5,7 +5,7 @@ import {
   PanelLeftClose, Calendar as CalIcon, Mail as MailIcon, FileBox, MoreHorizontal,
   Inbox, Sparkles, ChevronsUpDown, Home, Bell, Database as DatabaseIcon,
 } from "lucide-react";
-import { useStore, createPage, togglePageExpanded, setUI, createTeamspace, deletePage, toggleFavorite, duplicatePage } from "@/lib/store";
+import { useStore, createPage, togglePageExpanded, setUI, createTeamspace, deletePage, toggleFavorite, duplicatePage, reorderSiblingPages } from "@/lib/store";
 import { useAuth } from "@/hooks/use-auth";
 import type { Page, Teamspace } from "@/lib/types";
 
@@ -145,7 +145,12 @@ function SectionHeader({ label, expanded, onToggle }: { label: string; expanded:
 function TeamspaceSection({ teamspace, expanded, onToggle, onNewPage }: { teamspace: Teamspace; expanded: boolean; onToggle: () => void; onNewPage: () => void }) {
   const pages = useStore((s) => s.pages);
   const databases = useStore((s) => s.databases);
-  const rootPages = useMemo(() => Object.values(pages).filter((p) => p.teamspaceId === teamspace.id && !p.parentId && !p.isInTrash).sort((a, b) => a.createdAt - b.createdAt), [pages, teamspace.id]);
+  const rootPages = useMemo(
+    () => Object.values(pages)
+      .filter((p) => p.teamspaceId === teamspace.id && !p.parentId && !p.isInTrash)
+      .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt)),
+    [pages, teamspace.id],
+  );
   const rootDbs = useMemo(() => Object.values(databases).filter((d) => !d.isInline && !d.isInTrash && !d.parentId), [databases]);
 
   return (
@@ -189,7 +194,9 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const children = useMemo(
-    () => Object.values(allPages).filter((p) => p.parentId === page.id && !p.isInTrash),
+    () => Object.values(allPages)
+      .filter((p) => p.parentId === page.id && !p.isInTrash)
+      .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt)),
     [allPages, page.id],
   );
 
@@ -198,6 +205,31 @@ function PageItem({ page, depth }: { page: Page; depth: number }) {
       <div
         className={`group flex items-center pr-1 rounded text-sm ${active ? "bg-sidebar-accent" : "hover:bg-sidebar-accent"}`}
         style={{ paddingLeft: depth * 12 + 6 }}
+        draggable
+        data-page-id={page.id}
+        data-testid={`sidebar-page-${page.id}`}
+        onDragStart={(e) => {
+          e.stopPropagation();
+          e.dataTransfer.setData("application/x-sidebar-page-id", page.id);
+          e.dataTransfer.effectAllowed = "move";
+        }}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("application/x-sidebar-page-id")) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+          }
+        }}
+        onDrop={(e) => {
+          const sourceId = e.dataTransfer.getData("application/x-sidebar-page-id");
+          if (!sourceId || sourceId === page.id) return;
+          e.preventDefault();
+          e.stopPropagation();
+          // Only same-parent reorder for now (cross-parent would need movePage).
+          const sourcePage = allPages[sourceId];
+          if (!sourcePage) return;
+          if (sourcePage.parentId !== page.parentId || sourcePage.teamspaceId !== page.teamspaceId) return;
+          reorderSiblingPages(sourceId, page.id);
+        }}
       >
         <button
           className="p-0.5 rounded hover:bg-sidebar-accent/60"

@@ -4813,3 +4813,18 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-3711 / B-3013 / B-2909 / B-2805 — DB table row drag-reorder — fixed (commit c11ffbb) — closes I-3703
 - Fix: TableView `<tr>` is now `draggable` with `dragstart/dragover/drop` handlers using a `application/x-row-id` DataTransfer payload. New store action `reorderDatabaseRows(databaseId, sourceRowId, targetRowId)` moves the source so it lands immediately before the target (or appends if null target). A small `row-handle-<id>` ⋮⋮ hint appears on hover with `cursor-grab`. Each row exposes `data-row-id` + `row-<id>` testid.
 - Verified live: synthetic drag of row[0] onto row[1] on a 7-row table reorders so source sits immediately before target. Persists to localStorage.
+
+### B-4006 — Public form full-payload end-to-end submit verified (acceptance)
+- On QA Form DB `db_mp3lhvrxwl40mnbf`, navigated to `/form/<db>/view_qa_form_mp3ljwhb`. Filled title "B-4006 End-to-End", status "Done", date "2026-05-13", number 77, text "qa-end-to-end". Clicked submit. New row `row_mp3nmhann55g` saved with all 5 values including `prop_qa_num:77`, status optionId for "Done", and date. Visited `/app/db/<id>` table view — cells render exactly with `cell-title`, `cell-select` (text "Done"), `cell-date`, `cell-number`, `cell-text` matching input.
+
+### B-4007 — Public form Enter-to-submit via wrapping <form> + requestSubmit (acceptance)
+- Filled title "B-4007 Enter submit", focused title, called `titleInput.closest('form').requestSubmit()`. Row count went 3 → 4, new row `row_mp3nn0l15qvw` persisted with the title, success page showed "Thanks for submitting!". Per HTML spec this is exactly what the browser fires for Enter-in-single-line-input-inside-form-with-one-submit. Closes B-3817 / I-3800.
+
+### B-4008 — Comment delete cascades to replies (acceptance)
+- On `pg_mp2pz5zwikifg7r3`: posted parent `cmt_mp3nn9ubprelik1y`, then 2 replies via `reply-input-<parent>` + `reply-submit-<parent>`. Store had 7 comments and 2 replies with `parentId === <parent>`. Clicked `comment-delete-<parent>`. Result: parent + both replies removed from store (`data.comments[<id>]` undefined for all three) and DOM (`comment-row-<id>` gone). Total dropped from 7 → 4. Cascade works as expected.
+
+### B-4009 — Trash + restore cascades on 3-deep tree (acceptance)
+- Seeded A→B→C chain. Trashed A via `page-opt-trash`. All three pages flipped `isInTrash:true` and got `trashedAt` stamp. Navigated to `/app/trash`, clicked `restore-<A>`. All three flipped back to `isInTrash:false`. Hierarchical trash/restore both cascade correctly. Note: schema uses `isInTrash` (not `trashed` flag observed in earlier code).
+
+### B-4010 — Calendar view of DB renders no event chips / no drag target (P1, open — re-confirms B-2907)
+- Navigated to `/app/db/db_mp3lhvrxwl40mnbf/view_mp3lhvrxrj0lp5pi` (calendar view). No `[draggable=true]` elements, no `[data-row-id]`, no grid-cols-7 calendar grid in the DOM. The calendar view renders an empty container without month grid or event chips — there's nothing to drag-reschedule. B-2907 remains open: calendar drag-reschedule cannot be tested because the calendar UI itself is missing. Severity P1: feature gap on a 1st-class view type.

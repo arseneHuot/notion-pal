@@ -250,6 +250,9 @@ export interface Page {
   // permissions overrides (default inherits from parent)
   permissions: PermissionRule[];
   history: PageVersion[];
+  // Optional sidebar drag-reorder index. When unset, fall back to createdAt
+  // ordering (legacy + new pages auto-sort by creation time).
+  sortOrder?: number;
 }
 
 export interface PageVersion {

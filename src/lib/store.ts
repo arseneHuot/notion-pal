@@ -1185,6 +1185,38 @@ export function updateRow(id: string, patch: Partial<DatabaseRow> & { values?: R
 }
 
 /**
+ * Reorder sibling pages in the sidebar by setting `sortOrder` on the source
+ * to land immediately before the target page. Same-parent reorder only —
+ * cross-teamspace moves still happen via `movePage`. Pages without a
+ * sortOrder fall back to `createdAt` (legacy ordering). B-2908 / B-3712 /
+ * B-3616.
+ */
+export function reorderSiblingPages(sourcePageId: string, targetPageId: string | null) {
+  setState((s) => {
+    const src = s.pages[sourcePageId];
+    if (!src) return s;
+    const siblings = Object.values(s.pages)
+      .filter((p) => p.parentId === src.parentId && p.teamspaceId === src.teamspaceId && !p.isInTrash && p.id !== sourcePageId)
+      .sort((a, b) => (a.sortOrder ?? a.createdAt) - (b.sortOrder ?? b.createdAt));
+    // Find the target's index; if no target, append at end.
+    const tgtIdx = targetPageId ? siblings.findIndex((p) => p.id === targetPageId) : siblings.length;
+    if (tgtIdx === -1) return s;
+    // Pick a sortOrder that lands the source just before the target.
+    // Use the midpoint between the predecessor's order and the target's
+    // order so we don't collide. If there's no predecessor, subtract 1ms
+    // from the target.
+    const ord = (p: typeof src) => p.sortOrder ?? p.createdAt;
+    const tgtOrd = tgtIdx >= siblings.length ? Date.now() + 1 : ord(siblings[tgtIdx]);
+    const prevOrd = tgtIdx > 0 ? ord(siblings[tgtIdx - 1]) : tgtOrd - 1000;
+    const newOrder = (tgtOrd + prevOrd) / 2;
+    return {
+      ...s,
+      pages: { ...s.pages, [sourcePageId]: { ...src, sortOrder: newOrder, updatedAt: Date.now() } },
+    };
+  });
+}
+
+/**
  * Reorder rows within a database by moving `sourceRowId` so that it lands
  * before `targetRowId`. If targetRowId is null, the source is appended.
  * B-3711 — DB row drag-reorder.
