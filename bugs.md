@@ -4377,3 +4377,15 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 ### B-3522 — Sidebar has no responsive breakpoint hook (P3, open)
 - Searching the DOM for `data-testid="sidebar-backdrop"` / `mobile-menu` / `sidebar-drawer` after simulating 375px width returns nothing. The sidebar component appears to have no responsive variant at all.
 - Combined with B-3521, suggests the mobile layout was deferred entirely. Note for I-3208.
+
+### B-3519 — Rapid trash-restore drops pages — fixed (commit 1d3bc2d) — P1
+- Fix: TrashPage's restore-<pageId> click no longer navigates after restoring. It used to call `navigate(...)`, which unmounted TrashPage. Rapid restore-clicks therefore vanished after the first because the button DOM was gone. Now it just calls `restorePageCascade(p.id)` + a "Restored …" toast. Verified: clicking 3 restore buttons at 250ms intervals restores all 3; the URL stays on /app/trash.
+
+### B-3516 — Cross-tab StorageEvent doesn't rehydrate — false negative (info)
+- Re-verified: the storage listener works fine for properly-shaped pages. The original repro injected `teamspaceId: null` pages, which the Sidebar's teamspace grouping correctly does not render. Injecting a page with a valid teamspaceId AND a synthetic StorageEvent causes the new `expand-pg_*` chevron to appear in the Sidebar within ~600ms — no reload required. The listener flow (StorageEvent → `_state = next` → notify listeners → useStore force-render) is intact.
+
+### B-3214 — Public form empty submit creates blank row — fixed (commit 1d3bc2d) — closes I-3207 partial
+- Fix: form.$dbId.$viewId.tsx now validates before submission:
+  * If the title field is visible, it must be filled (otherwise "<Title name> is required.").
+  * If every visible field is empty/whitespace/empty-array, submission is blocked with "Please fill in at least one field before submitting.".
+  Errors render under the submit button via the existing `error` state.
