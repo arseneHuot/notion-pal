@@ -1267,8 +1267,9 @@ function TocEl({ block, pageId }: { block: Block; pageId: string }) {
   const pageBlocks = useStore((s) => s.pages[pageId]?.blocks ?? []);
   const headings = pageBlocks
     .map((id) => blocks[id])
-    .filter((b): b is Extract<Block, { type: "heading-1" | "heading-2" | "heading-3" }> =>
-      !!b && (b.type === "heading-1" || b.type === "heading-2" || b.type === "heading-3"),
+    .filter(
+      (b): b is Block & { content: string } =>
+        !!b && (b.type === "heading-1" || b.type === "heading-2" || b.type === "heading-3"),
     );
   return (
     <BlockShell block={block} pageId={pageId}>
