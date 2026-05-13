@@ -6403,3 +6403,51 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-6702 — Trashed page kept isFavorite — fixed (commit 3b251fc)
 - Fix: `deletePage` BFS sets `isFavorite: false` alongside `isInTrash: true` so restore doesn't re-add the page to Favorites unsolicited. Verified live.
+
+## 2026-05-13 — Test agent batch 24 (B-6800 series)
+
+### B-6800 — applyFilters `equals` operator filters correctly (P0 verification, fixed)
+- Re-verified `B-6700`: built filter `{operator:"equals", propertyId:"p_status", value:"st_done"}` against `db_b15_dates` (7 rows). Result: 2 rows ("Old Done", "Future Done"), all with `p_status === "st_done"`. No leak through. The `not-equals` alias returns the complementary 5 rows — `anyDone:false`.
+- `equals` vs `is` produce byte-identical row arrays; `not-equals` vs `is-not` likewise. Multi-select (`p_tag`) handles both aliases via the `Array.isArray` branch.
+- Status: fixed (filter.ts:48-58).
+
+### B-6801 — Trash clears isFavorite (B-6702 followup, fixed)
+- Re-verified `B-6702`: created a page, `toggleFavorite` → `isFavorite:true`; `deletePage` → `isFavorite:false, isInTrash:true`. Then `restorePage` (non-cascade) → `isFavorite:false`. Then re-favorite + trash + `restorePageCascade` → also `isFavorite:false`. Restore never re-adds to Favorites unsolicited.
+- Status: fixed (store.ts:645). Both restore paths verified.
+
+### B-6802 — InlineDatabase view-count badge ignores `equals` operator (P1, open)
+- File: `src/components/database/InlineDatabase.tsx:42-53`. The inline badge has its OWN switch with cases `is`/`is-not`/`is-empty`/`is-not-empty`/`contains`/`greater-than`/`less-than`, default `return true`. The `equals`/`not-equals` aliases handled by `filter.ts:48-58` fall through to default, so the badge over-counts.
+- Repro: a view with `{operator:"equals", propertyId:"p_status", value:"st_done"}` on `db_b15_dates`. TableView shows 2 rows (correct). Inline badge shows 7/7 (wrong — should be 2/7).
+- Fix: replace the inline switch with a call to `applyFilters` from `./filter`, OR add `case "equals":` and `case "not-equals":` aliases mirroring filter.ts.
+
+### B-6803 — Unknown filter operator emits warn-once-per-session (verified, fixed)
+- Cleared `window.__filterOpsSeen`, ran `applyFilters` 3× with `operator:"rumpelstiltskin"` against `db_b15_dates`. `console.warn` fired exactly 1 time. Subsequent invocations with the same operator emit nothing; the seen Set is captured on `window.__filterOpsSeen` for cross-call persistence (I-6702).
+- Status: fixed (filter.ts:96-108).
+
+### B-6804 — Comment delete on leaf only removes that comment (verified, fixed)
+- Created root + child + leaf (all siblings under root). Called `deleteComment(leafId)`. After: root and child still present in `state.comments`; only leaf removed. Aligns with B-6500 cascade fix — leaf has no children to cascade.
+- Status: working as designed.
+
+### B-6805 — AI panel rapid Cmd+J toggle ×20 lands stable (verified, no bug)
+- AI panel `open` is local React state in `AIChat.tsx:126`. Fired 20 `keydown Cmd+J` events synchronously. Initial closed → 20 toggles (even count) → final closed. No console errors, no stuck DOM. The earlier B-6700-stability stuck-state (P3) does NOT reproduce via pure keyboard events; it required `close-ai` event interleaving.
+- Status: stable for keyboard-only path.
+
+### B-6806 — Synced-block ref count stable across 4 edit cycles (verified, no bug)
+- Created `synced-block` source + 1 `synced-block-ref` referencing it on a fresh page. Added a paragraph child under the source, then `updateBlock(childId, {content})` 4 times. After: source still has exactly 1 child block under `parentId === srcId`, and exactly 1 `synced-block-ref` exists with `sourceId === srcId`. No ref duplication, no orphan, no extra children.
+- Status: stable.
+
+### B-6807 — Cmd+K palette clears query on every reopen (verified, by design)
+- Opened palette with Cmd+K, typed "meet", closed by clicking backdrop → reopened with Cmd+K → input value `""`. Repeated with Escape close: typed "roadmap", Escape, reopen with Cmd+K → input value `""`. The reset happens in the Cmd+K keydown branch (CommandPalette.tsx:72) regardless of toggle direction.
+- Note: if a future code path opens the palette WITHOUT routing through the keydown handler or `open-command-palette` event, the query would survive. Custom-event path also clears (line 83).
+
+### B-6808 — View duplicate × 15 holds (Copy N) progression (verified, fixed)
+- Called `duplicateView` 15 times on `v_main` of `db_b15_dates`. Names produced in order: "Main (Copy)", "Main (Copy 2)" … "Main (Copy 15)". Strictly monotonic. The duplicate logic scans existing `(Copy N)` siblings to pick `max+1` (store.ts:1613-1644), so N=15 works correctly even with gaps.
+- Status: stable.
+
+### B-6809 — Calendar drag preserves color across 3 reschedules (verified, fixed)
+- Created `cev_b6800_color` with `color:"#ff00aa"`. Called `moveCalendarEvent` to `2026-06-01`, `2026-06-15`, `2026-07-04`. Color stays `#ff00aa` after each move. `moveCalendarEvent` (store.ts:1833) spreads `...e` and only overwrites `start`, so any color/title/end/data attached to the event is preserved.
+- Status: stable.
+
+### B-6810 — Sidebar drag across teamspaces is rejected (verified, fixed)
+- Created two pages: A in `tsA`, B in `tsB` (different teamspaces). The Sidebar drop guard at `Sidebar.tsx:231` rejects the drop because `sourcePage.teamspaceId !== page.teamspaceId`. Additionally, even when bypassing the guard and calling `reorderSiblingPages(aId, bId)` directly, the page's `teamspaceId` stays on `tsA` — `reorderSiblingPages` operates on `sortOrder` only and doesn't reparent. Defense in depth confirmed.
+- Status: stable.

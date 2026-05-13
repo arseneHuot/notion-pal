@@ -2019,3 +2019,29 @@ Priority: high / medium / low.
 ### I-6703 — Mobile sidebar resize behavior not test-coverable (low, open)
 - No `data-testid` on the hamburger/breakpoint trigger, no exposed `isMobileSidebarOpen` flag. Resizing the window past `md` in eval doesn't trigger the React `useMediaQuery` listener (no real `resize` event for synthetic dimensions).
 - Fix: add `data-testid="mobile-sidebar-toggle"` and persist `mobileSidebarOpen` on `ui` slice so QA can verify "open then resize past breakpoint" auto-closes the overlay.
+
+## 2026-05-13 — Improvements suggested by batch 24 (I-6800)
+
+### I-6800 — InlineDatabase badge should call the shared `applyFilters` (medium, open)
+- See B-6802. The inline DB component duplicates the operator switch with a smaller subset (no `equals`/`not-equals` aliases, no `before/after`, no `is-empty` for array types). It will silently miss any operator added to the canonical evaluator.
+- Fix: import `applyFilters` from `../filter` and replace the local switch with `applyFilters(allRows, v.filters ?? [], db).length`. Identical-runtime semantics, single source of truth, deletes ~15 lines.
+
+### I-6801 — `restorePage` (non-cascade) should also restore favorites flagged as `wasFavoriteBeforeTrash` (low, open)
+- B-6801 confirms restore does NOT auto-refavorite (correct default). However, for users who explicitly want "this was my favorite — bring it back": store could capture a `wasFavoriteBeforeTrash` boolean at trash time, and Restore offers a one-click "Restore and re-add to Favorites" affordance.
+- Implementation: extend `deletePage` to set `wasFavoriteBeforeTrash: p.isFavorite` alongside the clear. The Trash row UI then shows a tri-state restore (Restore / Restore + favorite). Pure UX nicety; default flow unchanged.
+
+### I-6802 — Cmd+K query persistence as a power-user preference (low, open)
+- See B-6807. Today every reopen clears the query (good default — most users want a blank slate). Some power users would prefer the palette to remember the last search for ~10s so accidental close/reopen doesn't lose context.
+- Fix: `ui.commandPaletteLastQuery` + `ui.commandPaletteLastQueryAt`. If the gap < 10s, prefill on open; else clear. Optionally hide behind a Settings checkbox "Remember last command palette query".
+
+### I-6803 — Synced-block source deletion should soft-redirect refs to a stub or prompt (low, open)
+- Today, deleting a `synced-block` source leaves its `synced-block-ref` mirrors rendering the "Synced reference — no source" empty state with a relink input. Fine for power users, confusing for new ones.
+- Fix: when `deleteBlock` removes a synced-block source, scan for `synced-block-ref` blocks pointing at it and either (a) inline-convert each ref into a normal block group cloning the last-known children, or (b) toast "N synced references will become detached — undo?" with a 5s window.
+
+### I-6804 — `moveCalendarEvent`: optional duration preservation (low, open)
+- See B-6809. Today, only `start` is updated on drag; events with an explicit `end` keep that absolute end timestamp, which means dragging to a new day truncates or extends the visual duration. Most users expect drag-reschedule to preserve duration.
+- Fix: when moving, compute `duration = e.end - e.start` (if both set), then write `start = next` AND `end = next + duration`. Falls back to current behavior if no `end`.
+
+### I-6805 — Sidebar cross-teamspace drag: surface "move to teamspace" prompt instead of silent no-op (low, open)
+- See B-6810. The current drop guard silently rejects when source/target teamspaces differ. Users will perceive this as "nothing happened" rather than "this is disallowed; here's how to actually move it".
+- Fix: when guard fails, show a toast/confirm "Move 'X' to teamspace 'Y'? Pages in that teamspace gain its members and lose yours." Confirm → call `movePageToTeamspace`. Cancel → no-op. Affordance for the common case of accidentally cross-dragging vs. intentional teamspace migration.

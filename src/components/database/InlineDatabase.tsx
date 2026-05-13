@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useStore, updateDatabase, addDatabaseRow, updateRow, addDatabaseProperty, removeDatabaseProperty, updateDatabaseProperty, addView, removeView, updateView, duplicateView, deleteRow, deleteDatabase } from "@/lib/store";
+import { applyFilters } from "./filter";
 import { toast } from "@/components/ui/Toast";
 import type { NotionDatabase, Property, View, DatabaseRow, BlockColor, SelectOption } from "@/lib/types";
 import { TableView } from "./views/TableView";
@@ -28,31 +29,18 @@ export function InlineDatabase({ databaseId, initialViewId }: { databaseId: stri
     return db.views?.find((v) => v.id === activeViewId) ?? db.views?.[0];
   }, [db, activeViewId]);
 
-  // Per-view filtered row count for badges (B-2410 / B-2417).
+  // Per-view filtered row count for badges (B-2410 / B-2417). Delegates to
+  // the shared `applyFilters` so operator aliases (`equals`, `not-equals`)
+  // and date-aware operators behave identically to the view-rendering path
+  // (B-6802, P1 — the badge over-counted before because the inline switch
+  // didn't know about the aliases).
   const viewCounts = useMemo(() => {
     const out: Record<string, { visible: number; total: number }> = {};
     if (!db || !Array.isArray(db.rows) || !Array.isArray(db.views)) return out;
     const allRows = db.rows.map((id) => rowsMap[id]).filter((r) => r && !r.isInTrash);
     for (const v of db.views) {
       const filtered = (v.filters ?? []).length > 0
-        ? allRows.filter((r) =>
-            (v.filters ?? []).every((f) => {
-              // Lightweight evaluator — operator subset that's enough for badges.
-              const val = r.values[f.propertyId];
-              switch (f.operator) {
-                case "is": return val === f.value;
-                case "is-not": return val !== f.value;
-                case "is-empty": return val == null || val === "" || (Array.isArray(val) && val.length === 0);
-                case "is-not-empty": return !(val == null || val === "" || (Array.isArray(val) && val.length === 0));
-                case "contains":
-                  if (Array.isArray(val)) return val.some((x) => String(x).toLowerCase().includes(String(f.value ?? "").toLowerCase()));
-                  return typeof val === "string" && val.toLowerCase().includes(String(f.value ?? "").toLowerCase());
-                case "greater-than": return Number(val) > Number(f.value);
-                case "less-than": return Number(val) < Number(f.value);
-                default: return true;
-              }
-            }),
-          )
+        ? applyFilters(allRows, v.filters ?? [], db)
         : allRows;
       out[v.id] = { visible: filtered.length, total: allRows.length };
     }
