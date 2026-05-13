@@ -6697,3 +6697,6 @@ Severity: P0 (blocker) · P1 (major) · P2 (minor) · P3 (nit).
 
 ### B-7502 — Dangling-parentId comment invisible — fixed (commit 2e32202)
 - Fix: PageComments treats a comment whose `parentId` points at a non-existent comment as top-level. Previously fell through both filters and silently vanished.
+
+### B-7503 — TableView ignored view.propertyOrder — fixed (commit d30c388)
+- Fix: TableView walks `view.propertyOrder` first (dropping dangling IDs), then appends any remaining `db.properties`. `reorderDatabaseProperties` rewrites every view's propertyOrder to match. Closes the dead-field gap. Verified live: synthetic propertyOrder `[c,b,dangling,a,title]` renders as `[c,b,a,title]`.
