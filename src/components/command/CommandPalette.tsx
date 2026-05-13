@@ -174,9 +174,13 @@ export function CommandPalette() {
             label: `${snippet}  ·  ${p.title || "Untitled"}`,
             icon: <span className="text-base">¶</span>,
             action: () => {
-              navigate({ to: "/app/p/$pageId", params: { pageId: p.id } });
+              // Navigate and add the block id as a hash so back/forward
+              // restores the highlight (I-4402). A small useEffect on the
+              // page reads `location.hash` and re-runs the scroll+highlight.
+              navigate({ to: "/app/p/$pageId", params: { pageId: p.id }, hash: `block-${bid}` });
               setOpen(false);
-              // Scroll the matched block into view after the route settles.
+              // Also scroll immediately for the case where the route didn't
+              // change (we were already on this page).
               setTimeout(() => {
                 const el = document.querySelector(`[data-block-id="${bid}"]`);
                 if (el && "scrollIntoView" in el) {

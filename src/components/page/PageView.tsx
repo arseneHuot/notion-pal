@@ -36,6 +36,36 @@ export function PageView({ pageId }: { pageId: string }) {
     return () => window.removeEventListener("open-comments", open);
   }, []);
 
+  // Block-jump highlight via `#block-<id>` URL hash (I-4402). Reads on mount
+  // and on every `hashchange` so back/forward navigation also restores the
+  // highlight. Adds a persistent ring rather than the transient 1500ms one
+  // so users can copy / look without losing the focus.
+  useEffect(() => {
+    function highlightFromHash() {
+      const hash = (typeof window !== "undefined" ? window.location.hash : "") || "";
+      const match = /^#block-(.+)$/.exec(hash);
+      if (!match) return;
+      const blockId = match[1];
+      // Remove any prior persistent highlights so only one block is marked.
+      document.querySelectorAll("[data-block-highlight=\"1\"]").forEach((n) => {
+        n.removeAttribute("data-block-highlight");
+        n.classList.remove("ring-2", "ring-blue-400");
+      });
+      // Wait one paint for the page's blocks to mount.
+      setTimeout(() => {
+        const el = document.querySelector(`[data-block-id="${blockId}"]`);
+        if (el && "scrollIntoView" in el) {
+          (el as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+          (el as HTMLElement).classList.add("ring-2", "ring-blue-400");
+          (el as HTMLElement).setAttribute("data-block-highlight", "1");
+        }
+      }, 80);
+    }
+    highlightFromHash();
+    window.addEventListener("hashchange", highlightFromHash);
+    return () => window.removeEventListener("hashchange", highlightFromHash);
+  }, [pageId]);
+
   // Word-count listener (B-211)
   useEffect(() => {
     function showCount() {
