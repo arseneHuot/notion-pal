@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty, updateView, getState as getStoreState } from "@/lib/store";
+import { useStore, addDatabaseRow, deleteRow, removeDatabaseProperty, updateDatabaseProperty, addDatabaseProperty, updateView, reorderDatabaseRows, getState as getStoreState } from "@/lib/store";
 
 function databasesNow() {
   return Object.values(getStoreState().databases);
@@ -43,7 +43,29 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
         </thead>
         <tbody>
           {sorted.map((row) => (
-            <tr key={row.id} className="hover:bg-muted/20 group">
+            <tr
+              key={row.id}
+              className="hover:bg-muted/20 group"
+              draggable
+              data-row-id={row.id}
+              data-testid={`row-${row.id}`}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/x-row-id", row.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes("application/x-row-id")) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }
+              }}
+              onDrop={(e) => {
+                const sourceId = e.dataTransfer.getData("application/x-row-id");
+                if (!sourceId || sourceId === row.id) return;
+                e.preventDefault();
+                reorderDatabaseRows(databaseId, sourceId, row.id);
+              }}
+            >
               {visibleProps.map((p, idx) => (
                 <td
                   key={p.id}
@@ -53,6 +75,14 @@ export function TableView({ databaseId, viewId }: { databaseId: string; viewId: 
                 </td>
               ))}
               <td className="border border-border px-1 text-center whitespace-nowrap">
+                <span
+                  className="cursor-grab text-muted-foreground opacity-0 group-hover:opacity-100 mr-1 select-none"
+                  title="Drag to reorder"
+                  data-testid={`row-handle-${row.id}`}
+                  aria-label="Drag row to reorder"
+                >
+                  ⋮⋮
+                </span>
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent("open-row-detail", { detail: { rowId: row.id } }))}
                   className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 mr-1"

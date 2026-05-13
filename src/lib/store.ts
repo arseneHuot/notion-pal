@@ -1184,6 +1184,34 @@ export function updateRow(id: string, patch: Partial<DatabaseRow> & { values?: R
   });
 }
 
+/**
+ * Reorder rows within a database by moving `sourceRowId` so that it lands
+ * before `targetRowId`. If targetRowId is null, the source is appended.
+ * B-3711 — DB row drag-reorder.
+ */
+export function reorderDatabaseRows(databaseId: string, sourceRowId: string, targetRowId: string | null) {
+  setState((s) => {
+    const db = s.databases[databaseId];
+    if (!db) return s;
+    if (!Array.isArray(db.rows)) return s;
+    const rows = db.rows.filter((r) => r !== sourceRowId);
+    if (!targetRowId) {
+      rows.push(sourceRowId);
+    } else {
+      const idx = rows.indexOf(targetRowId);
+      if (idx === -1) {
+        rows.push(sourceRowId);
+      } else {
+        rows.splice(idx, 0, sourceRowId);
+      }
+    }
+    return {
+      ...s,
+      databases: { ...s.databases, [databaseId]: { ...db, rows } },
+    };
+  });
+}
+
 export function deleteRow(id: string) {
   setState((s) => {
     const row = s.rows[id];
